@@ -2,17 +2,19 @@
  * iCareerOS — Evaluate Service (Stage 1 of Career OS)
  * Assesses the user's current career profile: skills, gaps, and market fit.
  *
- * Calls: extract-profile-fields edge fn
- * Full implementation: Week 3
+ * Delegates to the server-side API route /api/career-os/evaluate,
+ * which calls Claude API directly (ANTHROPIC_API_KEY stays server-side).
+ *
+ * The `extract-profile-fields` Supabase edge function is NOT deployed in the
+ * icareeros project (kuneabeiwcxavvyyfjkx), so we use the Next.js API route instead.
  */
 
-import { createClient } from "@/lib/supabase";
 import { eventLogger } from "@/orchestrator/eventLogger";
 
 export interface EvaluationResult {
   skills: string[];
   gaps: string[];
-  marketFitScore: number;       // 0–100
+  marketFitScore: number;       // 0-100
   careerLevel: string;
   recommendedNextStage: string;
   summary: string;
@@ -22,31 +24,27 @@ export async function evaluateCareerProfile(
   userId: string,
   cycleId: string,
 ): Promise<EvaluationResult> {
-  const supabase = createClient();
+  await eventLogger.logAiCall(userId, cycleId, "evaluate-career-profile", "started");
 
-  await eventLogger.logAiCall(userId, cycleId, "extract-profile-fields", "started");
-
-  const { data, error } = await supabase.functions.invoke("extract-profile-fields", {
-    body: { user_id: userId, cycle_id: cycleId },
+  const res = await fetch("/api/career-os/evaluate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, cycle_id: cycleId }),
+    credentials: "include",   // send Supabase auth cookie
   });
 
-  if (error) {
-    await eventLogger.logAiCall(userId, cycleId, "extract-profile-fields", "failed", {
-      error: error.message,
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    await eventLogger.logAiCall(userId, cycleId, "evaluate-career-profile", "failed", {
+      error: err.error ?? "Unknown error",
+      status: res.status,
     });
-    throw new Error(`evaluateCareerProfile failed: ${error.message}`);
+    throw new Error("evaluateCareerProfile failed: " + (err.error ?? res.statusText));
   }
 
-  const result: EvaluationResult = {
-    skills: data?.skills ?? [],
-    gaps: data?.gaps ?? [],
-    marketFitScore: data?.market_fit_score ?? 0,
-    careerLevel: data?.career_level ?? "unknown",
-    recommendedNextStage: "advise",
-    summary: data?.summary ?? "",
-  };
+  const result = (await res.json()) as EvaluationResult;
 
-  await eventLogger.logAiCall(userId, cycleId, "extract-profile-fields", "completed", {
+  await eventLogger.logAiCall(userId, cycleId, "evaluate-career-profile", "completed", {
     skillCount: result.skills.length,
     gapCount: result.gaps.length,
     marketFitScore: result.marketFitScore,

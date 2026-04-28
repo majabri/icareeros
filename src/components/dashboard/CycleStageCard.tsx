@@ -1,6 +1,7 @@
 "use client";
 
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
+import type { EvaluationResult } from "@/services/ai/evaluateService";
 
 interface StageConfig {
   label: string;
@@ -63,6 +64,8 @@ interface CycleStageCardProps {
   isCurrentStage: boolean;
   onRun?: () => void;
   running?: boolean;
+  /** Stage result notes persisted by stageRouter (only meaningful when completed) */
+  notes?: Record<string, unknown> | null;
 }
 
 export function CycleStageCard({
@@ -71,6 +74,7 @@ export function CycleStageCard({
   isCurrentStage,
   onRun,
   running = false,
+  notes,
 }: CycleStageCardProps) {
   const config = STAGE_CONFIG[stage];
 
@@ -83,27 +87,81 @@ export function CycleStageCard({
 
   const badge = statusBadge[status];
 
+  // Type-cast evaluate notes for inline display
+  const evalResult: EvaluationResult | null =
+    stage === "evaluate" && status === "completed" && notes
+      ? (notes as unknown as EvaluationResult)
+      : null;
+
+  const scoreColor = evalResult
+    ? evalResult.marketFitScore >= 70 ? "text-green-700 bg-green-50"
+      : evalResult.marketFitScore >= 45 ? "text-amber-700 bg-amber-50"
+      : "text-red-700 bg-red-50"
+    : "";
+
   return (
     <div
-      className={`
-        relative rounded-xl border p-5 transition-shadow
-        ${config.bg}
-        ${isCurrentStage ? "shadow-md ring-2 ring-blue-400 ring-offset-2" : "shadow-sm"}
-      `}
+      className={
+        "relative rounded-xl border p-5 transition-shadow " +
+        config.bg + " " +
+        (isCurrentStage ? "shadow-md ring-2 ring-blue-400 ring-offset-2" : "shadow-sm")
+      }
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <span className="text-2xl" aria-hidden="true">{config.icon}</span>
           <div>
-            <h3 className={`font-semibold ${config.color}`}>{config.label}</h3>
+            <h3 className={"font-semibold " + config.color}>{config.label}</h3>
             <p className="mt-0.5 text-xs text-gray-500">{config.description}</p>
           </div>
         </div>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.class}`}>
+        <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + badge.class}>
           {badge.label}
         </span>
       </div>
 
+      {/* ── Evaluate results (shown when completed with notes) ── */}
+      {evalResult && (
+        <div className="mt-4 space-y-2">
+          {/* Market fit score */}
+          <div className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm font-semibold " + scoreColor}>
+            <span>Market fit:</span>
+            <span>{evalResult.marketFitScore}/100</span>
+          </div>
+
+          {/* Top gaps (max 3) */}
+          {evalResult.gaps.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Key gaps</p>
+              <div className="flex flex-wrap gap-1.5">
+                {evalResult.gaps.slice(0, 3).map((gap) => (
+                  <span
+                    key={gap}
+                    className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5
+                               text-xs font-medium text-red-700"
+                  >
+                    {gap}
+                  </span>
+                ))}
+                {evalResult.gaps.length > 3 && (
+                  <span className="text-xs text-gray-400">
+                    +{evalResult.gaps.length - 3} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Summary (truncated) */}
+          {evalResult.summary && (
+            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+              {evalResult.summary}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Run button (current stage) ── */}
       {isCurrentStage && onRun && (
         <button
           onClick={onRun}
@@ -118,15 +176,16 @@ export function CycleStageCard({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              Running {config.label}…
+              {"Running " + config.label + "..."}
             </span>
           ) : (
-            `Run ${config.label}`
+            "Run " + config.label
           )}
         </button>
       )}
 
-      {status === "completed" && (
+      {/* ── Completed indicator (no notes) ── */}
+      {status === "completed" && !evalResult && (
         <div className="mt-3 flex items-center gap-1.5 text-xs text-green-600">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

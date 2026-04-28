@@ -44,12 +44,39 @@ function makeChain(returnData: unknown = null, returnError: unknown = null) {
     chain[m] = vi.fn(() => chain);
   });
   // Terminal methods resolve
-  (chain.single     as MockInstance) = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+  (chain.single      as MockInstance) = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
   (chain.maybeSingle as MockInstance) = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
   // Make chain awaitable
   (chain as any).then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: returnData, error: returnError }).then(resolve);
   return chain;
+}
+
+/** Helper: mock global.fetch for the evaluate API route */
+function mockEvaluateFetch(
+  overrides: Partial<{
+    skills: string[];
+    gaps: string[];
+    marketFitScore: number;
+    careerLevel: string;
+    recommendedNextStage: string;
+    summary: string;
+  }> = {}
+) {
+  const body = {
+    skills: ["TypeScript", "React"],
+    gaps: ["System Design"],
+    marketFitScore: 72,
+    careerLevel: "mid",
+    recommendedNextStage: "advise",
+    summary: "Strong frontend, needs systems breadth",
+    ...overrides,
+  };
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:   true,
+    status: 200,
+    json: async () => body,
+  } as Response);
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -104,11 +131,14 @@ describe("careerOsOrchestrator", () => {
   });
 
   describe("advanceStage", () => {
-    it("returns skipped result if stageRouter returns success:false", async () => {
-      mockFnInvoke.mockResolvedValue({
-        data: null,
-        error: { message: "Edge function unavailable" },
-      });
+    it("returns skipped result if evaluate API route fails", async () => {
+      // Mock fetch to return a non-OK response (evaluate fails)
+      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok:   false,
+        status: 500,
+        json: async () => ({ error: "Internal server error" }),
+      } as Response);
+
       const chain = makeChain({ notes: null }, null);
       mockFrom.mockReturnValue(chain);
 
@@ -119,7 +149,6 @@ describe("careerOsOrchestrator", () => {
 
   describe("completeCycle", () => {
     it("marks cycle as completed", async () => {
-      // Build a full chain supporting .update().eq().eq().select().single()
       const chain = makeChain({ id: "cycle-1", status: "completed" }, null);
       mockFrom.mockReturnValue(chain);
 
@@ -130,21 +159,16 @@ describe("careerOsOrchestrator", () => {
 });
 
 describe("stageRouter — unit", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
 
-  it("evaluate: calls evaluateCareerProfile and saves notes", async () => {
-    mockFnInvoke.mockResolvedValue({
-      data: {
-        skills: ["TypeScript", "React"],
-        gaps: ["System Design"],
-        market_fit_score: 72,
-        career_level: "mid",
-        summary: "Strong frontend, needs systems breadth",
-      },
-      error: null,
-    });
+  it("evaluate: calls /api/career-os/evaluate and saves notes", async () => {
+    // Mock the fetch call that evaluateService makes
+    mockEvaluateFetch();
 
-    // from() calls: loadStageNotes (maybeSingle) + saveStageNotes (update chain)
+    // from() calls: saveStageNotes (update chain)
     const chain = makeChain(null, null);
     mockFrom.mockReturnValue(chain);
 
@@ -157,7 +181,7 @@ describe("stageRouter — unit", () => {
   });
 
   it("advise: requires evaluate notes or returns error", async () => {
-    // maybeSingle returns null notes → advise should fail gracefully
+    // maybeSingle returns null notes -> advise should fail gracefully
     const chain = makeChain(null, null);
     mockFrom.mockReturnValue(chain);
 
