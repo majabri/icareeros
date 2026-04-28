@@ -434,7 +434,7 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
         </button>
 
         {saved && !evaluating && !evalResult && (
-          <span className="text-sm font-medium text-green-600">Profile saved</span>
+          <span className="text-sm font-medium text-green-600">✓ Profile saved</span>
         )}
 
         {evaluating && (

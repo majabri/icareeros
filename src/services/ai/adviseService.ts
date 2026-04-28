@@ -2,12 +2,11 @@
  * iCareerOS — Advise Service (Stage 2 of Career OS)
  * Generates AI career advice based on evaluation results.
  *
- * Calls: career-path-analysis edge fn (SSE streaming)
- * Full implementation: Week 3
+ * Calls: POST /api/career-os/advise (server-side Next.js route → Claude Sonnet)
+ * ANTHROPIC_API_KEY stays server-side; this module only calls the local API route.
  */
 
 import { eventLogger } from "@/orchestrator/eventLogger";
-import type { EvaluationResult } from "./evaluateService";
 
 export interface AdviceResult {
   recommendedPaths: CareerPath[];
@@ -18,7 +17,7 @@ export interface AdviceResult {
 
 export interface CareerPath {
   title: string;
-  matchScore: number;   // 0–100
+  matchScore: number; // 0-100
   requiredSkills: string[];
   gapSkills: string[];
   estimatedWeeks: number;
@@ -27,61 +26,32 @@ export interface CareerPath {
 export async function generateAdvice(
   userId: string,
   cycleId: string,
-  evaluation: EvaluationResult,
 ): Promise<AdviceResult> {
-  await eventLogger.logAiCall(userId, cycleId, "career-path-analysis", "started");
+  await eventLogger.logAiCall(userId, cycleId, "generate-advice", "started");
 
-  // SSE streaming — uses raw fetch per edge function invocation rule
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const res = await fetch("/api/career-os/advise", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cycle_id: cycleId }),
+    credentials: "include",
+  });
 
-  try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/career-path-analysis`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${anonKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: userId,
-        cycle_id: cycleId,
-        skills: evaluation.skills,
-        gaps: evaluation.gaps,
-        career_level: evaluation.careerLevel,
-      }),
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    await eventLogger.logAiCall(userId, cycleId, "generate-advice", "failed", {
+      error: err.error,
+      status: res.status,
     });
-
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    // Collect SSE chunks
-    const reader = resp.body?.getReader();
-    const decoder = new TextDecoder();
-    let raw = "";
-    while (reader) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      raw += decoder.decode(value, { stream: true });
-    }
-
-    const parsed = JSON.parse(raw.replace(/^data: /gm, "").trim());
-
-    const result: AdviceResult = {
-      recommendedPaths: parsed?.paths ?? [],
-      nextActions: parsed?.next_actions ?? [],
-      timelineWeeks: parsed?.timeline_weeks ?? 12,
-      summary: parsed?.summary ?? "",
-    };
-
-    await eventLogger.logAiCall(userId, cycleId, "career-path-analysis", "completed", {
-      pathCount: result.recommendedPaths.length,
-    });
-
-    return result;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await eventLogger.logAiCall(userId, cycleId, "career-path-analysis", "failed", {
-      error: message,
-    });
-    throw new Error(`generateAdvice failed: ${message}`);
+    throw new Error("generateAdvice failed: " + (err.error ?? res.statusText));
   }
+
+  const result = (await res.json()) as AdviceResult;
+
+  await eventLogger.logAiCall(userId, cycleId, "generate-advice", "completed", {
+    pathCount: result.recommendedPaths.length,
+    timelineWeeks: result.timelineWeeks,
+    actionCount: result.nextActions.length,
+  });
+
+  return result;
 }
