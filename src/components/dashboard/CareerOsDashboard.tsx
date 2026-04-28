@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createClient }    from "@/lib/supabase";
 import { CycleStageCard }  from "./CycleStageCard";
+import { CycleSummaryPanel } from "./CycleSummaryPanel";
 import {
   startCycle,
   getActiveCycle,
@@ -13,6 +15,8 @@ import {
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { getSubscription } from "@/services/billing/subscriptionService";
 import type { SubscriptionPlan } from "@/services/billing/types";
+import type { AchieveResult } from "@/services/ai/achieveService";
+import type { EvaluationResult } from "@/services/ai/evaluateService";
 
 interface ActiveCycle {
   id: string;
@@ -76,6 +80,7 @@ async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
 }
 
 export function CareerOsDashboard() {
+  const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
   const [cycle, setCycle]             = useState<ActiveCycle | null>(null);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
@@ -86,6 +91,8 @@ export function CareerOsDashboard() {
   const [error, setError]             = useState<string | null>(null);
   const [goal, setGoal]               = useState("");
   const [showGoalInput, setShowGoalInput] = useState(false);
+  /** Set after completing a cycle — triggers the /profile hint banner */
+  const [newCycleStarted, setNewCycleStarted] = useState(false);
 
   // Load user + active cycle + stage notes
   useEffect(() => {
@@ -161,18 +168,39 @@ export function CareerOsDashboard() {
     }
   }, [userId, cycle, refreshCycle]);
 
-  const handleCompleteCycle = useCallback(async () => {
+  /**
+   * Complete the current cycle and immediately start the next one.
+   * If prefilledGoal is provided (from achieve recommendations), use it as
+   * the goal for the new cycle. Otherwise fall back to the goal input.
+   */
+  const handleStartNextCycle = useCallback(async (prefilledGoal?: string) => {
     if (!userId || !cycle) return;
     setRunning(true);
+    setError(null);
     try {
+      // 1. Mark current cycle complete
       await completeCycle(userId, cycle.id);
-      setCycle(null);
-      setStageStatus(buildStageStatus(null));
-      setStageNotes(emptyNotesMap());
+
+      // 2. If a specific goal was passed use it, else show goal input
+      if (prefilledGoal !== undefined) {
+        const result = await startCycle(userId, prefilledGoal || undefined);
+        if (result.status === "abandoned") {
+          setError(result.error ?? "Failed to start next cycle.");
+          return;
+        }
+        await refreshCycle(userId);
+        setNewCycleStarted(true);
+      } else {
+        // No goal passed — clear cycle state and show goal input
+        setCycle(null);
+        setStageStatus(buildStageStatus(null));
+        setStageNotes(emptyNotesMap());
+        setShowGoalInput(true);
+      }
     } finally {
       setRunning(false);
     }
-  }, [userId, cycle]);
+  }, [userId, cycle, refreshCycle]);
 
   if (loading) {
     return (
@@ -187,6 +215,14 @@ export function CareerOsDashboard() {
   const currentStage  = cycle?.current_stage as CareerOsStage | undefined;
   const cycleComplete =
     currentStage === "achieve" && stageStatus.achieve === "completed";
+
+  const achieveNotes = stageNotes.achieve
+    ? (stageNotes.achieve as unknown as AchieveResult)
+    : null;
+
+  const evaluateNotes = stageNotes.evaluate
+    ? (stageNotes.evaluate as unknown as EvaluationResult)
+    : null;
 
   return (
     <div className="space-y-8">
@@ -204,6 +240,30 @@ export function CareerOsDashboard() {
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {/* /profile hint — shown after a new cycle auto-starts */}
+      {newCycleStarted && (
+        <div
+          data-testid="profile-hint-banner"
+          className="flex items-start justify-between gap-4 rounded-xl border border-blue-200
+                     bg-blue-50 px-4 py-3"
+        >
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 text-blue-500 text-lg" aria-hidden="true">💡</span>
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">New cycle started.</span>{" "}
+              Update your profile to give the Evaluate stage the freshest picture of where you are.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/profile")}
+            className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold
+                       text-white hover:bg-blue-700 transition-colors"
+          >
+            Update profile →
+          </button>
         </div>
       )}
 
@@ -309,22 +369,16 @@ export function CareerOsDashboard() {
             ))}
           </div>
 
+          {/* Cycle complete — show summary panel */}
           {cycleComplete && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-              <div className="text-3xl">🎉</div>
-              <h3 className="mt-2 font-semibold text-green-800">Cycle complete!</h3>
-              <p className="mt-1 text-sm text-green-600">
-                You&apos;ve completed all 6 stages. Ready to level up again?
-              </p>
-              <button
-                onClick={handleCompleteCycle}
-                disabled={running}
-                className="mt-4 rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold
-                           text-white hover:bg-green-700 disabled:opacity-50"
-              >
-                {running ? "Completing..." : "Complete & start next cycle"}
-              </button>
-            </div>
+            <CycleSummaryPanel
+              cycleNumber={cycle.cycle_number}
+              goal={cycle.goal}
+              achieveNotes={achieveNotes}
+              evaluateNotes={evaluateNotes}
+              onStartNextCycle={handleStartNextCycle}
+              running={running}
+            />
           )}
         </>
       )}
