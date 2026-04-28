@@ -162,7 +162,7 @@ test.describe("Profile page — authenticated", () => {
     await page.click('button[type="submit"]');
 
     // Should show success indicator
-    await expect(page.getByText("Profile saved", { exact: false })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Profile saved", { exact: false }).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("profile persists across page reloads", async ({ page }) => {
