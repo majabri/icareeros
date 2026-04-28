@@ -36,10 +36,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 /** Return a signed-in Supabase client and the user's ID. */
-async function getSupabaseSession(): Promise<{
-  supabase: ReturnType<typeof createClient>;
-  userId: string;
-} | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getSupabaseSession(): Promise<{ supabase: any; userId: string } | null> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const {
     data: { session },
@@ -96,7 +94,8 @@ test.describe("Career OS Dashboard — empty state", () => {
 // ─── Active-cycle tests ───────────────────────────────────────────────────────
 
 test.describe("Career OS Dashboard — active cycle", () => {
-  let supabase: ReturnType<typeof createClient> | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let supabase: any = null;
   let testUserId: string | null = null;
 
   test.beforeAll(async () => {
@@ -113,7 +112,8 @@ test.describe("Career OS Dashboard — active cycle", () => {
       .delete()
       .eq("user_id", testUserId);
 
-    const { error } = await supabase.from("career_os_cycles").insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("career_os_cycles") as any).insert({
       user_id: testUserId,
       goal: "Become a Senior Engineer",
       status: "active",
