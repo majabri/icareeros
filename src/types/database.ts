@@ -746,6 +746,47 @@ export type Database = {
         }
       }
     }
+      user_profiles: {
+        Row: {
+          id:               string
+          user_id:          string
+          full_name:        string | null
+          current_position:     string | null
+          target_roles:     string[]
+          skills:           string[]
+          experience_level: string | null
+          location:         string | null
+          open_to_remote:   boolean
+          created_at:       string
+          updated_at:       string
+        }
+        Insert: {
+          id?:               string
+          user_id:           string
+          full_name?:        string | null
+          current_position?:     string | null
+          target_roles?:     string[]
+          skills?:           string[]
+          experience_level?: string | null
+          location?:         string | null
+          open_to_remote?:   boolean
+          created_at?:       string
+          updated_at?:       string
+        }
+        Update: {
+          id?:               string
+          user_id?:          string
+          full_name?:        string | null
+          current_position?:     string | null
+          target_roles?:     string[]
+          skills?:           string[]
+          experience_level?: string | null
+          location?:         string | null
+          open_to_remote?:   boolean
+          created_at?:       string
+          updated_at?:       string
+        }
+      }
     Views: { [_ in never]: never }
     Functions: { [_ in never]: never }
     Enums: { [_ in never]: never }
