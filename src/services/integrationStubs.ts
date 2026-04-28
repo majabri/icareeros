@@ -1,25 +1,28 @@
 /**
- * iCareerOS — External Job Board Integration Stubs
- * LinkedIn and Indeed search stubs — to be fully implemented in Week 3.
- * Returns typed empty arrays so consumers can be wired up now.
+ * iCareerOS — Integration Stubs (DEPRECATED)
+ *
+ * @deprecated Use src/services/integrations/ instead.
+ *
+ * These thin wrappers are kept for backwards compatibility while
+ * existing callers are migrated to opportunityAggregator.searchOpportunities().
  */
 
+import { searchLinkedIn } from "./integrations/linkedInAdapter";
+import { searchIndeed }   from "./integrations/indeedAdapter";
 import type { OpportunityResult, OpportunitySearchFilters } from "./opportunityTypes";
 
-/** LinkedIn Jobs search stub */
+/** @deprecated Use searchLinkedIn() from src/services/integrations/ */
 export async function linkedInSearchStub(
-  _filters: OpportunitySearchFilters,
+  filters: OpportunitySearchFilters
 ): Promise<OpportunityResult[]> {
-  // TODO Week 3: Implement LinkedIn Jobs API integration
-  console.warn("[integrationStubs] linkedInSearchStub not yet implemented");
-  return [];
+  const result = await searchLinkedIn({ filters });
+  return result.opportunities;
 }
 
-/** Indeed Jobs search stub */
+/** @deprecated Use searchIndeed() from src/services/integrations/ */
 export async function indeedSearchStub(
-  _filters: OpportunitySearchFilters,
+  filters: OpportunitySearchFilters
 ): Promise<OpportunityResult[]> {
-  // TODO Week 3: Implement Indeed Publisher API integration
-  console.warn("[integrationStubs] indeedSearchStub not yet implemented");
-  return [];
+  const result = await searchIndeed({ filters });
+  return result.opportunities;
 }
