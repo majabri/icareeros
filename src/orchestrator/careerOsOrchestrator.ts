@@ -70,6 +70,7 @@ export async function startCycle(
       cycle_number: cycleNumber,
       goal: goal ?? null,
       status: "active",
+      current_stage: "evaluate",
     })
     .select()
     .single();
@@ -128,9 +129,21 @@ export async function advanceStage(
     .eq("cycle_id", cycleId)
     .eq("stage", stage);
 
+  // Advance current_stage in the cycle to the next stage
+  const stageIdx = STAGE_ORDER.indexOf(stage);
+  const nextStage = stageIdx < STAGE_ORDER.length - 1
+    ? STAGE_ORDER[stageIdx + 1]
+    : stage; // stays on achieve if already last
+  await supabase
+    .from("career_os_cycles")
+    .update({ current_stage: nextStage })
+    .eq("id", cycleId)
+    .eq("user_id", userId);
+
   await eventLogger.log(userId, cycleId, "stage_ended", {
     stage,
     status: finalStatus,
+    nextStage,
     ...routeResult.meta,
   });
 

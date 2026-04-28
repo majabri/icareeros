@@ -51,7 +51,7 @@ async function getSupabaseSession(): Promise<{
   return { supabase, userId: session.user.id };
 }
 
-// ─── Empty-state tests (fresh test user, no active cycle) ────────────────────
+// ─── Empty-state tests (no active cycle) ─────────────────────────────────────
 
 test.describe("Career OS Dashboard — empty state", () => {
   test.beforeEach(async ({ page }, testInfo) => {
@@ -83,11 +83,12 @@ test.describe("Career OS Dashboard — empty state", () => {
     await expect(page).not.toHaveURL(/\/auth\/login/);
   });
 
-  test("dashboard shows empty state with goal input when no active cycle", async ({
+  test("dashboard shows empty state with New cycle button when no active cycle", async ({
     page,
   }) => {
+    // "Start your career cycle" heading only renders in the empty state
     await expect(
-      page.getByText(/start|begin|first cycle|career goal/i).first()
+      page.getByText("Start your career cycle")
     ).toBeVisible({ timeout: 12_000 });
   });
 });
@@ -112,13 +113,17 @@ test.describe("Career OS Dashboard — active cycle", () => {
       .delete()
       .eq("user_id", testUserId);
 
-    await supabase.from("career_os_cycles").insert({
+    const { error } = await supabase.from("career_os_cycles").insert({
       user_id: testUserId,
       goal: "Become a Senior Engineer",
       status: "active",
       current_stage: "evaluate",
       cycle_number: 1,
     });
+
+    if (error) {
+      console.error("Failed to create test cycle:", error.message);
+    }
   });
 
   test.afterAll(async () => {
@@ -141,38 +146,45 @@ test.describe("Career OS Dashboard — active cycle", () => {
     await signIn(page);
   });
 
-  test("dashboard shows 6 Career OS stage cards", async ({ page }) => {
-    for (const stage of [
-      "Evaluate",
-      "Advise",
-      "Learn",
-      "Act",
-      "Coach",
-      "Achieve",
-    ]) {
-      await expect(page.getByText(stage)).toBeVisible({ timeout: 12_000 });
+  test("dashboard shows 6 Career OS stage cards with descriptions", async ({
+    page,
+  }) => {
+    // Use stage DESCRIPTIONS (not labels) — descriptions only appear in stage
+    // cards, not in the header text, so this test is stage-card-specific.
+    const descriptions = [
+      "Assess your skills, gaps, and market fit",
+      "Get AI-powered career path recommendations",
+      "Acquire the skills your target role demands",
+      "Apply, network, and build real-world experience",
+      "Interview prep, resume polish, and accountability",
+      "Land the role, promotion, or milestone",
+    ];
+    for (const desc of descriptions) {
+      await expect(page.getByText(desc)).toBeVisible({ timeout: 12_000 });
     }
   });
 
   test("dashboard shows the active cycle goal", async ({ page }) => {
+    // Goal text renders inside cycle header: "Cycle #1 — Become a Senior Engineer"
     await expect(
-      page.getByText(/Become a Senior Engineer/i)
+      page.getByText("Become a Senior Engineer", { exact: false })
     ).toBeVisible({ timeout: 12_000 });
   });
 
-  test("current stage card has a Run button", async ({ page }) => {
+  test("current stage card has a Run Evaluate button", async ({ page }) => {
+    // Button text is "Run {stageLabel}" — for current_stage=evaluate it is "Run Evaluate"
     await expect(
-      page.getByRole("button", { name: /run/i }).first()
+      page.getByRole("button", { name: "Run Evaluate" })
     ).toBeVisible({ timeout: 12_000 });
   });
 
-  test("dashboard shows a progress bar for the active cycle", async ({
+  test("dashboard shows stage progress text for the active cycle", async ({
     page,
   }) => {
-    const progressBar = page
-      .locator('[role="progressbar"], [class*="progress"]')
-      .first();
-    await expect(progressBar).toBeVisible({ timeout: 12_000 });
+    // "Stage N of 6" text appears in the cycle progress section
+    await expect(
+      page.getByText(/Stage \d+ of 6/)
+    ).toBeVisible({ timeout: 12_000 });
   });
 
   test("plan badge shows Free plan", async ({ page }) => {
