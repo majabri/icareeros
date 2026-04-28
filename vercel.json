@@ -8,17 +8,5 @@
   "regions": ["iad1"],
   "github": {
     "silent": true
-  },
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@icareeros-supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@icareeros-supabase-anon-key",
-    "NEXT_PUBLIC_MONETIZATION_ENABLED": "false"
-  },
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_SUPABASE_URL": "@icareeros-supabase-url",
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@icareeros-supabase-anon-key",
-      "NEXT_PUBLIC_MONETIZATION_ENABLED": "false"
-    }
   }
 }
