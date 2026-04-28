@@ -1,239 +1,213 @@
 import { test, expect, Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 
 /**
  * Career OS Dashboard E2E tests.
  *
- * ARCHITECTURE NOTE:
- * Dashboard content tests require a valid Supabase auth session.
- * The Next.js middleware uses @supabase/ssr which validates the access token
- * against Supabase's auth API — fake cookies are rejected.
+ * ARCHITECTURE:
+ * Tests run against the live Vercel deployment (icareeros.vercel.app in CI).
+ * Dashboard content tests require real Supabase credentials so that
+ * @supabase/ssr can validate the session against the real auth API.
  *
- * In CI (without STAGING_SUPABASE_ANON_KEY set), session injection via cookies
- * cannot be validated and all requests redirect to /auth/login.
+ * Prerequisites (GitHub secrets / local env):
+ *   E2E_TEST_EMAIL    — email of the dedicated e2e test user
+ *   E2E_TEST_PASSWORD — password of the dedicated e2e test user
  *
- * Strategy:
- * - "Dashboard navigation" tests (unauthenticated redirects): run everywhere
- * - "Career OS Dashboard" content tests: skip in CI, run locally with real creds
- *
- * To run dashboard content tests locally:
- *   STAGING_SUPABASE_ANON_KEY=<key> npx playwright test e2e/dashboard.spec.ts
- *
- * Staging Supabase project: muevgfmpzykihjuihnga
+ * Test user: e2e-test@icareeros.com (created in kuneabeiwcxavvyyfjkx)
+ * Supabase project: kuneabeiwcxavvyyfjkx
  */
 
-const SUPABASE_STAGING_URL = "https://muevgfmpzykihjuihnga.supabase.co";
-const IS_CI = !!process.env.CI;
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  "https://kuneabeiwcxavvyyfjkx.supabase.co";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const E2E_EMAIL = process.env.E2E_TEST_EMAIL ?? "";
+const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
 
-/** Inject a fake Supabase session so middleware passes through to /dashboard */
-async function injectFakeSession(page: Page) {
-  const fakeSession = {
-    access_token: "fake-access-token",
-    refresh_token: "fake-refresh-token",
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    token_type: "bearer",
-    user: {
-      id: "test-user-id",
-      email: "test@example.com",
-      aud: "authenticated",
-      role: "authenticated",
-    },
-  };
+const hasRealCreds = !!E2E_EMAIL && !!E2E_PASSWORD;
 
-  await page.context().addCookies([
-    {
-      name: "sb-muevgfmpzykihjuihnga-auth-token",
-      value: JSON.stringify(fakeSession),
-      domain: "localhost",
-      path: "/",
-      httpOnly: false,
-      secure: false,
-    },
-  ]);
-
-  await page.route(`${SUPABASE_STAGING_URL}/auth/v1/user`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        id: "test-user-id",
-        email: "test@example.com",
-        aud: "authenticated",
-        role: "authenticated",
-      }),
-    });
-  });
+/** Sign in via the login form and wait for /dashboard redirect. */
+async function signIn(page: Page): Promise<void> {
+  await page.goto("/auth/login");
+  await page.fill("#email", E2E_EMAIL);
+  await page.fill("#password", E2E_PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 }
 
-/** Intercept Supabase REST calls for dashboard data */
-async function mockDashboardData(
-  page: Page,
-  opts: { hasActiveCycle: boolean }
-) {
-  await page.route(`${SUPABASE_STAGING_URL}/rest/v1/**`, async (route) => {
-    const url = route.request().url();
-
-    if (url.includes("career_os_cycles")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          opts.hasActiveCycle
-            ? [
-                {
-                  id: "cycle-1",
-                  user_id: "test-user-id",
-                  goal: "Become a Senior Engineer",
-                  status: "active",
-                  current_stage: "evaluate",
-                  cycle_number: 1,
-                  started_at: new Date().toISOString(),
-                  completed_at: null,
-                },
-              ]
-            : []
-        ),
-      });
-      return;
-    }
-
-    if (url.includes("career_os_stages")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          opts.hasActiveCycle
-            ? [
-                {
-                  id: "stage-1",
-                  cycle_id: "cycle-1",
-                  stage: "evaluate",
-                  status: "in_progress",
-                  started_at: new Date().toISOString(),
-                  completed_at: null,
-                  notes: null,
-                },
-              ]
-            : []
-        ),
-      });
-      return;
-    }
-
-    if (url.includes("user_subscriptions")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          { id: "sub-1", user_id: "test-user-id", plan: "free", status: "active" },
-        ]),
-      });
-      return;
-    }
-
-    await route.continue();
+/** Return a signed-in Supabase client and the user's ID. */
+async function getSupabaseSession(): Promise<{
+  supabase: ReturnType<typeof createClient>;
+  userId: string;
+} | null> {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const {
+    data: { session },
+  } = await supabase.auth.signInWithPassword({
+    email: E2E_EMAIL,
+    password: E2E_PASSWORD,
   });
-
-  await page.route(`${SUPABASE_STAGING_URL}/functions/v1/**`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ plan: "free", status: "active", allowed: true }),
-    });
-  });
+  if (!session) return null;
+  return { supabase, userId: session.user.id };
 }
 
-// ─── Content tests — require real Supabase session validation ─────────────────
-// These run locally but are skipped in CI because @supabase/ssr validates the
-// access_token against the real Supabase auth API.
+// ─── Empty-state tests (no active cycle) ─────────────────────────────────────
 
-test.describe("Career OS Dashboard", () => {
-  test.beforeEach(async ({}, testInfo) => {
-    if (IS_CI) testInfo.skip(true, "Dashboard content tests require real Supabase auth — run locally");
+test.describe("Career OS Dashboard — empty state", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (!hasRealCreds) {
+      testInfo.skip(
+        true,
+        "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run dashboard content tests"
+      );
+      return;
+    }
+
+    // Ensure no active cycles for this test user
+    const ctx = await getSupabaseSession();
+    if (ctx) {
+      await ctx.supabase
+        .from("career_os_cycles")
+        .delete()
+        .eq("user_id", ctx.userId)
+        .eq("status", "active");
+    }
+
+    await signIn(page);
   });
 
-  test("dashboard shows empty state with goal input when no active cycle", async ({
+  test("dashboard renders after login without redirecting back to login", async ({
     page,
   }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: false });
-    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).not.toHaveURL(/\/auth\/login/);
+  });
+
+  test("dashboard shows empty state with New cycle button when no active cycle", async ({
+    page,
+  }) => {
+    // "Start your career cycle" heading only renders in the empty state
     await expect(
-      page.getByText(/start|begin|first cycle|career goal/i).first()
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("dashboard shows 6 stage cards when active cycle exists", async ({
-    page,
-  }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: true });
-    await page.goto("/dashboard");
-    for (const stage of ["Evaluate", "Advise", "Learn", "Act", "Coach", "Achieve"]) {
-      await expect(page.getByText(stage)).toBeVisible({ timeout: 10_000 });
-    }
-  });
-
-  test("dashboard shows active cycle goal", async ({ page }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: true });
-    await page.goto("/dashboard");
-    await expect(page.getByText(/Become a Senior Engineer/i)).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("current stage card has Run button", async ({ page }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: true });
-    await page.goto("/dashboard");
-    await expect(page.getByRole("button", { name: /run/i }).first()).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("dashboard shows progress bar for active cycle", async ({ page }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: true });
-    await page.goto("/dashboard");
-    const progressBar = page.locator('[role="progressbar"], [class*="progress"]').first();
-    await expect(progressBar).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("plan badge shows Free plan", async ({ page }) => {
-    await injectFakeSession(page);
-    await mockDashboardData(page, { hasActiveCycle: true });
-    await page.goto("/dashboard");
-    await expect(page.getByText(/free/i).first()).toBeVisible({ timeout: 10_000 });
+      page.getByText("Start your career cycle")
+    ).toBeVisible({ timeout: 12_000 });
   });
 });
 
-// ─── Navigation tests — run everywhere ───────────────────────────────────────
+// ─── Active-cycle tests ───────────────────────────────────────────────────────
 
-test.describe("Dashboard navigation", () => {
-  test("unauthenticated user is redirected to login from /dashboard", async ({
-    page,
-  }) => {
-    // No session — middleware should redirect unauthenticated users
-    await page.route(`${SUPABASE_STAGING_URL}/auth/v1/**`, async (route) => {
-      await route.fulfill({
-        status: 401,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "not authenticated" }),
-      });
+test.describe("Career OS Dashboard — active cycle", () => {
+  let supabase: ReturnType<typeof createClient> | null = null;
+  let testUserId: string | null = null;
+
+  test.beforeAll(async () => {
+    if (!hasRealCreds) return;
+
+    const ctx = await getSupabaseSession();
+    if (!ctx) return;
+    supabase = ctx.supabase;
+    testUserId = ctx.userId;
+
+    // Clean any leftover cycles, then create a fresh one
+    await supabase
+      .from("career_os_cycles")
+      .delete()
+      .eq("user_id", testUserId);
+
+    const { error } = await supabase.from("career_os_cycles").insert({
+      user_id: testUserId,
+      goal: "Become a Senior Engineer",
+      status: "active",
+      current_stage: "evaluate",
+      cycle_number: 1,
     });
 
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
+    if (error) {
+      console.error("Failed to create test cycle:", error.message);
+    }
   });
 
-  test("unauthenticated user is redirected to login from /settings", async ({
+  test.afterAll(async () => {
+    if (supabase && testUserId) {
+      await supabase
+        .from("career_os_cycles")
+        .delete()
+        .eq("user_id", testUserId);
+    }
+  });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (!hasRealCreds) {
+      testInfo.skip(
+        true,
+        "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run dashboard content tests"
+      );
+      return;
+    }
+    await signIn(page);
+  });
+
+  test("dashboard shows 6 Career OS stage cards with descriptions", async ({
     page,
   }) => {
-    await page.route(`${SUPABASE_STAGING_URL}/auth/v1/**`, async (route) => {
-      await route.fulfill({
-        status: 401,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "not authenticated" }),
-      });
-    });
+    // Use stage DESCRIPTIONS (not labels) — descriptions only appear in stage
+    // cards, not in the header text, so this test is stage-card-specific.
+    const descriptions = [
+      "Assess your skills, gaps, and market fit",
+      "Get AI-powered career path recommendations",
+      "Acquire the skills your target role demands",
+      "Apply, network, and build real-world experience",
+      "Interview prep, resume polish, and accountability",
+      "Land the role, promotion, or milestone",
+    ];
+    for (const desc of descriptions) {
+      await expect(page.getByText(desc)).toBeVisible({ timeout: 12_000 });
+    }
+  });
 
+  test("dashboard shows the active cycle goal", async ({ page }) => {
+    // Goal text renders inside cycle header: "Cycle #1 — Become a Senior Engineer"
+    await expect(
+      page.getByText("Become a Senior Engineer", { exact: false })
+    ).toBeVisible({ timeout: 12_000 });
+  });
+
+  test("current stage card has a Run Evaluate button", async ({ page }) => {
+    // Button text is "Run {stageLabel}" — for current_stage=evaluate it is "Run Evaluate"
+    await expect(
+      page.getByRole("button", { name: "Run Evaluate" })
+    ).toBeVisible({ timeout: 12_000 });
+  });
+
+  test("dashboard shows stage progress text for the active cycle", async ({
+    page,
+  }) => {
+    // "Stage N of 6" text appears in the cycle progress section
+    await expect(
+      page.getByText(/Stage \d+ of 6/)
+    ).toBeVisible({ timeout: 12_000 });
+  });
+
+  test("plan badge shows Free plan", async ({ page }) => {
+    await expect(page.getByText(/free/i).first()).toBeVisible({
+      timeout: 12_000,
+    });
+  });
+});
+
+// ─── Navigation tests — run everywhere (no credentials needed) ───────────────
+
+test.describe("Dashboard navigation", () => {
+  test("unauthenticated user is redirected to /auth/login from /dashboard", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 12_000 });
+  });
+
+  test("unauthenticated user is redirected to /auth/login from /settings", async ({
+    page,
+  }) => {
     await page.goto("/settings");
-    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 12_000 });
   });
 });

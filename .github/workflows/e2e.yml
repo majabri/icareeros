@@ -13,12 +13,14 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Tests run against the live Vercel staging deployment — no local server needed
+      # Tests run against the live Vercel deployment — no local server needed
       PLAYWRIGHT_BASE_URL: https://icareeros.vercel.app
-      # Supabase staging project (kuneabeiwcxavvyyfjkx)
-      # Set STAGING_SUPABASE_ANON_KEY secret to enable dashboard content tests
+      # Supabase dev project (kuneabeiwcxavvyyfjkx)
       NEXT_PUBLIC_SUPABASE_URL: https://kuneabeiwcxavvyyfjkx.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      # Dedicated E2E test user credentials — enables dashboard content tests
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
