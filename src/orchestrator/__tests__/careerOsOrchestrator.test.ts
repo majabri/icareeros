@@ -155,6 +155,48 @@ function mockLearnFetch(
   } as Response);
 }
 
+
+/** Helper: mock global.fetch for the act API route */
+function mockActFetch(
+  overrides: Partial<{
+    jobSearchQueries: string[];
+    networkingTargets: unknown[];
+    applicationPriority: unknown[];
+    weeklyApplicationTarget: number;
+    summary: string;
+  }> = {},
+  status = 200
+) {
+  const body =
+    status >= 200 && status < 300
+      ? {
+          jobSearchQueries: ["Senior Product Manager fintech Series B"],
+          networkingTargets: [
+            {
+              role: "Senior Product Manager",
+              company: "Stripe",
+              rationale: "Fintech aligns with your background",
+              outreachTip: "Comment on their blog posts first",
+            },
+          ],
+          applicationPriority: [
+            { roleTier: "Stretch", description: "Director-level roles", targetCount: 2, rationale: "High upside" },
+            { roleTier: "Target",  description: "Senior PM at startups",  targetCount: 8, rationale: "Best match" },
+            { roleTier: "Safety",  description: "Mid-level PM roles",     targetCount: 4, rationale: "Pipeline flow" },
+          ],
+          weeklyApplicationTarget: 5,
+          summary: "Aim for 5 applications per week across all tiers.",
+          ...overrides,
+        }
+      : { error: "Learn stage must be completed before running Act." };
+
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:     status >= 200 && status < 300,
+    status,
+    json:   async () => body,
+  } as Response);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("careerOsOrchestrator", () => {
@@ -312,6 +354,35 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.resourceCount).toBe(1);
     expect(result.meta?.weeklyHoursNeeded).toBe(8);
     expect(result.meta?.estimatedWeeks).toBe(12);
+  });
+
+    it("act: propagates 422 error when learn stage not completed", async () => {
+    // Route returns 422 when learn notes are missing server-side
+    mockActFetch({}, 422);
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "act");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Learn");
+  });
+
+  it("act: calls /api/career-os/act and saves notes on success", async () => {
+    mockActFetch();
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "act");
+
+    expect(result.success).toBe(true);
+    expect(result.meta?.queryCount).toBe(1);
+    expect(result.meta?.networkingTargetCount).toBe(1);
+    expect(result.meta?.weeklyApplicationTarget).toBe(5);
   });
 
     it("unknown stage: returns success:false with error", async () => {
