@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // Routes that require authentication
-const PROTECTED = ["/dashboard", "/settings"];
+const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile"];
 // Routes that authenticated users should not see
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
