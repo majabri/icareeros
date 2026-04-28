@@ -5,6 +5,7 @@ import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import type { LearnResult } from "@/services/ai/learnService";
 import type { ActResult } from "@/services/ai/actService";
+import type { CoachResult } from "@/services/ai/coachService";
 
 interface StageConfig {
   label: string;
@@ -140,6 +141,24 @@ export function CycleStageCard({
       : null;
 
   const targetTier = actResult?.applicationPriority?.find((t) => t.roleTier === "Target") ?? null;
+
+  // ── Coach notes ─────────────────────────────────────────────────────────
+  const coachResult: CoachResult | null =
+    stage === "coach" && status === "completed" && notes
+      ? (notes as unknown as CoachResult)
+      : null;
+
+  const readinessColor = coachResult?.interviewPrep
+    ? coachResult.interviewPrep.estimatedReadinessScore >= 70 ? "text-green-700 bg-green-50"
+      : coachResult.interviewPrep.estimatedReadinessScore >= 45 ? "text-amber-700 bg-amber-50"
+      : "text-red-700 bg-red-50"
+    : "";
+
+  const resumeScoreColor = coachResult?.resumeInsights
+    ? coachResult.resumeInsights.score >= 70 ? "text-green-700 bg-green-50"
+      : coachResult.resumeInsights.score >= 45 ? "text-amber-700 bg-amber-50"
+      : "text-red-700 bg-red-50"
+    : "";
 
   return (
     <div
@@ -391,6 +410,69 @@ export function CycleStageCard({
         </div>
       )}
 
+            {/* ── Coach results ── */}
+      {coachResult && (
+        <div className="mt-4 space-y-2">
+          {/* Score chips row */}
+          <div className="flex flex-wrap gap-2">
+            {coachResult.interviewPrep && (
+              <div className={"inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold " + readinessColor}>
+                <span>Interview readiness:</span>
+                <span>{coachResult.interviewPrep.estimatedReadinessScore}/100</span>
+              </div>
+            )}
+            {coachResult.resumeInsights && (
+              <div className={"inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold " + resumeScoreColor}>
+                <span>Resume score:</span>
+                <span>{coachResult.resumeInsights.score}/100</span>
+              </div>
+            )}
+          </div>
+
+          {/* Top practice question */}
+          {coachResult.interviewPrep?.practiceQuestions[0] && (
+            <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
+              <p className="text-xs font-medium text-gray-500 mb-0.5">Practice question</p>
+              <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 italic">
+                &ldquo;{coachResult.interviewPrep.practiceQuestions[0]}&rdquo;
+              </p>
+            </div>
+          )}
+
+          {/* Top resume suggestion */}
+          {coachResult.resumeInsights?.suggestions[0] && (
+            <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
+              <p className="text-xs font-medium text-gray-500 mb-0.5">Resume: top fix</p>
+              <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
+                {coachResult.resumeInsights.suggestions[0]}
+              </p>
+            </div>
+          )}
+
+          {/* Action items (top 3) */}
+          {coachResult.actionItems.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Action items</p>
+              <div className="space-y-1">
+                {coachResult.actionItems.slice(0, 3).map((item, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0 text-orange-500 text-xs">•</span>
+                    <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {coachResult.summary && (
+            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+              {coachResult.summary}
+            </p>
+          )}
+        </div>
+      )}
+
             {/* ── Run button (current stage) ── */}
       {isCurrentStage && onRun && (
         <button
@@ -415,7 +497,7 @@ export function CycleStageCard({
       )}
 
       {/* ── Completed indicator (no notes) ── */}
-      {status === "completed" && !evalResult && !adviceResult && !learnResult && !actResult && (
+      {status === "completed" && !evalResult && !adviceResult && !learnResult && !actResult && !coachResult && (
         <div className="mt-3 flex items-center gap-1.5 text-xs text-green-600">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
