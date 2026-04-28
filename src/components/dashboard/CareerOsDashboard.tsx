@@ -9,7 +9,6 @@ import {
   advanceStage,
   completeCycle,
   type CareerOsStage,
-
 } from "@/orchestrator/careerOsOrchestrator";
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { getSubscription } from "@/services/billing/subscriptionService";
@@ -23,16 +22,14 @@ interface ActiveCycle {
   current_stage: string;
 }
 
-
 const STAGE_ORDER: CareerOsStage[] = [
   "evaluate", "advise", "learn", "act", "coach", "achieve",
 ];
 
 type StageStatusMap = Record<CareerOsStage, "pending" | "in_progress" | "completed" | "skipped">;
+type StageNotesMap  = Record<CareerOsStage, Record<string, unknown> | null>;
 
-function buildStageStatus(
-  cycle: ActiveCycle | null
-): StageStatusMap {
+function buildStageStatus(cycle: ActiveCycle | null): StageStatusMap {
   const current = cycle?.current_stage as CareerOsStage | undefined;
   const status: StageStatusMap = {
     evaluate: "pending", advise: "pending", learn: "pending",
@@ -44,24 +41,53 @@ function buildStageStatus(
   const currentIdx = STAGE_ORDER.indexOf(current);
   for (let i = 0; i < STAGE_ORDER.length; i++) {
     const s = STAGE_ORDER[i];
-    if (i < currentIdx)      status[s] = "completed";
+    if (i < currentIdx)        status[s] = "completed";
     else if (i === currentIdx) status[s] = cycle?.status === "active" ? "in_progress" : "completed";
   }
   return status;
 }
 
+function emptyNotesMap(): StageNotesMap {
+  return {
+    evaluate: null, advise: null, learn: null,
+    act: null,      coach: null,  achieve: null,
+  };
+}
+
+/** Load notes for all completed stages in a cycle */
+async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("career_os_stages")
+    .select("stage, notes")
+    .eq("cycle_id", cycleId)
+    .eq("status", "completed");
+
+  const map = emptyNotesMap();
+  if (data) {
+    for (const row of data) {
+      const stage = row.stage as CareerOsStage;
+      if (stage in map && row.notes && typeof row.notes === "object") {
+        map[stage] = row.notes as Record<string, unknown>;
+      }
+    }
+  }
+  return map;
+}
+
 export function CareerOsDashboard() {
-  const [userId, setUserId]       = useState<string | null>(null);
-  const [cycle, setCycle]         = useState<ActiveCycle | null>(null);
+  const [userId, setUserId]           = useState<string | null>(null);
+  const [cycle, setCycle]             = useState<ActiveCycle | null>(null);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
-  const [loading, setLoading]     = useState(true);
-  const [running, setRunning]     = useState(false);
-  const [plan, setPlan]           = useState<SubscriptionPlan>("free");
-  const [error, setError]         = useState<string | null>(null);
-  const [goal, setGoal]           = useState("");
+  const [stageNotes, setStageNotes]   = useState<StageNotesMap>(emptyNotesMap());
+  const [loading, setLoading]         = useState(true);
+  const [running, setRunning]         = useState(false);
+  const [plan, setPlan]               = useState<SubscriptionPlan>("free");
+  const [error, setError]             = useState<string | null>(null);
+  const [goal, setGoal]               = useState("");
   const [showGoalInput, setShowGoalInput] = useState(false);
 
-  // Load user + active cycle
+  // Load user + active cycle + stage notes
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data }) => {
@@ -77,8 +103,27 @@ export function CareerOsDashboard() {
       setCycle(activeCycle);
       setStageStatus(buildStageStatus(activeCycle));
       setPlan(sub?.plan ?? "free");
+
+      // Load notes for completed stages
+      if (activeCycle) {
+        const notes = await loadStageNotes(activeCycle.id);
+        setStageNotes(notes);
+      }
+
       setLoading(false);
     });
+  }, []);
+
+  const refreshCycle = useCallback(async (uid: string) => {
+    const fresh = await getActiveCycle(uid);
+    setCycle(fresh);
+    setStageStatus(buildStageStatus(fresh));
+    if (fresh) {
+      const notes = await loadStageNotes(fresh.id);
+      setStageNotes(notes);
+    } else {
+      setStageNotes(emptyNotesMap());
+    }
   }, []);
 
   const handleStartCycle = useCallback(async () => {
@@ -90,16 +135,14 @@ export function CareerOsDashboard() {
       if (result.status === "abandoned") {
         setError(result.error ?? "Failed to start cycle.");
       } else {
-        const fresh = await getActiveCycle(userId);
-        setCycle(fresh);
-        setStageStatus(buildStageStatus(fresh));
+        await refreshCycle(userId);
         setShowGoalInput(false);
         setGoal("");
       }
     } finally {
       setRunning(false);
     }
-  }, [userId, goal]);
+  }, [userId, goal, refreshCycle]);
 
   const handleAdvanceStage = useCallback(async () => {
     if (!userId || !cycle) return;
@@ -109,16 +152,14 @@ export function CareerOsDashboard() {
     try {
       const result = await advanceStage(userId, cycle.id, currentStage);
       if (result.error) {
-        setError(result.error ?? `Failed to run ${currentStage}.`);
+        setError(result.error ?? "Failed to run " + currentStage + ".");
       } else {
-        const fresh = await getActiveCycle(userId);
-        setCycle(fresh);
-        setStageStatus(buildStageStatus(fresh));
+        await refreshCycle(userId);
       }
     } finally {
       setRunning(false);
     }
-  }, [userId, cycle]);
+  }, [userId, cycle, refreshCycle]);
 
   const handleCompleteCycle = useCallback(async () => {
     if (!userId || !cycle) return;
@@ -127,6 +168,7 @@ export function CareerOsDashboard() {
       await completeCycle(userId, cycle.id);
       setCycle(null);
       setStageStatus(buildStageStatus(null));
+      setStageNotes(emptyNotesMap());
     } finally {
       setRunning(false);
     }
@@ -142,7 +184,7 @@ export function CareerOsDashboard() {
     );
   }
 
-  const currentStage = cycle?.current_stage as CareerOsStage | undefined;
+  const currentStage  = cycle?.current_stage as CareerOsStage | undefined;
   const cycleComplete =
     currentStage === "achieve" && stageStatus.achieve === "completed";
 
@@ -153,7 +195,7 @@ export function CareerOsDashboard() {
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Career OS</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Your AI-powered career operating system — Evaluate → Advise → Learn → Act → Coach → Achieve
+            Your AI-powered career operating system — Evaluate &rarr; Advise &rarr; Learn &rarr; Act &rarr; Coach &rarr; Achieve
           </p>
         </div>
         <PlanBadge plan={plan} />
@@ -193,7 +235,7 @@ export function CareerOsDashboard() {
                   className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold
                              text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {running ? "Starting…" : "Start cycle"}
+                  {running ? "Starting..." : "Start cycle"}
                 </button>
                 <button
                   onClick={() => setShowGoalInput(false)}
@@ -236,11 +278,10 @@ export function CareerOsDashboard() {
                 <div
                   className="h-1.5 rounded-full bg-blue-500 transition-all"
                   style={{
-                    width: `${Math.round(
+                    width: Math.round(
                       ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /
-                        STAGE_ORDER.length) *
-                        100
-                    )}%`,
+                        STAGE_ORDER.length) * 100
+                    ) + "%",
                   }}
                 />
               </div>
@@ -263,6 +304,7 @@ export function CareerOsDashboard() {
                     : undefined
                 }
                 running={running}
+                notes={stageNotes[stage]}
               />
             ))}
           </div>
@@ -280,7 +322,7 @@ export function CareerOsDashboard() {
                 className="mt-4 rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold
                            text-white hover:bg-green-700 disabled:opacity-50"
               >
-                {running ? "Completing…" : "Complete & start next cycle"}
+                {running ? "Completing..." : "Complete & start next cycle"}
               </button>
             </div>
           )}

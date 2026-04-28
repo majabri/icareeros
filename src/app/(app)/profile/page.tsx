@@ -6,16 +6,19 @@
  * Loads the current user's profile from `user_profiles`, renders the
  * ProfileForm for editing, and links back to the dashboard.
  *
- * This is Step 1 of the Career OS loop: Evaluate (where am I now?).
+ * Day 21: also loads the active cycle so ProfileForm can auto-trigger
+ * the Evaluate AI stage after the user saves their profile.
  */
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
 import { ProfileForm, type UserProfile } from "@/components/profile/ProfileForm";
 
 export default function ProfilePage() {
   const [userId,  setUserId]  = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [cycleId, setCycleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
@@ -24,20 +27,23 @@ export default function ProfilePage() {
       try {
         const supabase = createClient();
 
-        // Get authenticated user
         const { data: { user }, error: authErr } = await supabase.auth.getUser();
         if (authErr || !user) throw new Error("Not authenticated");
         setUserId(user.id);
 
-        // Load existing profile (may be null if first visit)
-        const { data, error: dbErr } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        // Load profile and active cycle in parallel
+        const [profileResult, activeCycle] = await Promise.all([
+          supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          getActiveCycle(user.id),
+        ]);
 
-        if (dbErr) throw new Error(dbErr.message);
-        if (data) setProfile(data as UserProfile);
+        if (profileResult.error) throw new Error(profileResult.error.message);
+        if (profileResult.data) setProfile(profileResult.data as UserProfile);
+        if (activeCycle) setCycleId(activeCycle.id);
       } catch (err) {
         setLoadErr(err instanceof Error ? err.message : "Failed to load profile.");
       } finally {
@@ -59,11 +65,19 @@ export default function ProfilePage() {
               Evaluate
             </span>
             <span className="text-sm text-gray-400">Stage 1 of 6</span>
+            {cycleId && (
+              <span className="text-sm text-green-600 font-medium">
+                Active cycle detected
+              </span>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
           <p className="mt-1 text-sm text-gray-500">
             Tell us where you are today. iCareerOS uses this to assess your market fit,
             identify skill gaps, and recommend your next career move.
+            {cycleId
+              ? " Saving your profile will automatically run the AI evaluation."
+              : " Start a Career OS cycle on the dashboard to enable AI evaluation."}
           </p>
         </div>
 
@@ -85,7 +99,7 @@ export default function ProfilePage() {
 
         {/* Form */}
         {!loading && !loadErr && userId && (
-          <ProfileForm initial={profile} userId={userId} />
+          <ProfileForm initial={profile} userId={userId} cycleId={cycleId} />
         )}
 
         {/* Link back to dashboard */}
@@ -94,7 +108,7 @@ export default function ProfilePage() {
             href="/dashboard"
             className="text-sm text-blue-600 hover:underline transition-colors"
           >
-            ← Back to Career OS Dashboard
+            Back to Career OS Dashboard
           </a>
         </div>
       </div>
