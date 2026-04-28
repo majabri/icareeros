@@ -115,6 +115,46 @@ function mockAdviseFetch(
   } as Response);
 }
 
+
+/** Helper: mock global.fetch for the learn API route */
+function mockLearnFetch(
+  overrides: Partial<{
+    resources: unknown[];
+    topSkillGaps: string[];
+    weeklyHoursNeeded: number;
+    estimatedCompletionWeeks: number;
+    summary: string;
+  }> = {},
+  status = 200
+) {
+  const body =
+    status >= 200 && status < 300
+      ? {
+          resources: [
+            {
+              title: "SQL for Data Analysis",
+              type: "course",
+              provider: "Coursera",
+              estimatedHours: 20,
+              skillsCovered: ["SQL"],
+              priorityScore: 95,
+            },
+          ],
+          topSkillGaps: ["SQL", "A/B testing"],
+          weeklyHoursNeeded: 8,
+          estimatedCompletionWeeks: 12,
+          summary: "Focus on SQL first to close the biggest gap.",
+          ...overrides,
+        }
+      : { error: "Advise stage must be completed before running Learn." };
+
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:     status >= 200 && status < 300,
+    status,
+    json:   async () => body,
+  } as Response);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("careerOsOrchestrator", () => {
@@ -245,7 +285,36 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.timelineWeeks).toBe(16);
   });
 
-  it("unknown stage: returns success:false with error", async () => {
+  it("learn: propagates 422 error when advise stage not completed", async () => {
+    // Route returns 422 when advise notes are missing server-side
+    mockLearnFetch({}, 422);
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "learn");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Advise");
+  });
+
+  it("learn: calls /api/career-os/learn and saves notes on success", async () => {
+    mockLearnFetch();
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "learn");
+
+    expect(result.success).toBe(true);
+    expect(result.meta?.resourceCount).toBe(1);
+    expect(result.meta?.weeklyHoursNeeded).toBe(8);
+    expect(result.meta?.estimatedWeeks).toBe(12);
+  });
+
+    it("unknown stage: returns success:false with error", async () => {
     const { stageRouter } = await import("../stageRouter");
     const result = await stageRouter.route("user-1", "cycle-1", "unknown" as never);
     expect(result.success).toBe(false);

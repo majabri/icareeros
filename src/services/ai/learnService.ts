@@ -2,13 +2,11 @@
  * iCareerOS — Learn Service (Stage 3 of Career OS)
  * Generates personalised learning recommendations: courses, certifications, resources.
  *
- * Calls: learning-insights edge fn via supabase.functions.invoke()
+ * Calls: POST /api/career-os/learn (server-side Next.js route → Claude Sonnet)
+ * ANTHROPIC_API_KEY stays server-side; this module only calls the local API route.
  */
 
-import { createClient } from "@/lib/supabase";
 import { eventLogger } from "@/orchestrator/eventLogger";
-import type { EvaluationResult } from "./evaluateService";
-import type { AdviceResult } from "./adviseService";
 
 export interface LearningResource {
   title: string;
@@ -31,52 +29,31 @@ export interface LearnResult {
 export async function generateLearningPlan(
   userId: string,
   cycleId: string,
-  evaluation: EvaluationResult,
-  advice: AdviceResult,
 ): Promise<LearnResult> {
-  const supabase = createClient();
+  await eventLogger.logAiCall(userId, cycleId, "generate-learning-plan", "started");
 
-  await eventLogger.logAiCall(userId, cycleId, "learning-insights", "started");
-
-  const { data, error } = await supabase.functions.invoke("learning-insights", {
-    body: {
-      user_id: userId,
-      cycle_id: cycleId,
-      skill_gaps: evaluation.gaps,
-      career_level: evaluation.careerLevel,
-      recommended_paths: advice.recommendedPaths.map((p) => p.title),
-      timeline_weeks: advice.timelineWeeks,
-    },
+  const res = await fetch("/api/career-os/learn", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cycle_id: cycleId }),
+    credentials: "include",
   });
 
-  if (error) {
-    await eventLogger.logAiCall(userId, cycleId, "learning-insights", "failed", {
-      error: error.message,
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    await eventLogger.logAiCall(userId, cycleId, "generate-learning-plan", "failed", {
+      error: err.error,
+      status: res.status,
     });
-    throw new Error(`generateLearningPlan failed: ${error.message}`);
+    throw new Error("generateLearningPlan failed: " + (err.error ?? res.statusText));
   }
 
-  const resources: LearningResource[] = (data?.resources ?? []).map((r: Record<string, unknown>) => ({
-    title: String(r.title ?? ""),
-    type: (r.type as LearningResource["type"]) ?? "course",
-    provider: String(r.provider ?? ""),
-    url: r.url ? String(r.url) : undefined,
-    estimatedHours: Number(r.estimated_hours ?? 0),
-    skillsCovered: Array.isArray(r.skills_covered) ? (r.skills_covered as string[]) : [],
-    priorityScore: Number(r.priority_score ?? 50),
-  }));
+  const result = (await res.json()) as LearnResult;
 
-  const result: LearnResult = {
-    resources,
-    topSkillGaps: data?.top_skill_gaps ?? evaluation.gaps.slice(0, 5),
-    weeklyHoursNeeded: data?.weekly_hours_needed ?? 5,
-    estimatedCompletionWeeks: data?.estimated_completion_weeks ?? advice.timelineWeeks,
-    summary: data?.summary ?? "",
-  };
-
-  await eventLogger.logAiCall(userId, cycleId, "learning-insights", "completed", {
+  await eventLogger.logAiCall(userId, cycleId, "generate-learning-plan", "completed", {
     resourceCount: result.resources.length,
     weeklyHoursNeeded: result.weeklyHoursNeeded,
+    estimatedCompletionWeeks: result.estimatedCompletionWeeks,
   });
 
   return result;
