@@ -10,16 +10,15 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     env:
-      # Staging Supabase — read-only anon key, safe for CI
-      NEXT_PUBLIC_SUPABASE_URL: https://muevgfmpzykihjuihnga.supabase.co
+      # Tests run against the live Vercel staging deployment — no local server needed
+      PLAYWRIGHT_BASE_URL: https://icareeros.vercel.app
+      # Supabase staging project (kuneabeiwcxavvyyfjkx)
+      # Set STAGING_SUPABASE_ANON_KEY secret to enable dashboard content tests
+      NEXT_PUBLIC_SUPABASE_URL: https://kuneabeiwcxavvyyfjkx.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
-      # Tests mock Supabase responses via page.route() so real key not required
-      # If secret missing tests still run against mocked responses
-      PLAYWRIGHT_BASE_URL: http://localhost:3000
-      NEXT_PUBLIC_MONETIZATION_ENABLED: "false"
 
     steps:
       - uses: actions/checkout@v4
@@ -34,20 +33,6 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-
-      - name: Build Next.js app
-        run: npm run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://muevgfmpzykihjuihnga.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY || 'placeholder-for-build' }}
-
-      - name: Start Next.js server
-        run: npm run start &
-        env:
-          PORT: 3000
-
-      - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 30000
 
       - name: Run Playwright tests
         run: npx playwright test --reporter=github
