@@ -1,6 +1,6 @@
 // ── Subscription types ─────────────────────────────────────────────────────
 
-export type SubscriptionPlan = "free" | "pro" | "premium";
+export type SubscriptionPlan = "free" | "premium" | "professional";
 export type SubscriptionStatus =
   | "active"
   | "trialing"
@@ -24,40 +24,50 @@ export interface UserSubscription {
 }
 
 export interface PlanLimits {
-  maxCycles: number;        // -1 = unlimited
+  maxCycles: number;           // -1 = unlimited
   aiCoach: boolean;
   advancedMatch: boolean;
   prioritySupport: boolean;
+  coverLettersPerMonth: number; // 0 = none
+  mockInterviews: boolean;
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
-    maxCycles: 3,
-    aiCoach: false,
-    advancedMatch: false,
-    prioritySupport: false,
-  },
-  pro: {
-    maxCycles: -1,
-    aiCoach: true,
-    advancedMatch: true,
-    prioritySupport: false,
+    maxCycles:           3,
+    aiCoach:             false,
+    advancedMatch:       false,
+    prioritySupport:     false,
+    coverLettersPerMonth: 0,
+    mockInterviews:      false,
   },
   premium: {
-    maxCycles: -1,
-    aiCoach: true,
-    advancedMatch: true,
-    prioritySupport: true,
+    maxCycles:           -1,
+    aiCoach:             true,
+    advancedMatch:       true,
+    prioritySupport:     false,
+    coverLettersPerMonth: 2,
+    mockInterviews:      true,
+  },
+  professional: {
+    maxCycles:           -1,
+    aiCoach:             true,
+    advancedMatch:       true,
+    prioritySupport:     true,
+    coverLettersPerMonth: 5,
+    mockInterviews:      true,
   },
 };
 
 export const PLAN_PRICES: Record<SubscriptionPlan, { monthly: number; annual: number }> = {
-  free:    { monthly: 0,   annual: 0 },
-  pro:     { monthly: 29,  annual: 290 },
-  premium: { monthly: 79,  annual: 790 },
+  free:         { monthly: 0,   annual: 0    },
+  premium:      { monthly: 19,  annual: 190  },   // 2 months free
+  professional: { monthly: 129, annual: 1290 },   // 2 months free
 };
 
 export type FeatureKey =
   | "feature_ai_coach"
   | "feature_advanced_match"
-  | "feature_unlimited_cycles";
+  | "feature_unlimited_cycles"
+  | "feature_mock_interviews"
+  | "feature_cover_letters";

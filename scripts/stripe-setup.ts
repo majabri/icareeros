@@ -1,20 +1,21 @@
 /**
  * iCareerOS — Stripe Product Setup Script
+ * Pricing decision: Free / Premium $19/mo / Professional $129/mo
  *
  * Run ONCE when ready to enable monetization:
  *   STRIPE_SECRET_KEY=sk_live_xxx deno run --allow-net --allow-env scripts/stripe-setup.ts
  *
- * This creates:
- *   - iCareerOS Free (product, no price needed — it's free)
- *   - iCareerOS Pro  ($29/mo, $290/yr)
- *   - iCareerOS Premium ($79/mo, $790/yr)
+ * This creates in Stripe:
+ *   - iCareerOS Free          (product only — no price, it's free)
+ *   - iCareerOS Premium       ($19/mo, $190/yr)
+ *   - iCareerOS Professional  ($129/mo, $1290/yr)
  *
- * After running, copy the price IDs printed at the end into your Supabase
- * edge function secrets:
- *   supabase secrets set STRIPE_PRICE_PRO=price_xxx
+ * After running, copy the price IDs into Supabase edge function secrets:
  *   supabase secrets set STRIPE_PRICE_PREMIUM=price_xxx
+ *   supabase secrets set STRIPE_PRICE_PROFESSIONAL=price_xxx
  *
- * Then set monetization_enabled = true in the feature_flags table.
+ * Then flip monetization on in Supabase:
+ *   UPDATE public.feature_flags SET enabled = true WHERE key = 'monetization_enabled';
  */
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
@@ -38,8 +39,9 @@ async function stripe(
       Object.entries(body).map(([k, v]) => [k, String(v)])
     ).toString(),
   });
-  const data = await res.json() as Record<string, unknown>;
+  const data = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
+    // deno-lint-ignore no-explicit-any
     throw new Error(`Stripe error on ${path}: ${(data as any).error?.message}`);
   }
   return data;
@@ -50,74 +52,79 @@ async function main() {
 
   // ── Free Product (reference only, no price) ─────────────────────────────
   const free = await stripe("POST", "/products", {
-    name:        "iCareerOS Free",
-    description: "Get started with your AI Career Operating System. No credit card required.",
+    name: "iCareerOS Free",
+    description:
+      "Start your AI Career Operating System. No credit card required.",
     "metadata[plan]": "free",
   });
   console.log(`✅ Free product: ${free.id}`);
 
-  // ── Pro Product ──────────────────────────────────────────────────────────
-  const pro = await stripe("POST", "/products", {
-    name:        "iCareerOS Pro",
-    description: "Unlimited Career OS cycles, AI Coach, advanced match insights.",
-    "metadata[plan]": "pro",
-  });
-  console.log(`✅ Pro product: ${pro.id}`);
-
-  const proMonthly = await stripe("POST", "/prices", {
-    product:        pro.id as string,
-    unit_amount:    2900,
-    currency:       "usd",
-    "recurring[interval]": "month",
-    nickname:       "Pro Monthly",
-    "metadata[plan]": "pro",
-  });
-  console.log(`   Monthly price: ${proMonthly.id}`);
-
-  const proAnnual = await stripe("POST", "/prices", {
-    product:        pro.id as string,
-    unit_amount:    29000,
-    currency:       "usd",
-    "recurring[interval]": "year",
-    nickname:       "Pro Annual",
-    "metadata[plan]": "pro",
-  });
-  console.log(`   Annual price: ${proAnnual.id}`);
-
-  // ── Premium Product ──────────────────────────────────────────────────────
+  // ── Premium — $19/mo ─────────────────────────────────────────────────────
   const premium = await stripe("POST", "/products", {
-    name:        "iCareerOS Premium",
-    description: "Everything in Pro plus priority support and advanced career intelligence.",
+    name: "iCareerOS Premium",
+    description:
+      "Unlimited AI coaching cycles, 2 cover letters/mo, interview prep, and weekly career tracking.",
     "metadata[plan]": "premium",
   });
   console.log(`✅ Premium product: ${premium.id}`);
 
   const premiumMonthly = await stripe("POST", "/prices", {
-    product:        premium.id as string,
-    unit_amount:    7900,
-    currency:       "usd",
+    product:               premium.id as string,
+    unit_amount:           1900,
+    currency:              "usd",
     "recurring[interval]": "month",
-    nickname:       "Premium Monthly",
-    "metadata[plan]": "premium",
+    nickname:              "Premium Monthly",
+    "metadata[plan]":      "premium",
   });
   console.log(`   Monthly price: ${premiumMonthly.id}`);
 
   const premiumAnnual = await stripe("POST", "/prices", {
-    product:        premium.id as string,
-    unit_amount:    79000,
-    currency:       "usd",
+    product:               premium.id as string,
+    unit_amount:           19000,  // $190/yr — 2 months free
+    currency:              "usd",
     "recurring[interval]": "year",
-    nickname:       "Premium Annual",
-    "metadata[plan]": "premium",
+    nickname:              "Premium Annual",
+    "metadata[plan]":      "premium",
   });
-  console.log(`   Annual price: ${premiumAnnual.id}`);
+  console.log(`   Annual price:  ${premiumAnnual.id}`);
+
+  // ── Professional — $129/mo ───────────────────────────────────────────────
+  const professional = await stripe("POST", "/products", {
+    name: "iCareerOS Professional",
+    description:
+      "Dedicated coaching dashboard, 5 cover letters/mo, unlimited mock interviews, 3–5 year roadmap, and priority support.",
+    "metadata[plan]": "professional",
+  });
+  console.log(`✅ Professional product: ${professional.id}`);
+
+  const professionalMonthly = await stripe("POST", "/prices", {
+    product:               professional.id as string,
+    unit_amount:           12900,
+    currency:              "usd",
+    "recurring[interval]": "month",
+    nickname:              "Professional Monthly",
+    "metadata[plan]":      "professional",
+  });
+  console.log(`   Monthly price: ${professionalMonthly.id}`);
+
+  const professionalAnnual = await stripe("POST", "/prices", {
+    product:               professional.id as string,
+    unit_amount:           129000, // $1290/yr — 2 months free
+    currency:              "usd",
+    "recurring[interval]": "year",
+    nickname:              "Professional Annual",
+    "metadata[plan]":      "professional",
+  });
+  console.log(`   Annual price:  ${professionalAnnual.id}`);
 
   // ── Summary ──────────────────────────────────────────────────────────────
   console.log("\n✅ Done! Run these commands to configure the edge function:\n");
-  console.log(`supabase secrets set STRIPE_PRICE_PRO=${proMonthly.id}`);
   console.log(`supabase secrets set STRIPE_PRICE_PREMIUM=${premiumMonthly.id}`);
-  console.log("\nThen enable monetization:");
+  console.log(`supabase secrets set STRIPE_PRICE_PROFESSIONAL=${professionalMonthly.id}`);
+  console.log("\nThen enable monetization in Supabase:");
   console.log("UPDATE public.feature_flags SET enabled = true WHERE key = 'monetization_enabled';");
+  console.log("\nAnd set the Vercel env var:");
+  console.log("NEXT_PUBLIC_MONETIZATION_ENABLED=true");
 }
 
 await main();

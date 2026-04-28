@@ -29,7 +29,7 @@ export async function getSubscription(): Promise<UserSubscription | null> {
  * Returns null if monetization is not yet configured.
  */
 export async function createCheckoutSession(
-  plan: "pro" | "premium"
+  plan: "premium" | "professional"
 ): Promise<string | null> {
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{

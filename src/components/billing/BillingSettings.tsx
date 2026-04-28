@@ -167,7 +167,7 @@ export function BillingSettings() {
       </div>
 
       {/* Upgrade options — only show if not on premium and monetization will be enabled */}
-      {plan !== "premium" && (
+      {plan !== "professional" && (
         <div className="space-y-4">
           <h3 className="text-base font-semibold text-gray-900">
             {MONETIZATION_ENABLED ? "Upgrade your plan" : "Plans — coming soon"}
@@ -175,14 +175,14 @@ export function BillingSettings() {
           <div className="grid gap-4 sm:grid-cols-2">
             {plan === "free" && (
               <UpgradeCTA
-                targetPlan="pro"
+                targetPlan="premium"
                 currentPlan={plan as SubscriptionPlan}
                 disabled={!MONETIZATION_ENABLED}
                 variant="card"
               />
             )}
             <UpgradeCTA
-              targetPlan="premium"
+              targetPlan="professional"
               currentPlan={plan as SubscriptionPlan}
               disabled={!MONETIZATION_ENABLED}
               variant="card"
@@ -212,7 +212,7 @@ export function BillingSettings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(["free", "pro", "premium"] as SubscriptionPlan[]).map((p) => (
+              {(["free", "premium", "professional"] as SubscriptionPlan[]).map((p) => (
                 <tr key={p} className={p === plan ? "font-semibold text-gray-900" : "text-gray-600"}>
                   <td className="py-2 pr-4 capitalize">
                     {p} {p === plan && <span className="ml-1 text-xs text-blue-600">(current)</span>}
