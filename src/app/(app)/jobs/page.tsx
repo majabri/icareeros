@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
 import type { OpportunityResult } from "@/services/opportunityTypes";
+import { scoreFitBatch, type FitScore } from "@/services/ai/fitScoreService";
+import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
 
 const PAGE_SIZE = 30;
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Freelance"];
@@ -17,14 +19,49 @@ interface Filters {
 const DEFAULTS: Filters = { query: "", remote: false, jobType: "" };
 
 export default function JobsPage() {
-  const [filters,  setFilters]  = useState<Filters>(DEFAULTS);
-  const [draft,    setDraft]    = useState<Filters>(DEFAULTS);
-  const [results,  setResults]  = useState<OpportunityResult[]>([]);
-  const [total,    setTotal]    = useState(0);
-  const [offset,   setOffset]   = useState(0);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
-  const [searched, setSearched] = useState(false);
+  const [filters,    setFilters]    = useState<Filters>(DEFAULTS);
+  const [draft,      setDraft]      = useState<Filters>(DEFAULTS);
+  const [results,    setResults]    = useState<OpportunityResult[]>([]);
+  const [total,      setTotal]      = useState(0);
+  const [offset,     setOffset]     = useState(0);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [searched,   setSearched]   = useState(false);
+  // Fit score state — populated non-blocking after search
+  const [fitScores,  setFitScores]  = useState<Record<string, FitScore>>({});
+  const [scoringFit, setScoringFit] = useState(false);
+  const [cycleId,    setCycleId]    = useState<string | null>(null);
+
+  // Load active cycle ID once on mount (needed for evaluate-stage enrichment)
+  useEffect(() => {
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const cycle = await getActiveCycle(user.id);
+        if (cycle) setCycleId(cycle.id);
+      } catch {
+        // non-critical — fit scoring still works via user_profiles fallback
+      }
+    })();
+  }, []);
+
+  /** Fire background fit scoring for a page of results (non-blocking) */
+  const runFitScoring = useCallback(async (opps: OpportunityResult[], cId: string | null) => {
+    const ids = opps.map((o) => o.id).filter((id): id is string => !!id);
+    if (ids.length === 0) return;
+
+    setScoringFit(true);
+    try {
+      const result = await scoreFitBatch(ids, cId ?? undefined);
+      setFitScores((prev) => ({ ...prev, ...result.scores }));
+    } catch {
+      // Scoring is non-critical — silently ignore errors
+    } finally {
+      setScoringFit(false);
+    }
+  }, []);
 
   const search = useCallback(async (f: Filters, off: number) => {
     setLoading(true);
@@ -76,22 +113,29 @@ export default function JobsPage() {
         is_flagged:    row.is_flagged,
         flag_reasons:  row.flag_reasons ?? undefined,
         matchReason:   "",
-        // Store raw salary fields for the card to format
         ...(row.salary_min != null ? { salary_min: row.salary_min } : {}),
         ...(row.salary_max != null ? { salary_max: row.salary_max } : {}),
       }));
 
-      if (off === 0) setResults(mapped);
-      else           setResults((prev) => [...prev, ...mapped]);
+      if (off === 0) {
+        setResults(mapped);
+        // Clear stale scores when starting a new search
+        setFitScores({});
+      } else {
+        setResults((prev) => [...prev, ...mapped]);
+      }
 
       setTotal(count ?? 0);
       setSearched(true);
+
+      // Fire background fit scoring — don't await (non-blocking)
+      void runFitScoring(mapped, cycleId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed — please try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cycleId, runFitScoring]);
 
   useEffect(() => { search(DEFAULTS, 0); }, [search]);
 
@@ -113,6 +157,20 @@ export default function JobsPage() {
     setFilters(DEFAULTS);
     setOffset(0);
     search(DEFAULTS, 0);
+  }
+
+  /** Merge live fit scores into an opportunity result */
+  function withFitScore(opp: OpportunityResult): OpportunityResult {
+    if (!opp.id) return opp;
+    const fs = fitScores[opp.id];
+    if (!fs) return opp;
+    return {
+      ...opp,
+      fit_score:     fs.fit_score,
+      match_summary: fs.match_summary,
+      strengths:     fs.strengths,
+      skill_gaps:    fs.skill_gaps,
+    };
   }
 
   const loadingFirst = loading && offset === 0;
@@ -195,13 +253,22 @@ export default function JobsPage() {
           </div>
         )}
 
-        {/* Result count */}
+        {/* Result count + scoring indicator */}
         {searched && !loadingFirst && (
-          <p className="mb-4 text-sm text-gray-500">
-            {total === 0
-              ? "No opportunities found — try different keywords or remove filters."
-              : `Showing ${results.length} of ${total.toLocaleString()} opportunit${total === 1 ? "y" : "ies"}`}
-          </p>
+          <div className="mb-4 flex items-center gap-3">
+            <p className="text-sm text-gray-500">
+              {total === 0
+                ? "No opportunities found — try different keywords or remove filters."
+                : `Showing ${results.length} of ${total.toLocaleString()} opportunit${total === 1 ? "y" : "ies"}`}
+            </p>
+            {scoringFit && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5
+                               text-xs font-medium text-blue-600">
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-blue-400" />
+                Scoring fit…
+              </span>
+            )}
+          </div>
         )}
 
         {/* Loading skeleton */}
@@ -221,7 +288,7 @@ export default function JobsPage() {
                 {results.map((opp) => (
                   <OpportunityCard
                     key={opp.id ?? `${opp.company}::${opp.title}`}
-                    opportunity={opp}
+                    opportunity={withFitScore(opp)}
                   />
                 ))}
               </div>
