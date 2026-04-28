@@ -197,6 +197,50 @@ function mockActFetch(
   } as Response);
 }
 
+
+/** Helper: mock global.fetch for the coach API route */
+function mockCoachFetch(
+  overrides: Partial<{
+    interviewPrep: unknown;
+    resumeInsights: unknown;
+    actionItems: string[];
+    nextCheckInDays: number;
+    summary: string;
+  }> = {},
+  status = 200
+) {
+  const body =
+    status >= 200 && status < 300
+      ? {
+          interviewPrep: {
+            practiceQuestions: ["Tell me about a time you used data to drive a decision."],
+            keyTalkingPoints: ["Quantify impact wherever possible"],
+            weaknessesToAddress: ["SQL gap — prepare a learning plan story"],
+            estimatedReadinessScore: 65,
+          },
+          resumeInsights: {
+            score: 72,
+            suggestions: ["Add measurable outcomes to each bullet"],
+            keywordsAdded: ["product roadmap", "OKR"],
+            sectionsImproved: ["Summary", "Experience"],
+          },
+          actionItems: [
+            "Practice the top 3 questions aloud before Friday",
+            "Update resume summary this week",
+          ],
+          nextCheckInDays: 7,
+          summary: "Readiness at 65% — update resume and schedule a mock interview.",
+          ...overrides,
+        }
+      : { error: "Advise stage must be completed before running Coach." };
+
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:     status >= 200 && status < 300,
+    status,
+    json:   async () => body,
+  } as Response);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("careerOsOrchestrator", () => {
@@ -383,6 +427,34 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.queryCount).toBe(1);
     expect(result.meta?.networkingTargetCount).toBe(1);
     expect(result.meta?.weeklyApplicationTarget).toBe(5);
+  });
+
+    it("coach: propagates 422 error when advise stage not completed", async () => {
+    mockCoachFetch({}, 422);
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "coach");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Advise");
+  });
+
+  it("coach: calls /api/career-os/coach and saves notes on success", async () => {
+    mockCoachFetch();
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "coach");
+
+    expect(result.success).toBe(true);
+    expect(result.meta?.interviewReadiness).toBe(65);
+    expect(result.meta?.resumeScore).toBe(72);
+    expect(result.meta?.actionItemCount).toBe(2);
   });
 
     it("unknown stage: returns success:false with error", async () => {

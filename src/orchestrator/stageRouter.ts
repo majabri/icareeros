@@ -15,8 +15,6 @@ import {
   runCoachingSession,
   recordAchievement,
 } from "@/services/ai";
-import type { EvaluationResult } from "@/services/ai/evaluateService";
-import type { AdviceResult } from "@/services/ai/adviseService";
 
 export interface RouteResult {
   success: boolean;
@@ -128,20 +126,15 @@ async function routeAct(userId: string, cycleId: string): Promise<RouteResult> {
 }
 
 async function routeCoach(userId: string, cycleId: string): Promise<RouteResult> {
-  const [evaluation, advice] = await Promise.all([
-    loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate"),
-    loadStageNotes<AdviceResult>(userId, cycleId, "advise"),
-  ]);
-  if (!evaluation || !advice) {
-    throw new Error("Coach stage requires completed Evaluate and Advise stages.");
-  }
-  const result = await runCoachingSession(userId, cycleId, evaluation, advice, "both");
+  // Evaluate + Advise notes are fetched server-side inside /api/career-os/coach.
+  // If either stage hasn't completed the route returns 422 and this throws.
+  const result = await runCoachingSession(userId, cycleId);
   await saveStageNotes(userId, cycleId, "coach", result as unknown as Record<string, unknown>);
   return {
     success: true,
     meta: {
-      interviewReadiness: result.interviewPrep?.estimatedReadinessScore,
-      resumeScore: result.resumeInsights?.score,
+      interviewReadiness: result.interviewPrep.estimatedReadinessScore,
+      resumeScore: result.resumeInsights.score,
       actionItemCount: result.actionItems.length,
     },
   };

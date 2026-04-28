@@ -1,16 +1,12 @@
 /**
  * iCareerOS — Coach Service (Stage 5 of Career OS)
- * Provides accountability, feedback, and preparation coaching.
+ * Provides interview preparation, resume insights, and accountability coaching.
  *
- * Calls:
- *   - generate-interview-prep (interview readiness via supabase.functions.invoke)
- *   - rewrite-resume (resume optimisation via supabase.functions.invoke)
+ * Calls: POST /api/career-os/coach (server-side Next.js route → Claude Sonnet)
+ * ANTHROPIC_API_KEY stays server-side; this module only calls the local API route.
  */
 
-import { createClient } from "@/lib/supabase";
 import { eventLogger } from "@/orchestrator/eventLogger";
-import type { EvaluationResult } from "./evaluateService";
-import type { AdviceResult } from "./adviseService";
 
 export type CoachingFocus = "interview_prep" | "resume_polish" | "both";
 
@@ -29,101 +25,44 @@ export interface ResumeInsights {
 }
 
 export interface CoachResult {
-  focus: CoachingFocus;
-  interviewPrep?: InterviewPrepResult;
-  resumeInsights?: ResumeInsights;
+  interviewPrep: InterviewPrepResult;
+  resumeInsights: ResumeInsights;
   actionItems: string[];
   nextCheckInDays: number;
   summary: string;
+  // Legacy field kept for backwards compatibility
+  focus?: CoachingFocus;
 }
 
 export async function runCoachingSession(
   userId: string,
   cycleId: string,
-  evaluation: EvaluationResult,
-  advice: AdviceResult,
-  focus: CoachingFocus = "both",
 ): Promise<CoachResult> {
-  const supabase = createClient();
-  const result: Partial<CoachResult> = { focus, actionItems: [], nextCheckInDays: 7 };
+  await eventLogger.logAiCall(userId, cycleId, "generate-coaching-session", "started");
 
-  // ── Interview prep ──────────────────────────────────────────────
-  if (focus === "interview_prep" || focus === "both") {
-    await eventLogger.logAiCall(userId, cycleId, "generate-interview-prep", "started");
-    const { data: prepData, error: prepError } = await supabase.functions.invoke(
-      "generate-interview-prep",
-      {
-        body: {
-          user_id: userId,
-          cycle_id: cycleId,
-          career_level: evaluation.careerLevel,
-          target_roles: advice.recommendedPaths.map((p) => p.title),
-          skills: evaluation.skills,
-          gaps: evaluation.gaps,
-        },
-      },
-    );
+  const res = await fetch("/api/career-os/coach", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cycle_id: cycleId }),
+    credentials: "include",
+  });
 
-    if (prepError) {
-      await eventLogger.logAiCall(userId, cycleId, "generate-interview-prep", "failed", {
-        error: prepError.message,
-      });
-      throw new Error(`runCoachingSession (interview prep) failed: ${prepError.message}`);
-    }
-
-    result.interviewPrep = {
-      practiceQuestions: prepData?.practice_questions ?? [],
-      keyTalkingPoints: prepData?.key_talking_points ?? [],
-      weaknessesToAddress: prepData?.weaknesses ?? [],
-      estimatedReadinessScore: prepData?.readiness_score ?? 50,
-    };
-
-    await eventLogger.logAiCall(userId, cycleId, "generate-interview-prep", "completed", {
-      questionCount: result.interviewPrep.practiceQuestions.length,
-      readinessScore: result.interviewPrep.estimatedReadinessScore,
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    await eventLogger.logAiCall(userId, cycleId, "generate-coaching-session", "failed", {
+      error: err.error,
+      status: res.status,
     });
+    throw new Error("runCoachingSession failed: " + (err.error ?? res.statusText));
   }
 
-  // ── Resume polish ───────────────────────────────────────────────
-  if (focus === "resume_polish" || focus === "both") {
-    await eventLogger.logAiCall(userId, cycleId, "rewrite-resume", "started");
-    const { data: resumeData, error: resumeError } = await supabase.functions.invoke(
-      "rewrite-resume",
-      {
-        body: {
-          user_id: userId,
-          cycle_id: cycleId,
-          target_roles: advice.recommendedPaths.map((p) => p.title),
-          mode: "optimize",
-        },
-      },
-    );
+  const result = (await res.json()) as CoachResult;
 
-    if (resumeError) {
-      await eventLogger.logAiCall(userId, cycleId, "rewrite-resume", "failed", {
-        error: resumeError.message,
-      });
-      throw new Error(`runCoachingSession (resume) failed: ${resumeError.message}`);
-    }
+  await eventLogger.logAiCall(userId, cycleId, "generate-coaching-session", "completed", {
+    readinessScore: result.interviewPrep.estimatedReadinessScore,
+    resumeScore: result.resumeInsights.score,
+    actionItemCount: result.actionItems.length,
+  });
 
-    result.resumeInsights = {
-      score: resumeData?.score ?? 0,
-      suggestions: resumeData?.suggestions ?? [],
-      keywordsAdded: resumeData?.keywords_added ?? [],
-      sectionsImproved: resumeData?.sections_improved ?? [],
-    };
-
-    await eventLogger.logAiCall(userId, cycleId, "rewrite-resume", "completed", {
-      resumeScore: result.resumeInsights.score,
-      suggestionCount: result.resumeInsights.suggestions.length,
-    });
-  }
-
-  result.actionItems = [
-    ...(result.interviewPrep?.weaknessesToAddress.slice(0, 2) ?? []),
-    ...(result.resumeInsights?.suggestions.slice(0, 2) ?? []),
-  ];
-  result.summary = `Coaching complete. Focus: ${focus}. ${result.actionItems.length} action items generated.`;
-
-  return result as CoachResult;
+  return result;
 }
