@@ -141,14 +141,15 @@ async function routeCoach(userId: string, cycleId: string): Promise<RouteResult>
 }
 
 async function routeAchieve(userId: string, cycleId: string): Promise<RouteResult> {
-  // Default milestone: cycle completion. Callers can override by calling achieveService directly.
-  const result = await recordAchievement(userId, cycleId, "goal_completed");
+  // All prior stage notes are loaded server-side inside /api/career-os/achieve.
+  // Returns 422 if Evaluate or Advise are not yet completed.
+  const result = await recordAchievement(userId, cycleId);
   await saveStageNotes(userId, cycleId, "achieve", result as unknown as Record<string, unknown>);
   return {
     success: true,
     meta: {
       milestoneType: result.milestoneType,
-      notificationSent: result.notificationSent,
+      accomplishmentCount: result.accomplishments.length,
       cycleReadyToComplete: result.cycleReadyToComplete,
       achievedAt: result.achievedAt,
     },
