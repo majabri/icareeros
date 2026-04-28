@@ -241,6 +241,45 @@ function mockCoachFetch(
   } as Response);
 }
 
+
+/** Helper: mock global.fetch for the achieve API route */
+function mockAchieveFetch(
+  overrides: Partial<{
+    accomplishments: string[];
+    nextCycleRecommendations: unknown[];
+    celebrationMessage: string;
+    summary: string;
+  }> = {},
+  status = 200
+) {
+  const body =
+    status >= 200 && status < 300
+      ? {
+          milestoneType: "goal_completed",
+          milestoneRecorded: true,
+          accomplishments: [
+            "Completed a full Career OS cycle",
+            "Built a targeted job-search plan",
+          ],
+          nextCycleRecommendations: [
+            { focus: "Track application outcomes", priority: "high" },
+          ],
+          celebrationMessage: "You completed your first full Career OS cycle — great work!",
+          cycleReadyToComplete: true,
+          notificationSent: false,
+          achievedAt: "2026-04-28T16:00:00.000Z",
+          summary: "Cycle complete. Focus on applications next.",
+          ...overrides,
+        }
+      : { error: "Advise stage must be completed before running Achieve." };
+
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:     status >= 200 && status < 300,
+    status,
+    json:   async () => body,
+  } as Response);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("careerOsOrchestrator", () => {
@@ -455,6 +494,34 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.interviewReadiness).toBe(65);
     expect(result.meta?.resumeScore).toBe(72);
     expect(result.meta?.actionItemCount).toBe(2);
+  });
+
+    it("achieve: propagates 422 error when advise stage not completed", async () => {
+    mockAchieveFetch({}, 422);
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "achieve");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Advise");
+  });
+
+  it("achieve: calls /api/career-os/achieve and marks cycle ready to complete", async () => {
+    mockAchieveFetch();
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "achieve");
+
+    expect(result.success).toBe(true);
+    expect(result.meta?.milestoneType).toBe("goal_completed");
+    expect(result.meta?.accomplishmentCount).toBe(2);
+    expect(result.meta?.cycleReadyToComplete).toBe(true);
   });
 
     it("unknown stage: returns success:false with error", async () => {
