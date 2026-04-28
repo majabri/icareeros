@@ -183,11 +183,11 @@ export async function abandonCycle(
 /** Get the active cycle for a user, or null if none */
 export async function getActiveCycle(
   userId: string,
-): Promise<{ id: string; cycle_number: number; goal: string | null } | null> {
+): Promise<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string } | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("career_os_cycles")
-    .select("id, cycle_number, goal")
+    .select("id, cycle_number, goal, status, current_stage")
     .eq("user_id", userId)
     .eq("status", "active")
     .order("created_at", { ascending: false })

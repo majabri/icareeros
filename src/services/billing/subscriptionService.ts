@@ -98,7 +98,7 @@ export async function canAccessFeature(featureKey: FeatureKey): Promise<boolean>
 
   if (error || !data?.success) {
     // Fail open — don't block users if billing service is down
-    console.warn("canAccessFeature error (failing open):", error ?? data?.error);
+    console.warn("canAccessFeature error (failing open):", error ?? (data as Record<string, unknown>)?.error);
     return true;
   }
   return data.allowed;
