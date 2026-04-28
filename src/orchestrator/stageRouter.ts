@@ -83,11 +83,9 @@ async function routeEvaluate(userId: string, cycleId: string): Promise<RouteResu
 }
 
 async function routeAdvise(userId: string, cycleId: string): Promise<RouteResult> {
-  const evaluation = await loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate");
-  if (!evaluation) {
-    throw new Error("Advise stage requires a completed Evaluate stage — no evaluation notes found.");
-  }
-  const result = await generateAdvice(userId, cycleId, evaluation);
+  // Evaluation notes are fetched server-side inside /api/career-os/advise.
+  // If evaluate hasn't completed the route returns 422 and this throws.
+  const result = await generateAdvice(userId, cycleId);
   await saveStageNotes(userId, cycleId, "advise", result as unknown as Record<string, unknown>);
   return {
     success: true,

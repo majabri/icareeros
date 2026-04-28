@@ -79,6 +79,42 @@ function mockEvaluateFetch(
   } as Response);
 }
 
+/** Helper: mock global.fetch for the advise API route */
+function mockAdviseFetch(
+  overrides: Partial<{
+    recommendedPaths: unknown[];
+    nextActions: string[];
+    timelineWeeks: number;
+    summary: string;
+  }> = {},
+  status = 200
+) {
+  const body =
+    status >= 200 && status < 300
+      ? {
+          recommendedPaths: [
+            {
+              title: "Senior Product Manager",
+              matchScore: 82,
+              requiredSkills: ["Product strategy", "Data analysis"],
+              gapSkills: ["SQL"],
+              estimatedWeeks: 16,
+            },
+          ],
+          nextActions: ["Complete SQL course", "Apply to 3 PM roles"],
+          timelineWeeks: 16,
+          summary: "Strong path to Senior PM; close SQL gap first.",
+          ...overrides,
+        }
+      : { error: "Evaluate stage must be completed before running Advise." };
+
+  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    ok:     status >= 200 && status < 300,
+    status,
+    json:   async () => body,
+  } as Response);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("careerOsOrchestrator", () => {
@@ -180,8 +216,10 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.marketFitScore).toBe(72);
   });
 
-  it("advise: requires evaluate notes or returns error", async () => {
-    // maybeSingle returns null notes -> advise should fail gracefully
+  it("advise: propagates 422 error when evaluate stage not completed", async () => {
+    // Route returns 422 when evaluate notes are missing server-side
+    mockAdviseFetch({}, 422);
+
     const chain = makeChain(null, null);
     mockFrom.mockReturnValue(chain);
 
@@ -189,7 +227,22 @@ describe("stageRouter — unit", () => {
     const result = await stageRouter.route("user-1", "cycle-1", "advise");
 
     expect(result.success).toBe(false);
+    // Error is "generateAdvice failed: Evaluate stage must be completed..."
     expect(result.error).toContain("Evaluate");
+  });
+
+  it("advise: calls /api/career-os/advise and saves notes on success", async () => {
+    mockAdviseFetch();
+
+    const chain = makeChain(null, null);
+    mockFrom.mockReturnValue(chain);
+
+    const { stageRouter } = await import("../stageRouter");
+    const result = await stageRouter.route("user-1", "cycle-1", "advise");
+
+    expect(result.success).toBe(true);
+    expect(result.meta?.pathCount).toBe(1);
+    expect(result.meta?.timelineWeeks).toBe(16);
   });
 
   it("unknown stage: returns success:false with error", async () => {

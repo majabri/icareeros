@@ -2,6 +2,7 @@
 
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
+import type { AdviceResult } from "@/services/ai/adviseService";
 
 interface StageConfig {
   label: string;
@@ -99,6 +100,19 @@ export function CycleStageCard({
       : "text-red-700 bg-red-50"
     : "";
 
+  // Type-cast advise notes for inline display
+  const adviceResult: AdviceResult | null =
+    stage === "advise" && status === "completed" && notes
+      ? (notes as unknown as AdviceResult)
+      : null;
+
+  const topPath = adviceResult?.recommendedPaths?.[0] ?? null;
+  const topPathScoreColor = topPath
+    ? topPath.matchScore >= 70 ? "text-green-700 bg-green-50"
+      : topPath.matchScore >= 45 ? "text-amber-700 bg-amber-50"
+      : "text-red-700 bg-red-50"
+    : "";
+
   return (
     <div
       className={
@@ -156,6 +170,68 @@ export function CycleStageCard({
           {evalResult.summary && (
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
               {evalResult.summary}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Advise results (shown when completed with notes) ── */}
+      {adviceResult && topPath && (
+        <div className="mt-4 space-y-2">
+          {/* Top recommended path */}
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500">Top recommended path</p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-gray-800 truncate">{topPath.title}</span>
+              <span
+                className={"shrink-0 rounded-lg px-2 py-0.5 text-xs font-semibold " + topPathScoreColor}
+              >
+                {topPath.matchScore}/100
+              </span>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>~{adviceResult.timelineWeeks} weeks to role</span>
+          </div>
+
+          {/* Top gap skills for the best path */}
+          {topPath.gapSkills.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Skills to build</p>
+              <div className="flex flex-wrap gap-1.5">
+                {topPath.gapSkills.slice(0, 3).map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5
+                               text-xs font-medium text-amber-700"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Next top action */}
+          {adviceResult.nextActions[0] && (
+            <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
+              <p className="text-xs font-medium text-gray-500 mb-0.5">Next action</p>
+              <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
+                {adviceResult.nextActions[0]}
+              </p>
+            </div>
+          )}
+
+          {/* Summary */}
+          {adviceResult.summary && (
+            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+              {adviceResult.summary}
             </p>
           )}
         </div>
