@@ -27,3 +27,8 @@ next-env.d.ts
 *.pem
 coverage/
 .secrets.baseline
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
