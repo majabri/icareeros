@@ -1,10 +1,22 @@
 /**
  * iCareerOS — Stage Router
  * Routes each Career OS stage to the appropriate AI service.
- * All stage handlers are async and return a typed result.
+ * Previous stage results are loaded from career_os_stages.notes (JSONB) to feed
+ * downstream stages (e.g. advise needs evaluate result, learn needs both).
  */
 
+import { createClient } from "@/lib/supabase";
 import type { CareerOsStage } from "./careerOsOrchestrator";
+import {
+  evaluateCareerProfile,
+  generateAdvice,
+  generateLearningPlan,
+  triggerAction,
+  runCoachingSession,
+  recordAchievement,
+} from "@/services/ai";
+import type { EvaluationResult } from "@/services/ai/evaluateService";
+import type { AdviceResult } from "@/services/ai/adviseService";
 
 export interface RouteResult {
   success: boolean;
@@ -12,41 +24,150 @@ export interface RouteResult {
   error?: string;
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Load the notes (stored result) from a completed stage.
+ * Returns null if the stage hasn't completed or has no notes.
+ */
+async function loadStageNotes<T>(
+  userId: string,
+  cycleId: string,
+  stage: CareerOsStage,
+): Promise<T | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("career_os_stages")
+    .select("notes")
+    .eq("user_id", userId)
+    .eq("cycle_id", cycleId)
+    .eq("stage", stage)
+    .eq("status", "completed")
+    .maybeSingle();
+
+  return (data?.notes as T) ?? null;
+}
+
+/**
+ * Persist a stage result to career_os_stages.notes for downstream stages.
+ */
+async function saveStageNotes(
+  userId: string,
+  cycleId: string,
+  stage: CareerOsStage,
+  notes: Record<string, unknown>,
+): Promise<void> {
+  const supabase = createClient();
+  await supabase
+    .from("career_os_stages")
+    .update({ notes })
+    .eq("user_id", userId)
+    .eq("cycle_id", cycleId)
+    .eq("stage", stage);
+}
+
+// ── Stage handlers ─────────────────────────────────────────────────────────
+
 async function routeEvaluate(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to evaluateService.evaluateCareerProfile(userId)
-  console.info(`[stageRouter] evaluate — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "evaluate", stub: true } };
+  const result = await evaluateCareerProfile(userId, cycleId);
+  await saveStageNotes(userId, cycleId, "evaluate", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      skillCount: result.skills.length,
+      gapCount: result.gaps.length,
+      marketFitScore: result.marketFitScore,
+      careerLevel: result.careerLevel,
+    },
+  };
 }
 
 async function routeAdvise(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to adviseService.generateAdvice(userId, evaluationResult)
-  console.info(`[stageRouter] advise — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "advise", stub: true } };
+  const evaluation = await loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate");
+  if (!evaluation) {
+    throw new Error("Advise stage requires a completed Evaluate stage — no evaluation notes found.");
+  }
+  const result = await generateAdvice(userId, cycleId, evaluation);
+  await saveStageNotes(userId, cycleId, "advise", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      pathCount: result.recommendedPaths.length,
+      timelineWeeks: result.timelineWeeks,
+      actionCount: result.nextActions.length,
+    },
+  };
 }
 
 async function routeLearn(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to learning recommendations edge fn
-  console.info(`[stageRouter] learn — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "learn", stub: true } };
+  const [evaluation, advice] = await Promise.all([
+    loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate"),
+    loadStageNotes<AdviceResult>(userId, cycleId, "advise"),
+  ]);
+  if (!evaluation || !advice) {
+    throw new Error("Learn stage requires completed Evaluate and Advise stages.");
+  }
+  const result = await generateLearningPlan(userId, cycleId, evaluation, advice);
+  await saveStageNotes(userId, cycleId, "learn", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      resourceCount: result.resources.length,
+      weeklyHoursNeeded: result.weeklyHoursNeeded,
+      estimatedWeeks: result.estimatedCompletionWeeks,
+    },
+  };
 }
 
 async function routeAct(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to actService.triggerAction(userId, action)
-  console.info(`[stageRouter] act — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "act", stub: true } };
+  const result = await triggerAction(userId, cycleId, "search_opportunities");
+  await saveStageNotes(userId, cycleId, "act", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      opportunitiesFound: result.opportunitiesFound,
+      applicationsQueued: result.applicationsQueued,
+      agentRunId: result.agentRunId,
+    },
+  };
 }
 
 async function routeCoach(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to coach feedback edge fn (interview prep, resume tweaks)
-  console.info(`[stageRouter] coach — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "coach", stub: true } };
+  const [evaluation, advice] = await Promise.all([
+    loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate"),
+    loadStageNotes<AdviceResult>(userId, cycleId, "advise"),
+  ]);
+  if (!evaluation || !advice) {
+    throw new Error("Coach stage requires completed Evaluate and Advise stages.");
+  }
+  const result = await runCoachingSession(userId, cycleId, evaluation, advice, "both");
+  await saveStageNotes(userId, cycleId, "coach", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      interviewReadiness: result.interviewPrep?.estimatedReadinessScore,
+      resumeScore: result.resumeInsights?.score,
+      actionItemCount: result.actionItems.length,
+    },
+  };
 }
 
 async function routeAchieve(userId: string, cycleId: string): Promise<RouteResult> {
-  // Week 3: wire to milestone recording + notification
-  console.info(`[stageRouter] achieve — userId=${userId} cycleId=${cycleId}`);
-  return { success: true, meta: { stage: "achieve", stub: true } };
+  // Default milestone: cycle completion. Callers can override by calling achieveService directly.
+  const result = await recordAchievement(userId, cycleId, "goal_completed");
+  await saveStageNotes(userId, cycleId, "achieve", result as unknown as Record<string, unknown>);
+  return {
+    success: true,
+    meta: {
+      milestoneType: result.milestoneType,
+      notificationSent: result.notificationSent,
+      cycleReadyToComplete: result.cycleReadyToComplete,
+      achievedAt: result.achievedAt,
+    },
+  };
 }
+
+// ── Router ─────────────────────────────────────────────────────────────────
 
 const handlers: Record<CareerOsStage, (u: string, c: string) => Promise<RouteResult>> = {
   evaluate: routeEvaluate,
