@@ -1,8 +1,8 @@
 /**
  * iCareerOS — Stage Router
  * Routes each Career OS stage to the appropriate AI service.
- * Previous stage results are loaded from career_os_stages.notes (JSONB) to feed
- * downstream stages (e.g. advise needs evaluate result, learn needs both).
+ * Previous stage results are loaded server-side inside each API route for
+ * security and consistency (client cannot tamper with prior stage data).
  */
 
 import { createClient } from "@/lib/supabase";
@@ -83,7 +83,7 @@ async function routeEvaluate(userId: string, cycleId: string): Promise<RouteResu
 }
 
 async function routeAdvise(userId: string, cycleId: string): Promise<RouteResult> {
-  // Evaluation notes are fetched server-side inside /api/career-os/advise.
+  // Evaluate notes are fetched server-side inside /api/career-os/advise.
   // If evaluate hasn't completed the route returns 422 and this throws.
   const result = await generateAdvice(userId, cycleId);
   await saveStageNotes(userId, cycleId, "advise", result as unknown as Record<string, unknown>);
@@ -98,14 +98,9 @@ async function routeAdvise(userId: string, cycleId: string): Promise<RouteResult
 }
 
 async function routeLearn(userId: string, cycleId: string): Promise<RouteResult> {
-  const [evaluation, advice] = await Promise.all([
-    loadStageNotes<EvaluationResult>(userId, cycleId, "evaluate"),
-    loadStageNotes<AdviceResult>(userId, cycleId, "advise"),
-  ]);
-  if (!evaluation || !advice) {
-    throw new Error("Learn stage requires completed Evaluate and Advise stages.");
-  }
-  const result = await generateLearningPlan(userId, cycleId, evaluation, advice);
+  // Evaluate + Advise notes are fetched server-side inside /api/career-os/learn.
+  // If either stage hasn't completed the route returns 422 and this throws.
+  const result = await generateLearningPlan(userId, cycleId);
   await saveStageNotes(userId, cycleId, "learn", result as unknown as Record<string, unknown>);
   return {
     success: true,

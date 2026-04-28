@@ -3,6 +3,7 @@
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
+import type { LearnResult } from "@/services/ai/learnService";
 
 interface StageConfig {
   label: string;
@@ -69,6 +70,16 @@ interface CycleStageCardProps {
   notes?: Record<string, unknown> | null;
 }
 
+// Resource type label → short display label
+const RESOURCE_TYPE_LABEL: Record<string, string> = {
+  course:        "Course",
+  certification: "Cert",
+  book:          "Book",
+  video:         "Video",
+  article:       "Article",
+  mentorship:    "Mentorship",
+};
+
 export function CycleStageCard({
   stage,
   status,
@@ -88,7 +99,7 @@ export function CycleStageCard({
 
   const badge = statusBadge[status];
 
-  // Type-cast evaluate notes for inline display
+  // ── Evaluate notes ──────────────────────────────────────────────────────
   const evalResult: EvaluationResult | null =
     stage === "evaluate" && status === "completed" && notes
       ? (notes as unknown as EvaluationResult)
@@ -100,7 +111,7 @@ export function CycleStageCard({
       : "text-red-700 bg-red-50"
     : "";
 
-  // Type-cast advise notes for inline display
+  // ── Advise notes ────────────────────────────────────────────────────────
   const adviceResult: AdviceResult | null =
     stage === "advise" && status === "completed" && notes
       ? (notes as unknown as AdviceResult)
@@ -112,6 +123,14 @@ export function CycleStageCard({
       : topPath.matchScore >= 45 ? "text-amber-700 bg-amber-50"
       : "text-red-700 bg-red-50"
     : "";
+
+  // ── Learn notes ─────────────────────────────────────────────────────────
+  const learnResult: LearnResult | null =
+    stage === "learn" && status === "completed" && notes
+      ? (notes as unknown as LearnResult)
+      : null;
+
+  const topResources = learnResult?.resources?.slice(0, 3) ?? [];
 
   return (
     <div
@@ -134,16 +153,14 @@ export function CycleStageCard({
         </span>
       </div>
 
-      {/* ── Evaluate results (shown when completed with notes) ── */}
+      {/* ── Evaluate results ── */}
       {evalResult && (
         <div className="mt-4 space-y-2">
-          {/* Market fit score */}
           <div className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm font-semibold " + scoreColor}>
             <span>Market fit:</span>
             <span>{evalResult.marketFitScore}/100</span>
           </div>
 
-          {/* Top gaps (max 3) */}
           {evalResult.gaps.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Key gaps</p>
@@ -166,7 +183,6 @@ export function CycleStageCard({
             </div>
           )}
 
-          {/* Summary (truncated) */}
           {evalResult.summary && (
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
               {evalResult.summary}
@@ -175,10 +191,9 @@ export function CycleStageCard({
         </div>
       )}
 
-      {/* ── Advise results (shown when completed with notes) ── */}
+      {/* ── Advise results ── */}
       {adviceResult && topPath && (
         <div className="mt-4 space-y-2">
-          {/* Top recommended path */}
           <div className="space-y-1">
             <p className="text-xs text-gray-500">Top recommended path</p>
             <div className="flex items-center justify-between gap-2">
@@ -191,7 +206,6 @@ export function CycleStageCard({
             </div>
           </div>
 
-          {/* Timeline */}
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -200,7 +214,6 @@ export function CycleStageCard({
             <span>~{adviceResult.timelineWeeks} weeks to role</span>
           </div>
 
-          {/* Top gap skills for the best path */}
           {topPath.gapSkills.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Skills to build</p>
@@ -218,7 +231,6 @@ export function CycleStageCard({
             </div>
           )}
 
-          {/* Next top action */}
           {adviceResult.nextActions[0] && (
             <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
               <p className="text-xs font-medium text-gray-500 mb-0.5">Next action</p>
@@ -228,10 +240,80 @@ export function CycleStageCard({
             </div>
           )}
 
-          {/* Summary */}
           {adviceResult.summary && (
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
               {adviceResult.summary}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Learn results ── */}
+      {learnResult && (
+        <div className="mt-4 space-y-2">
+          {/* Time commitment chips */}
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-1 rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{learnResult.weeklyHoursNeeded}h / week</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>~{learnResult.estimatedCompletionWeeks} weeks</span>
+            </div>
+          </div>
+
+          {/* Top skill gaps */}
+          {learnResult.topSkillGaps.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Skills to close</p>
+              <div className="flex flex-wrap gap-1.5">
+                {learnResult.topSkillGaps.slice(0, 4).map((gap) => (
+                  <span
+                    key={gap}
+                    className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5
+                               text-xs font-medium text-violet-700"
+                  >
+                    {gap}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top resources */}
+          {topResources.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-500">Top resources</p>
+              {topResources.map((r, i) => (
+                <div
+                  key={i}
+                  className="flex items-start justify-between gap-2 rounded-lg bg-white/60
+                             border border-gray-200 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-800 line-clamp-1">{r.title}</p>
+                    <p className="text-xs text-gray-500">{r.provider} · {r.estimatedHours}h</p>
+                  </div>
+                  <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-xs
+                                   font-medium text-violet-700">
+                    {RESOURCE_TYPE_LABEL[r.type] ?? r.type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Summary */}
+          {learnResult.summary && (
+            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+              {learnResult.summary}
             </p>
           )}
         </div>
@@ -261,7 +343,7 @@ export function CycleStageCard({
       )}
 
       {/* ── Completed indicator (no notes) ── */}
-      {status === "completed" && !evalResult && (
+      {status === "completed" && !evalResult && !adviceResult && !learnResult && (
         <div className="mt-3 flex items-center gap-1.5 text-xs text-green-600">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
