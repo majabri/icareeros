@@ -113,14 +113,16 @@ async function routeLearn(userId: string, cycleId: string): Promise<RouteResult>
 }
 
 async function routeAct(userId: string, cycleId: string): Promise<RouteResult> {
-  const result = await triggerAction(userId, cycleId, "search_opportunities");
+  // Evaluate, Advise, and Learn notes are fetched server-side inside /api/career-os/act.
+  // If any prerequisite stage hasn't completed the route returns 422 and this throws.
+  const result = await triggerAction(userId, cycleId);
   await saveStageNotes(userId, cycleId, "act", result as unknown as Record<string, unknown>);
   return {
     success: true,
     meta: {
-      opportunitiesFound: result.opportunitiesFound,
-      applicationsQueued: result.applicationsQueued,
-      agentRunId: result.agentRunId,
+      queryCount: result.jobSearchQueries.length,
+      networkingTargetCount: result.networkingTargets.length,
+      weeklyApplicationTarget: result.weeklyApplicationTarget,
     },
   };
 }

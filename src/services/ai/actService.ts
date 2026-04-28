@@ -1,12 +1,11 @@
 /**
  * iCareerOS — Act Service (Stage 4 of Career OS)
- * Triggers real-world actions: job search, applications, networking.
+ * Generates a concrete job-search and networking action plan.
  *
- * Calls: run-job-agent edge fn
- * Full implementation: Week 3
+ * Calls: POST /api/career-os/act (server-side Next.js route → Claude Sonnet)
+ * ANTHROPIC_API_KEY stays server-side; this module only calls the local API route.
  */
 
-import { createClient } from "@/lib/supabase";
 import { eventLogger } from "@/orchestrator/eventLogger";
 
 export type ActionType =
@@ -15,53 +14,61 @@ export type ActionType =
   | "send_outreach"
   | "schedule_followups";
 
+export interface NetworkingTarget {
+  role: string;
+  company: string;
+  rationale: string;
+  outreachTip: string;
+}
+
+export interface ApplicationTier {
+  roleTier: "Stretch" | "Target" | "Safety";
+  description: string;
+  targetCount: number;
+  rationale: string;
+}
+
 export interface ActResult {
-  action: ActionType;
-  opportunitiesFound: number;
-  applicationsQueued: number;
-  agentRunId: string;
+  jobSearchQueries: string[];
+  networkingTargets: NetworkingTarget[];
+  applicationPriority: ApplicationTier[];
+  weeklyApplicationTarget: number;
   summary: string;
+  // Legacy fields kept for stageRouter.meta compatibility
+  action?: ActionType;
+  opportunitiesFound?: number;
+  applicationsQueued?: number;
+  agentRunId?: string;
 }
 
 export async function triggerAction(
   userId: string,
   cycleId: string,
-  action: ActionType,
 ): Promise<ActResult> {
-  const supabase = createClient();
+  await eventLogger.logAiCall(userId, cycleId, "generate-action-plan", "started");
 
-  await eventLogger.logAiCall(userId, cycleId, "run-job-agent", "started", {
-    action,
+  const res = await fetch("/api/career-os/act", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cycle_id: cycleId }),
+    credentials: "include",
   });
 
-  const { data, error } = await supabase.functions.invoke("run-job-agent", {
-    body: {
-      user_id: userId,
-      cycle_id: cycleId,
-      action,
-    },
-  });
-
-  if (error) {
-    await eventLogger.logAiCall(userId, cycleId, "run-job-agent", "failed", {
-      action,
-      error: error.message,
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    await eventLogger.logAiCall(userId, cycleId, "generate-action-plan", "failed", {
+      error: err.error,
+      status: res.status,
     });
-    throw new Error(`triggerAction failed: ${error.message}`);
+    throw new Error("triggerAction failed: " + (err.error ?? res.statusText));
   }
 
-  const result: ActResult = {
-    action,
-    opportunitiesFound: data?.jobs_found ?? 0,
-    applicationsQueued: data?.applications_queued ?? 0,
-    agentRunId: data?.agent_run_id ?? "",
-    summary: data?.summary ?? "",
-  };
+  const result = (await res.json()) as ActResult;
 
-  await eventLogger.logAiCall(userId, cycleId, "run-job-agent", "completed", {
-    action,
-    opportunitiesFound: result.opportunitiesFound,
-    applicationsQueued: result.applicationsQueued,
+  await eventLogger.logAiCall(userId, cycleId, "generate-action-plan", "completed", {
+    queryCount: result.jobSearchQueries.length,
+    networkingTargetCount: result.networkingTargets.length,
+    weeklyApplicationTarget: result.weeklyApplicationTarget,
   });
 
   return result;

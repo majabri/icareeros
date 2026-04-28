@@ -4,6 +4,7 @@ import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import type { LearnResult } from "@/services/ai/learnService";
+import type { ActResult } from "@/services/ai/actService";
 
 interface StageConfig {
   label: string;
@@ -131,6 +132,14 @@ export function CycleStageCard({
       : null;
 
   const topResources = learnResult?.resources?.slice(0, 3) ?? [];
+
+  // ── Act notes ───────────────────────────────────────────────────────────
+  const actResult: ActResult | null =
+    stage === "act" && status === "completed" && notes
+      ? (notes as unknown as ActResult)
+      : null;
+
+  const targetTier = actResult?.applicationPriority?.find((t) => t.roleTier === "Target") ?? null;
 
   return (
     <div
@@ -319,7 +328,70 @@ export function CycleStageCard({
         </div>
       )}
 
-      {/* ── Run button (current stage) ── */}
+      {/* ── Act results ── */}
+      {actResult && (
+        <div className="mt-4 space-y-2">
+          {/* Weekly target chip */}
+          <div className="flex items-center gap-1.5 rounded-lg bg-green-100 px-2.5 py-1
+                          text-xs font-semibold text-green-700 w-fit">
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span>{actResult.weeklyApplicationTarget} applications / week</span>
+          </div>
+
+          {/* Top job search query */}
+          {actResult.jobSearchQueries[0] && (
+            <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
+              <p className="text-xs font-medium text-gray-500 mb-0.5">Top search query</p>
+              <p className="text-xs font-mono text-gray-700 leading-relaxed line-clamp-2">
+                {actResult.jobSearchQueries[0]}
+              </p>
+            </div>
+          )}
+
+          {/* Target tier */}
+          {targetTier && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Target roles</p>
+              <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-800">{targetTier.description}</span>
+                  <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-xs font-semibold text-green-700">
+                    {targetTier.targetCount} roles
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{targetTier.rationale}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Top networking target */}
+          {actResult.networkingTargets[0] && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Network first</p>
+              <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2 space-y-0.5">
+                <p className="text-xs font-semibold text-gray-800 line-clamp-1">
+                  {actResult.networkingTargets[0].role} @ {actResult.networkingTargets[0].company}
+                </p>
+                <p className="text-xs text-gray-500 line-clamp-2">
+                  {actResult.networkingTargets[0].outreachTip}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {actResult.summary && (
+            <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+              {actResult.summary}
+            </p>
+          )}
+        </div>
+      )}
+
+            {/* ── Run button (current stage) ── */}
       {isCurrentStage && onRun && (
         <button
           onClick={onRun}
@@ -343,7 +415,7 @@ export function CycleStageCard({
       )}
 
       {/* ── Completed indicator (no notes) ── */}
-      {status === "completed" && !evalResult && !adviceResult && !learnResult && (
+      {status === "completed" && !evalResult && !adviceResult && !learnResult && !actResult && (
         <div className="mt-3 flex items-center gap-1.5 text-xs text-green-600">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
