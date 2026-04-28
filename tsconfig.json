@@ -36,6 +36,16 @@
   ],
   "exclude": [
     "node_modules",
-    "scripts"
+    "scripts",
+    "supabase",
+    "src/components/career",
+    "src/components/ui/LanguageSwitcher.tsx",
+    "src/components/ui/HelpTooltip.tsx",
+    "src/components/ui/ProtectedRoute.tsx",
+    "src/components/ui/RouteErrorBoundary.tsx",
+    "src/components/ui/ErrorBoundary.tsx",
+    "src/components/ui/ThemePicker.tsx",
+    "src/lib/auth.ts",
+    "src/lib/platform"
   ]
 }

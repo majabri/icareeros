@@ -9,11 +9,20 @@ import {
   advanceStage,
   completeCycle,
   type CareerOsStage,
-  type CareerOsCycle,
+
 } from "@/orchestrator/careerOsOrchestrator";
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { getSubscription } from "@/services/billing/subscriptionService";
 import type { SubscriptionPlan } from "@/services/billing/types";
+
+interface ActiveCycle {
+  id: string;
+  cycle_number: number;
+  goal: string | null;
+  status: string;
+  current_stage: string;
+}
+
 
 const STAGE_ORDER: CareerOsStage[] = [
   "evaluate", "advise", "learn", "act", "coach", "achieve",
@@ -22,7 +31,7 @@ const STAGE_ORDER: CareerOsStage[] = [
 type StageStatusMap = Record<CareerOsStage, "pending" | "in_progress" | "completed" | "skipped">;
 
 function buildStageStatus(
-  cycle: CareerOsCycle | null
+  cycle: ActiveCycle | null
 ): StageStatusMap {
   const current = cycle?.current_stage as CareerOsStage | undefined;
   const status: StageStatusMap = {
@@ -43,7 +52,7 @@ function buildStageStatus(
 
 export function CareerOsDashboard() {
   const [userId, setUserId]       = useState<string | null>(null);
-  const [cycle, setCycle]         = useState<CareerOsCycle | null>(null);
+  const [cycle, setCycle]         = useState<ActiveCycle | null>(null);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
   const [loading, setLoading]     = useState(true);
   const [running, setRunning]     = useState(false);
@@ -99,7 +108,7 @@ export function CareerOsDashboard() {
     setError(null);
     try {
       const result = await advanceStage(userId, cycle.id, currentStage);
-      if (!result.success) {
+      if (result.error) {
         setError(result.error ?? `Failed to run ${currentStage}.`);
       } else {
         const fresh = await getActiveCycle(userId);
