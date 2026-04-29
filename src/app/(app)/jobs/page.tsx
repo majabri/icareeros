@@ -289,6 +289,7 @@ export default function JobsPage() {
                   <OpportunityCard
                     key={opp.id ?? `${opp.company}::${opp.title}`}
                     opportunity={withFitScore(opp)}
+                    cycleId={cycleId}
                   />
                 ))}
               </div>
