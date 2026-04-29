@@ -68,3 +68,21 @@ test("Saved Versions section is visible", async ({ page }) => {
   await page.goto("/resume");
   await expect(page.getByText(/saved versions/i)).toBeVisible();
 });
+
+test("AI Rewrite button appears after text is entered", async ({ page }) => {
+  test.skip(!HAS_CREDS, "E2E credentials not set");
+  await loginIfNeeded(page);
+  await page.goto("/resume");
+  await page.fill("textarea", "John Smith\njohn@example.com\nSoftware Engineer at Acme\n10 years experience building backend systems");
+  await expect(page.getByRole("button", { name: /ai rewrite/i })).toBeVisible();
+});
+
+test("AI Rewrite button reveals options form", async ({ page }) => {
+  test.skip(!HAS_CREDS, "E2E credentials not set");
+  await loginIfNeeded(page);
+  await page.goto("/resume");
+  await page.fill("textarea", "John Smith\njohn@example.com\nSoftware Engineer at Acme\n10 years experience building backend systems");
+  await page.getByRole("button", { name: /ai rewrite/i }).click();
+  await expect(page.getByPlaceholder(/target role/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /rewrite now/i })).toBeVisible();
+});

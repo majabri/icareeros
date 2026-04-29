@@ -224,3 +224,68 @@ describe("deleteResumeVersion", () => {
     await expect(deleteResumeVersion("bad-id")).rejects.toThrow("not found");
   });
 });
+
+describe("rewriteResume", () => {
+  const SAMPLE_REWRITE = {
+    rewrittenText: "Jane Doe\njane@example.com\n\nEXPERIENCE\nSenior Software Engineer | Acme Corp\nLed migration reducing latency by 40%",
+    improvements: ["Stronger action verbs", "Quantified achievements", "ATS-optimized headers"],
+    wordCount: 32,
+  };
+
+  it("calls /api/resume/rewrite with the correct body", async () => {
+    const { rewriteResume } = await import("../resumeService");
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => SAMPLE_REWRITE,
+    });
+
+    const result = await rewriteResume({ resumeText: "Jane Doe engineer 8 years" });
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/resume/rewrite", expect.objectContaining({
+      method: "POST",
+    }));
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.resumeText).toBe("Jane Doe engineer 8 years");
+    expect(result.improvements).toHaveLength(3);
+  });
+
+  it("passes targetRole and jobDescription when provided", async () => {
+    const { rewriteResume } = await import("../resumeService");
+
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => SAMPLE_REWRITE });
+
+    await rewriteResume({
+      resumeText: "Jane Doe engineer",
+      targetRole: "Senior SWE",
+      jobDescription: "We need a senior engineer...",
+    });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.targetRole).toBe("Senior SWE");
+    expect(body.jobDescription).toBe("We need a senior engineer...");
+  });
+
+  it("throws if API returns an error", async () => {
+    const { rewriteResume } = await import("../resumeService");
+
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "resumeText is required" }),
+    });
+
+    await expect(rewriteResume({ resumeText: "x" })).rejects.toThrow("resumeText is required");
+  });
+
+  it("returns rewrittenText, improvements, and wordCount", async () => {
+    const { rewriteResume } = await import("../resumeService");
+
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => SAMPLE_REWRITE });
+
+    const result = await rewriteResume({ resumeText: "Jane Doe senior engineer" });
+    expect(typeof result.rewrittenText).toBe("string");
+    expect(Array.isArray(result.improvements)).toBe(true);
+    expect(typeof result.wordCount).toBe("number");
+  });
+});
