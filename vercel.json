@@ -5,7 +5,9 @@
   "devCommand": "npm run dev",
   "installCommand": "npm ci",
   "outputDirectory": ".next",
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "github": {
     "silent": true
   },
@@ -13,6 +15,10 @@
     {
       "path": "/api/cron/job-alerts",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-insights",
+      "schedule": "0 8 * * 0"
     }
   ]
 }
