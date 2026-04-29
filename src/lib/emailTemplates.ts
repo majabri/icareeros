@@ -236,3 +236,91 @@ Manage email preferences: ${BASE_URL}/settings/email`;
 
   return { subject, html, text };
 }
+
+/**
+ * Job alert digest email — up to 5 matching opportunities.
+ */
+export interface AlertJob {
+  title: string;
+  company: string;
+  location: string | null;
+  is_remote: boolean;
+  job_type: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  url: string | null;
+}
+
+export function jobAlertEmail(
+  query: string | null,
+  jobs: AlertJob[],
+  frequency: "daily" | "weekly",
+): { subject: string; html: string; text: string } {
+  const count = jobs.length;
+  const filterLabel = query ? `matching "${query}"` : "for you";
+  const subject = `${count} new ${count === 1 ? "opportunity" : "opportunities"} ${filterLabel} — iCareerOS`;
+
+  const jobRows = jobs
+    .slice(0, 5)
+    .map((j) => {
+      const salary =
+        j.salary_min && j.salary_max
+          ? `$${Math.round(j.salary_min / 1000)}k–$${Math.round(j.salary_max / 1000)}k`
+          : j.salary_min
+          ? `From $${Math.round(j.salary_min / 1000)}k`
+          : null;
+      const meta = [
+        j.location,
+        j.is_remote ? "Remote" : null,
+        j.job_type,
+        salary,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      return `
+        <tr>
+          <td style="padding:14px 0;border-bottom:1px solid #f1f5f9;">
+            <a href="${j.url ?? `${BASE_URL}/jobs`}"
+               style="font-size:15px;font-weight:600;color:#2563eb;text-decoration:none;">
+              ${j.title}
+            </a><br/>
+            <span style="font-size:14px;color:#374151;">${j.company}</span>
+            ${meta ? `<br/><span style="font-size:12px;color:#94a3b8;">${meta}</span>` : ""}
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  const html = wrap(`
+    <h1 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;">
+      ${count} new ${count === 1 ? "match" : "matches"} found
+    </h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#64748b;">
+      Your ${frequency} alert — ${filterLabel}
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${jobRows}
+    </table>
+    ${ctaButton(`${BASE_URL}/jobs`, "View all opportunities →")}
+    <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">
+      <a href="${BASE_URL}/jobs" style="color:#94a3b8;">Manage alerts</a>
+      &nbsp;·&nbsp;
+      <a href="${BASE_URL}/settings/email" style="color:#94a3b8;">Email preferences</a>
+    </p>
+  `);
+
+  const text = [
+    `${count} new ${count === 1 ? "opportunity" : "opportunities"} ${filterLabel}`,
+    "",
+    ...jobs.slice(0, 5).map(
+      (j) => `• ${j.title} at ${j.company}${j.location ? ` — ${j.location}` : ""}${j.url ? `\n  ${j.url}` : ""}`,
+    ),
+    "",
+    `View all: ${BASE_URL}/jobs`,
+    `Manage alerts: ${BASE_URL}/jobs`,
+    `Email preferences: ${BASE_URL}/settings/email`,
+  ].join("\n");
+
+  return { subject, html, text };
+}

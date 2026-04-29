@@ -98,3 +98,74 @@ describe("weeklyInsightsEmail", () => {
     expect((html.match(/Cat \d/g) ?? []).length).toBeLessThanOrEqual(5);
   });
 });
+
+import { jobAlertEmail } from "@/lib/emailTemplates";
+
+describe("jobAlertEmail", () => {
+  const jobs = [
+    {
+      title: "Senior Engineer",
+      company: "Acme Corp",
+      location: "New York, NY",
+      is_remote: false,
+      job_type: "full-time",
+      salary_min: 120000,
+      salary_max: 160000,
+      url: "https://jobs.example.com/1",
+    },
+    {
+      title: "Product Manager",
+      company: "Beta Inc",
+      location: null,
+      is_remote: true,
+      job_type: null,
+      salary_min: null,
+      salary_max: null,
+      url: null,
+    },
+  ];
+
+  it("includes job count in subject", () => {
+    const { subject } = jobAlertEmail("engineer", jobs, "daily");
+    expect(subject).toContain("2");
+    expect(subject).toContain("iCareerOS");
+  });
+
+  it("includes query filter in subject", () => {
+    const { subject } = jobAlertEmail("product manager", jobs, "weekly");
+    expect(subject).toContain("product manager");
+  });
+
+  it("uses generic label when no query", () => {
+    const { subject } = jobAlertEmail(null, jobs, "daily");
+    expect(subject).toContain("for you");
+  });
+
+  it("HTML contains job titles", () => {
+    const { html } = jobAlertEmail(null, jobs, "daily");
+    expect(html).toContain("Senior Engineer");
+    expect(html).toContain("Acme Corp");
+  });
+
+  it("HTML contains salary range", () => {
+    const { html } = jobAlertEmail(null, jobs, "daily");
+    expect(html).toContain("120k");
+    expect(html).toContain("160k");
+  });
+
+  it("limits to 5 jobs in output", () => {
+    const manyJobs = Array.from({ length: 10 }, (_, i) => ({
+      ...jobs[0],
+      title: `Job ${i}`,
+    }));
+    const { html } = jobAlertEmail(null, manyJobs, "daily");
+    const count = (html.match(/Job \d/g) ?? []).length;
+    expect(count).toBeLessThanOrEqual(5);
+  });
+
+  it("text fallback lists job titles", () => {
+    const { text } = jobAlertEmail(null, jobs, "daily");
+    expect(text).toContain("Senior Engineer");
+    expect(text).toContain("Acme Corp");
+  });
+});
