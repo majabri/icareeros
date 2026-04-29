@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { sendEmail } from "@/services/emailService";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -32,6 +33,15 @@ export function AuthForm({ mode }: AuthFormProps) {
           },
         });
         if (error) throw error;
+        // Fire-and-forget welcome email — don't await to keep UX snappy
+        sendEmail({
+          to: email,
+          subject: "Welcome to iCareerOS — your career OS is ready",
+          html: `<p>Hi ${email},</p><p>Welcome to iCareerOS! <a href="${window.location.origin}/dashboard">Go to your dashboard</a>.</p>`,
+          text: `Welcome to iCareerOS! Visit: ${window.location.origin}/dashboard`,
+        }).catch(() => {
+          // non-critical — ignore email delivery failures silently
+        });
         setSuccess(
           "Check your email — we've sent you a confirmation link to activate your account."
         );
