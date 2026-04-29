@@ -212,6 +212,7 @@ export default function JobsPage() {
   const loadingMore  = loading && offset > 0;
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
 
@@ -394,5 +395,6 @@ export default function JobsPage() {
           onClose={() => setShowAlert(false)}
         />
       )}
+    </>
   );
 }

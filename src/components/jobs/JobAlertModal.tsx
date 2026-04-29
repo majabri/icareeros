@@ -138,7 +138,7 @@ export function JobAlertModal({ initialQuery = "", onClose }: Props) {
           )}
 
           {/* Form */}
-          {(status === "idle" || status === "saving" || status === "deleting" || status === "error") && status !== "success" && (
+          {(status === "idle" || status === "saving" || status === "deleting" || status === "error") && (
             <form onSubmit={handleSave} className="space-y-4">
               {/* Keywords */}
               <div>
