@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/jobs",             label: "Opportunities", icon: "💼" },
   { href: "/interview",        label: "Interview",     icon: "🎤" },
   { href: "/resume",           label: "Resume",        icon: "📄" },
+  { href: "/offers",           label: "Offers",        icon: "🤝" },
   { href: "/profile",          label: "Profile",       icon: "👤" },
   { href: "/settings/billing", label: "Billing",       icon: "💳" },
 ];
