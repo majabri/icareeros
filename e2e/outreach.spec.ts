@@ -19,15 +19,35 @@ const hasRealCreds = Boolean(E2E_EMAIL && E2E_PASS);
 
 // ── Probes ────────────────────────────────────────────────────────────────────
 
-let outreachRouteDeployed = false; // /api/outreach exists in this deployment
-let jobsPageDeployed      = false; // /jobs page is accessible
-let hasOpportunityData    = false; // at least one opportunity card loads
+/**
+ * Whether /api/outreach is deployed. Probed unauthenticated so Next.js routing
+ * returns 401 (route exists) vs 404 (no route at all).  A 404 from our own
+ * application logic (opportunity not found) looks the same as a routing 404,
+ * so we must probe without auth to get a clean signal.
+ */
+let outreachRouteDeployed = false;
+let jobsPageDeployed      = false;
+let hasOpportunityData    = false; // at least one opportunity card renders
 
 test.use({ baseURL: BASE_URL });
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ browser, request: unauthRequest }) => {
+  // ── Probe 1: outreach route — unauthenticated ────────────────────────────
+  // Expects 401 if deployed, 404 if the route doesn't exist yet.
+  try {
+    const routeRes = await unauthRequest.post(`${BASE_URL}/api/outreach`, {
+      data: {},
+      headers: { "Content-Type": "application/json" },
+      failOnStatusCode: false,
+    });
+    outreachRouteDeployed = routeRes.status() === 401;
+  } catch {
+    outreachRouteDeployed = false;
+  }
+
   if (!hasRealCreds) return;
 
+  // ── Probes 2 & 3: jobs page + opportunity data — authenticated ────────────
   const page = await browser.newPage();
   try {
     await page.goto("/auth/login");
@@ -36,24 +56,13 @@ test.beforeAll(async ({ browser }) => {
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
-    // Probe the outreach API route
-    const routeRes = await page.request.post("/api/outreach", {
-      data: { opportunity_id: "probe" },
-      headers: { "Content-Type": "application/json" },
-      failOnStatusCode: false,
-    });
-    // 401 = route exists but needs auth → deployed; 404 = not yet deployed
-    outreachRouteDeployed = routeRes.status() !== 404;
-
     const jobsRes = await page.request.get("/jobs", { failOnStatusCode: false });
     jobsPageDeployed = jobsRes.status() < 400;
 
-    // Probe whether the opportunities table has data visible on /jobs
+    // Probe whether any opportunity cards load on /jobs
     if (jobsPageDeployed) {
       await page.goto("/jobs");
       await page.waitForLoadState("networkidle");
-      // If at least one Outreach button renders, we have data
-      // Alternatively check that the empty state ("No opportunities found") is NOT shown
       const emptyVisible = await page
         .locator("text=No opportunities found")
         .isVisible()
@@ -61,9 +70,8 @@ test.beforeAll(async ({ browser }) => {
       hasOpportunityData = !emptyVisible;
     }
   } catch {
-    outreachRouteDeployed = false;
-    jobsPageDeployed      = false;
-    hasOpportunityData    = false;
+    jobsPageDeployed   = false;
+    hasOpportunityData = false;
   } finally {
     await page.close();
   }
@@ -108,9 +116,11 @@ test("POST /api/outreach → 400 when opportunity_id is missing", async ({ brows
 });
 
 test("/jobs page shows Outreach button on opportunity cards", async ({ browser }) => {
-  test.skip(!jobsPageDeployed, "/jobs page not yet deployed — skipping until PR is merged");
-  test.skip(!hasRealCreds, "No E2E credentials — skipping authenticated test");
-  test.skip(!hasOpportunityData, "No opportunities in DB for this deployment — skipping Outreach button check");
+  // All three guards must pass: route deployed, page deployed, DB has data
+  test.skip(!outreachRouteDeployed, "Outreach route not yet deployed — skipping until PR is merged");
+  test.skip(!jobsPageDeployed,      "/jobs page not yet deployed — skipping until PR is merged");
+  test.skip(!hasRealCreds,          "No E2E credentials — skipping authenticated test");
+  test.skip(!hasOpportunityData,    "No opportunities in DB for this deployment — skipping Outreach button check");
 
   const page = await browser.newPage();
   try {
@@ -123,7 +133,6 @@ test("/jobs page shows Outreach button on opportunity cards", async ({ browser }
     await page.goto("/jobs");
     await page.waitForLoadState("networkidle");
 
-    // At least one Outreach button should be visible after jobs load
     const outreachBtn = page.locator('button:has-text("Outreach")').first();
     await expect(outreachBtn).toBeVisible({ timeout: 10_000 });
   } finally {
