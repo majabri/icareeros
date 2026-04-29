@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { scoreFitBatch, type FitScore } from "@/services/ai/fitScoreService";
+import { enrichSalaries, type SalaryRange } from "@/services/ai/salaryIntelligenceService";
 import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
 
 const PAGE_SIZE = 30;
@@ -30,6 +31,8 @@ export default function JobsPage() {
   // Fit score state — populated non-blocking after search
   const [fitScores,  setFitScores]  = useState<Record<string, FitScore>>({});
   const [scoringFit, setScoringFit] = useState(false);
+  const [salaryRanges, setSalaryRanges] = useState<Record<string, SalaryRange>>({});
+  const [enrichingSalary, setEnrichingSalary] = useState(false);
   const [cycleId,    setCycleId]    = useState<string | null>(null);
 
   // Load active cycle ID once on mount (needed for evaluate-stage enrichment)
@@ -60,6 +63,24 @@ export default function JobsPage() {
       // Scoring is non-critical — silently ignore errors
     } finally {
       setScoringFit(false);
+    }
+  }, []);
+
+  /** Enrich salary ranges for null-salary opportunities (non-blocking) */
+  const runSalaryEnrichment = useCallback(async (opps: OpportunityResult[]) => {
+    const ids = opps
+      .filter((o) => o.id && o.salary_min == null && o.salary_max == null && !o.salary)
+      .map((o) => o.id as string);
+    if (ids.length === 0) return;
+
+    setEnrichingSalary(true);
+    try {
+      const result = await enrichSalaries(ids);
+      setSalaryRanges((prev) => ({ ...prev, ...result.ranges }));
+    } catch {
+      // Enrichment is non-critical — silently ignore errors
+    } finally {
+      setEnrichingSalary(false);
     }
   }, []);
 
@@ -121,6 +142,7 @@ export default function JobsPage() {
         setResults(mapped);
         // Clear stale scores when starting a new search
         setFitScores({});
+        setSalaryRanges({});
       } else {
         setResults((prev) => [...prev, ...mapped]);
       }
@@ -130,12 +152,14 @@ export default function JobsPage() {
 
       // Fire background fit scoring — don't await (non-blocking)
       void runFitScoring(mapped, cycleId);
+      // Fire background salary enrichment for null-salary jobs — don't await (non-blocking)
+      void runSalaryEnrichment(mapped);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed — please try again.");
     } finally {
       setLoading(false);
     }
-  }, [cycleId, runFitScoring]);
+  }, [cycleId, runFitScoring, runSalaryEnrichment]);
 
   useEffect(() => { search(DEFAULTS, 0); }, [search]);
 
@@ -171,6 +195,15 @@ export default function JobsPage() {
       strengths:     fs.strengths,
       skill_gaps:    fs.skill_gaps,
     };
+  }
+
+  /** Merge AI-estimated salary ranges into an opportunity result */
+  function withSalary(opp: OpportunityResult): OpportunityResult {
+    if (!opp.id) return opp;
+    const range = salaryRanges[opp.id];
+    // Only enrich when the DB has no salary data
+    if (!range || opp.salary || opp.salary_min != null || opp.salary_max != null) return opp;
+    return { ...opp, salary: range.label };
   }
 
   const loadingFirst = loading && offset === 0;
@@ -268,6 +301,13 @@ export default function JobsPage() {
                 Scoring fit…
               </span>
             )}
+            {enrichingSalary && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5
+                               text-xs font-medium text-green-600">
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-green-400" />
+                Enriching salaries…
+              </span>
+            )}
           </div>
         )}
 
@@ -288,7 +328,7 @@ export default function JobsPage() {
                 {results.map((opp) => (
                   <OpportunityCard
                     key={opp.id ?? `${opp.company}::${opp.title}`}
-                    opportunity={withFitScore(opp)}
+                    opportunity={withFitScore(withSalary(opp))}
                     cycleId={cycleId}
                   />
                 ))}
