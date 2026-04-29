@@ -7,6 +7,7 @@ import type { OpportunityResult } from "@/services/opportunityTypes";
 import { scoreFitBatch, type FitScore } from "@/services/ai/fitScoreService";
 import { enrichSalaries, type SalaryRange } from "@/services/ai/salaryIntelligenceService";
 import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
+import { JobAlertModal } from "@/components/jobs/JobAlertModal";
 
 const PAGE_SIZE = 30;
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Freelance"];
@@ -34,6 +35,7 @@ export default function JobsPage() {
   const [salaryRanges, setSalaryRanges] = useState<Record<string, SalaryRange>>({});
   const [enrichingSalary, setEnrichingSalary] = useState(false);
   const [cycleId,    setCycleId]    = useState<string | null>(null);
+  const [showAlert,  setShowAlert]  = useState(false);
 
   // Load active cycle ID once on mount (needed for evaluate-stage enrichment)
   useEffect(() => {
@@ -214,11 +216,22 @@ export default function JobsPage() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
 
         {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Find Opportunities</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Search curated job listings matched to your career profile.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Find Opportunities</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Search curated job listings matched to your career profile.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAlert(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300
+                       bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700
+                       hover:bg-amber-100 transition-colors"
+            aria-label="Set job alert"
+          >
+            🔔 Alert
+          </button>
         </div>
 
         {/* Search form */}
@@ -373,5 +386,13 @@ export default function JobsPage() {
         )}
       </div>
     </div>
+
+      {/* Job Alert Modal */}
+      {showAlert && (
+        <JobAlertModal
+          initialQuery={draft.query}
+          onClose={() => setShowAlert(false)}
+        />
+      )}
   );
 }
