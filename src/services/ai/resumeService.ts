@@ -155,3 +155,33 @@ export async function deleteResumeVersion(id: string): Promise<void> {
 
   if (error) throw new Error(error.message);
 }
+
+// ── Rewrite ───────────────────────────────────────────────────────────────────
+
+export interface RewriteResult {
+  rewrittenText: string;
+  improvements: string[];
+  wordCount: number;
+}
+
+/**
+ * Rewrite resume text via the server-side API route using Claude Sonnet.
+ */
+export async function rewriteResume(opts: {
+  resumeText: string;
+  targetRole?: string;
+  jobDescription?: string;
+}): Promise<RewriteResult> {
+  const res = await fetch("/api/resume/rewrite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Rewrite failed (${res.status})`);
+  }
+
+  return res.json() as Promise<RewriteResult>;
+}
