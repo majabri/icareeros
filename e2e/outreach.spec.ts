@@ -5,7 +5,7 @@
  * 1. /api/outreach returns 401 without authentication
  * 2. /api/outreach returns 400 when opportunity_id is missing
  * 3. /jobs page loads and shows the Outreach button on opportunity cards
- *    (skipped pre-deploy using probe pattern)
+ *    (skipped pre-deploy using probe pattern; also skipped if DB has no opportunities)
  */
 
 import { test, expect } from "@playwright/test";
@@ -21,6 +21,7 @@ const hasRealCreds = Boolean(E2E_EMAIL && E2E_PASS);
 
 let outreachRouteDeployed = false; // /api/outreach exists in this deployment
 let jobsPageDeployed      = false; // /jobs page is accessible
+let hasOpportunityData    = false; // at least one opportunity card loads
 
 test.use({ baseURL: BASE_URL });
 
@@ -46,9 +47,23 @@ test.beforeAll(async ({ browser }) => {
 
     const jobsRes = await page.request.get("/jobs", { failOnStatusCode: false });
     jobsPageDeployed = jobsRes.status() < 400;
+
+    // Probe whether the opportunities table has data visible on /jobs
+    if (jobsPageDeployed) {
+      await page.goto("/jobs");
+      await page.waitForLoadState("networkidle");
+      // If at least one Outreach button renders, we have data
+      // Alternatively check that the empty state ("No opportunities found") is NOT shown
+      const emptyVisible = await page
+        .locator("text=No opportunities found")
+        .isVisible()
+        .catch(() => false);
+      hasOpportunityData = !emptyVisible;
+    }
   } catch {
     outreachRouteDeployed = false;
     jobsPageDeployed      = false;
+    hasOpportunityData    = false;
   } finally {
     await page.close();
   }
@@ -95,6 +110,7 @@ test("POST /api/outreach → 400 when opportunity_id is missing", async ({ brows
 test("/jobs page shows Outreach button on opportunity cards", async ({ browser }) => {
   test.skip(!jobsPageDeployed, "/jobs page not yet deployed — skipping until PR is merged");
   test.skip(!hasRealCreds, "No E2E credentials — skipping authenticated test");
+  test.skip(!hasOpportunityData, "No opportunities in DB for this deployment — skipping Outreach button check");
 
   const page = await browser.newPage();
   try {
