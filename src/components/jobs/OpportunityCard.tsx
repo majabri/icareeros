@@ -41,7 +41,7 @@ function formatSalary(
 export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardProps) {
   const [showOutreach, setShowOutreach] = useState(false);
   const fit    = fitLabel(opp.fit_score);
-  const salary = formatSalary(null, null, null, opp.salary ?? null);
+  const salary = formatSalary(opp.salary_min ?? null, opp.salary_max ?? null, opp.salary_currency ?? null, opp.salary ?? null);
 
   return (
     <>

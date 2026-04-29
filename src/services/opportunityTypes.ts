@@ -18,6 +18,9 @@ export interface OpportunityResult {
   is_flagged?: boolean;
   flag_reasons?: string[];
   salary?: string;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
   seniority?: string;
   is_remote?: boolean;
   source?: string;
