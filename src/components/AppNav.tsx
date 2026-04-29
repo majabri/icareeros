@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/dashboard",        label: "Career OS",     icon: "🔄" },
   { href: "/jobs",             label: "Opportunities", icon: "💼" },
   { href: "/interview",        label: "Interview",     icon: "🎤" },
+  { href: "/resume",           label: "Resume",        icon: "📄" },
   { href: "/profile",          label: "Profile",       icon: "👤" },
   { href: "/settings/billing", label: "Billing",       icon: "💳" },
 ];
