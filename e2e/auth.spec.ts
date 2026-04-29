@@ -133,10 +133,11 @@ test.describe("Auth flow", () => {
     expect(url).toContain("redirect=");
   });
 
-  test("root / redirects to /dashboard", async ({ page }) => {
+  test("root / renders the public landing page", async ({ page }) => {
     await page.goto("/");
-    // Root page.tsx redirects → /dashboard; middleware may redirect further to /auth/login
-    await expect(page).toHaveURL(/\/(dashboard|auth\/login)/);
+    // PR #28 replaced the root redirect with a public marketing landing page.
+    // Unauthenticated users see the landing page at "/" — no redirect occurs.
+    await expect(page).toHaveURL("/");
   });
 
   test("login form shows validation error on empty submit", async ({ page }) => {
