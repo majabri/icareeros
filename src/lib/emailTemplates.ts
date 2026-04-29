@@ -151,3 +151,88 @@ ${BASE_URL}/auth/login
 
   return { subject, html, text };
 }
+
+/**
+ * Weekly insights digest email.
+ */
+export interface WeeklyInsight {
+  category: string; // e.g. "New opportunities", "Interview tip"
+  content: string;
+}
+
+export function weeklyInsightsEmail(
+  userEmail: string,
+  insights: WeeklyInsight[],
+  newJobCount: number,
+  careerStage: string,
+): { subject: string; html: string; text: string } {
+  const subject = `Your iCareerOS weekly digest — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" })}`;
+
+  const insightRows = insights
+    .slice(0, 5)
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="display:inline-block;font-size:11px;font-weight:600;color:#2563eb;
+                       background:#eff6ff;padding:2px 8px;border-radius:12px;margin-bottom:6px;">
+            ${i.category}
+          </span>
+          <p style="margin:4px 0 0;font-size:14px;color:#475569;line-height:1.5;">${i.content}</p>
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  const html = wrap(`
+    <h1 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;">
+      Your weekly career digest
+    </h1>
+    <p style="margin:0 0 24px;font-size:14px;color:#64748b;">
+      Career OS stage: <strong>${careerStage}</strong>
+    </p>
+
+    ${
+      newJobCount > 0
+        ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+        <p style="margin:0;font-size:14px;color:#166534;font-weight:600;">
+          🔍 ${newJobCount} new opportunities match your profile this week
+        </p>
+        ${ctaButton(`${BASE_URL}/jobs`, "View opportunities →")}
+      </div>`
+        : ""
+    }
+
+    <p style="margin:0 0 12px;font-size:15px;font-weight:600;color:#0f172a;">This week's insights</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${insightRows || '<tr><td style="padding:12px 0;font-size:14px;color:#94a3b8;">No insights this week — check back soon.</td></tr>'}
+    </table>
+
+    ${ctaButton(`${BASE_URL}/dashboard`, "Open your Career OS →")}
+
+    <p style="margin:28px 0 0;font-size:12px;color:#94a3b8;">
+      <a href="${BASE_URL}/settings/email" style="color:#94a3b8;">Manage email preferences</a>
+      &nbsp;·&nbsp;
+      To unsubscribe from weekly digests, visit your
+      <a href="${BASE_URL}/settings/email" style="color:#94a3b8;">email settings</a>.
+    </p>
+  `);
+
+  const insightsText = insights
+    .slice(0, 5)
+    .map((i) => `[${i.category}] ${i.content}`)
+    .join("\n");
+
+  const text = `Your iCareerOS weekly digest
+
+Career OS stage: ${careerStage}
+${newJobCount > 0 ? `\n${newJobCount} new opportunities match your profile: ${BASE_URL}/jobs\n` : ""}
+This week's insights:
+${insightsText || "No insights this week."}
+
+Open your Career OS: ${BASE_URL}/dashboard
+
+Manage email preferences: ${BASE_URL}/settings/email`;
+
+  return { subject, html, text };
+}

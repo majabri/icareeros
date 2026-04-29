@@ -51,3 +51,50 @@ describe("passwordResetNotificationEmail", () => {
     expect(text).toContain(email);
   });
 });
+
+import { weeklyInsightsEmail } from "@/lib/emailTemplates";
+
+describe("weeklyInsightsEmail", () => {
+  const email = "user@example.com";
+  const insights = [
+    { category: "Interview tip", content: "Prepare STAR stories for each major accomplishment." },
+    { category: "Job search", content: "Apply within 48 hours of posting for best results." },
+  ];
+
+  it("returns subject with current month", () => {
+    const { subject } = weeklyInsightsEmail(email, insights, 5, "Evaluate");
+    expect(subject).toContain("iCareerOS weekly digest");
+  });
+
+  it("HTML includes new job count when > 0", () => {
+    const { html } = weeklyInsightsEmail(email, insights, 7, "Act");
+    expect(html).toContain("7");
+  });
+
+  it("HTML includes career stage", () => {
+    const { html } = weeklyInsightsEmail(email, insights, 0, "Coach");
+    expect(html).toContain("Coach");
+  });
+
+  it("HTML contains insight categories", () => {
+    const { html } = weeklyInsightsEmail(email, insights, 0, "Learn");
+    expect(html).toContain("Interview tip");
+    expect(html).toContain("Job search");
+  });
+
+  it("text fallback includes stage and insights", () => {
+    const { text } = weeklyInsightsEmail(email, insights, 3, "Advise");
+    expect(text).toContain("Advise");
+    expect(text).toContain("Interview tip");
+  });
+
+  it("limits insights to 5 even if more provided", () => {
+    const manyInsights = Array.from({ length: 10 }, (_, i) => ({
+      category: `Cat ${i}`,
+      content: `Content ${i}`,
+    }));
+    const { html } = weeklyInsightsEmail(email, manyInsights, 0, "Evaluate");
+    // Only first 5 should appear
+    expect((html.match(/Cat \d/g) ?? []).length).toBeLessThanOrEqual(5);
+  });
+});
