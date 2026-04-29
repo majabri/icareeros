@@ -1,45 +1,70 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   extractReadinessScore,
+  parseFinalFeedback,
   InterviewMessage,
 } from "../interviewService";
 
-// ---------------------------------------------------------------------------
-// extractReadinessScore
-// ---------------------------------------------------------------------------
+// ── extractReadinessScore ────────────────────────────────────────────────────
 describe("extractReadinessScore", () => {
-  it("returns null when there is no readiness marker", () => {
+  it("returns null when no readiness marker", () => {
     expect(extractReadinessScore("Great answer! Let's continue.")).toBeNull();
   });
-
   it("parses **Overall Readiness: 82%** format", () => {
-    const text =
-      "**Overall Readiness: 82%**\n**Top strengths:** clear communication";
-    expect(extractReadinessScore(text)).toBe(82);
+    expect(extractReadinessScore("**Overall Readiness: 82%**")).toBe(82);
   });
-
-  it("parses Overall Readiness 75% without bold markers", () => {
+  it("parses Overall Readiness 75% without bold", () => {
     expect(extractReadinessScore("Overall Readiness 75% overall")).toBe(75);
   });
-
-  it("parses case-insensitively", () => {
+  it("is case-insensitive", () => {
     expect(extractReadinessScore("overall readiness: 60%")).toBe(60);
   });
-
-  it("returns the first score when multiple percentages appear", () => {
-    // Only the first match is used
-    const text = "Overall Readiness: 90%\nSome other 40% mention";
-    expect(extractReadinessScore(text)).toBe(90);
+  it("picks first occurrence", () => {
+    expect(extractReadinessScore("Overall Readiness: 90%\nother 40%")).toBe(90);
   });
-
-  it("returns null for 0% edge case without keyword", () => {
+  it("returns null for unrelated percentage", () => {
     expect(extractReadinessScore("success rate 0%")).toBeNull();
   });
 });
 
-// ---------------------------------------------------------------------------
-// sendInterviewMessage — network call mocked
-// ---------------------------------------------------------------------------
+// ── parseFinalFeedback ───────────────────────────────────────────────────────
+describe("parseFinalFeedback", () => {
+  const sample = `**Overall Readiness: 78%**
+**Top strengths:**
+- Clear communication
+- Strong technical knowledge
+- Good use of STAR method
+**Areas to work on:**
+- Needs more quantified results
+- Work on conciseness`;
+
+  it("extracts the readiness score", () => {
+    expect(parseFinalFeedback(sample).score).toBe(78);
+  });
+
+  it("extracts strengths as an array", () => {
+    const { strengths } = parseFinalFeedback(sample);
+    expect(strengths.length).toBeGreaterThan(0);
+    expect(strengths.some((s) => s.toLowerCase().includes("communication"))).toBe(true);
+  });
+
+  it("extracts areasToWork as an array", () => {
+    const { areasToWork } = parseFinalFeedback(sample);
+    expect(areasToWork.length).toBeGreaterThan(0);
+  });
+
+  it("returns empty arrays when sections are missing", () => {
+    const { strengths, areasToWork } = parseFinalFeedback("Overall Readiness: 50%");
+    expect(strengths).toEqual([]);
+    expect(areasToWork).toEqual([]);
+  });
+
+  it("returns null score when no readiness marker", () => {
+    expect(parseFinalFeedback("Some feedback without score").score).toBeNull();
+  });
+});
+
+// ── Network-bound functions (mocked) ────────────────────────────────────────
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
     functions: {
@@ -48,36 +73,50 @@ vi.mock("@/lib/supabase", () => ({
         error: null,
       }),
     },
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u1" } } }) },
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u1" } } }),
+    },
     from: vi.fn().mockReturnValue({
       insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: { id: "session-1" }, error: null }),
     }),
   }),
 }));
 
-import { sendInterviewMessage, createInterviewSession, updateInterviewSession, listInterviewSessions } from "../interviewService";
+import {
+  sendInterviewMessage,
+  generateInterviewPrep,
+  createInterviewSession,
+  updateInterviewSession,
+  listInterviewSessions,
+} from "../interviewService";
 
 describe("sendInterviewMessage", () => {
-  it("returns the content string from the edge function", async () => {
-    const msgs: InterviewMessage[] = [
-      { role: "user", content: "Please start the interview." },
-    ];
-    const result = await sendInterviewMessage({
-      messages: msgs,
-      jobTitle: "Software Engineer",
-    });
+  it("returns content string from edge function", async () => {
+    const msgs: InterviewMessage[] = [{ role: "user", content: "Start." }];
+    const result = await sendInterviewMessage({ messages: msgs, jobTitle: "Engineer" });
     expect(result).toBe("Tell me about yourself.");
   });
 });
 
+describe("generateInterviewPrep", () => {
+  it("returns prep content string", async () => {
+    const result = await generateInterviewPrep({
+      jobTitle: "PM",
+      jobDescription: "Lead product initiatives.",
+    });
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
+  });
+});
+
 describe("createInterviewSession", () => {
-  it("returns the session id string", async () => {
+  it("returns the session id", async () => {
     const id = await createInterviewSession("Product Manager");
     expect(id).toBe("session-1");
   });
@@ -93,16 +132,7 @@ describe("updateInterviewSession", () => {
 
 describe("listInterviewSessions", () => {
   it("returns an array", async () => {
-    // Override the mock to return an array
-    const { createClient } = await import("@/lib/supabase");
-    const sb = createClient();
-    // The chained mock resolves to undefined for limit — override just enough
-    vi.mocked(sb.from("interview_sessions").select("").order("", { ascending: false }).limit(0) as any).mockResolvedValueOnce?.({
-      data: [],
-      error: null,
-    });
-    // The function should not throw even with empty data
-    const result = await listInterviewSessions().catch(() => []);
+    const result = await listInterviewSessions();
     expect(Array.isArray(result)).toBe(true);
   });
 });
