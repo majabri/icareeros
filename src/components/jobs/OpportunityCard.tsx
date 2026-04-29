@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { OutreachCard } from "./OutreachCard";
+import { CoverLetterModal } from "./CoverLetterModal";
 
 interface OpportunityCardProps {
   opportunity: OpportunityResult;
@@ -33,13 +34,14 @@ function formatSalary(
   const sym = currency === "USD" || !currency ? "$" : currency + " ";
   const fmt = (n: number) =>
     n >= 1000 ? `${sym}${Math.round(n / 1000)}k` : `${sym}${n}`;
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
+  if (min && max) return `${fmt(min)} - ${fmt(max)}`;
   if (min) return `${fmt(min)}+`;
   return `Up to ${fmt(max!)}`;
 }
 
 export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardProps) {
-  const [showOutreach, setShowOutreach] = useState(false);
+  const [showOutreach,     setShowOutreach]     = useState(false);
+  const [showCoverLetter,  setShowCoverLetter]  = useState(false);
   const fit    = fitLabel(opp.fit_score);
   const salary = formatSalary(opp.salary_min ?? null, opp.salary_max ?? null, opp.salary_currency ?? null, opp.salary ?? null);
 
@@ -104,6 +106,17 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             <span />
           )}
           <div className="flex items-center gap-2">
+            {/* Cover Letter button — only show if opportunity has an id */}
+            {opp.id && (
+              <button
+                onClick={() => setShowCoverLetter(true)}
+                className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs
+                           font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+                aria-label={`Generate cover letter for ${opp.title} at ${opp.company}`}
+              >
+                📄 Cover Letter
+              </button>
+            )}
             {/* Outreach button — only show if opportunity has an id */}
             {opp.id && (
               <button
@@ -138,6 +151,17 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
           companyName={opp.company}
           cycleId={cycleId}
           onClose={() => setShowOutreach(false)}
+        />
+      )}
+
+      {/* Cover Letter modal */}
+      {showCoverLetter && opp.id && (
+        <CoverLetterModal
+          opportunityId={opp.id}
+          opportunityTitle={opp.title}
+          companyName={opp.company}
+          cycleId={cycleId}
+          onClose={() => setShowCoverLetter(false)}
         />
       )}
     </>
