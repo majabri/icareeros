@@ -1,3 +1,6 @@
+// @ts-check
+const { withSentryConfig } = require("@sentry/nextjs");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Strict mode enabled for React best practices
@@ -22,4 +25,29 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  // Sentry build-time options
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Only upload source maps in CI / production builds to keep local dev fast.
+  silent: !process.env.CI,
+
+  // Upload source maps to Sentry so stack traces show original TypeScript.
+  // Requires SENTRY_AUTH_TOKEN env var in Vercel.
+  widenClientFileUpload: true,
+
+  // Automatically tree-shake Sentry logger statements in production.
+  disableLogger: true,
+
+  // Hides Sentry release name from bundle (security best practice).
+  hideSourceMaps: true,
+
+  // Route through /monitoring so Sentry tunnelling avoids ad-blockers.
+  tunnelRoute: "/monitoring",
+
+  // Automatically instrument Next.js features (Server Components, API routes).
+  autoInstrumentServerFunctions: true,
+  autoInstrumentMiddleware: true,
+  autoInstrumentAppDirectory: true,
+});
