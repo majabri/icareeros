@@ -6,12 +6,14 @@ const nextConfig = {
   // Strict mode enabled for React best practices
   reactStrictMode: true,
 
+  // Skip ESLint during Vercel builds — linting runs in the pre-deploy CI check
+  eslint: { ignoreDuringBuilds: true },
+
   // Environment variable validation at build time
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
-
 
   // HTTP security headers — Lighthouse, OWASP, and browser security best practices
   async headers() {
@@ -47,7 +49,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co",
-              "font-src 'self'",
+              "font-src 'self' https://fonts.gstatic.com",
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "object-src 'none'",
               "base-uri 'self'",
