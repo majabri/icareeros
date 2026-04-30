@@ -375,24 +375,27 @@ export default function ResumePage() {
 
   useState(() => { void loadVersions(); });
 
-  // File handling
+  // File handling — all types go through FormData; TXT also reads client-side for rewrite
   const handleFile = useCallback(async (file: File) => {
     setFileName(file.name);
     setParseError(null);
     setParsed(null);
     setRewriteResult(null);
 
-    if (file.type === "application/pdf") {
-      setFileForParse(file);
-      setRawText("");
-    } else {
+    // All file types (PDF, Word .docx/.doc, TXT) are sent to the server via FormData
+    setFileForParse(file);
+
+    // For plain text files, also read client-side to enable the AI Rewrite button
+    const isText = file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+    if (isText) {
       try {
         const text = await readFileAsText(file);
         setRawText(text);
-        setFileForParse(null);
       } catch {
-        setParseError("Failed to read file. Try pasting the text instead.");
+        setRawText("");
       }
+    } else {
+      setRawText("");
     }
   }, []);
 
@@ -425,8 +428,8 @@ export default function ResumePage() {
         setRawText(pasteText);
       } else {
         if (fileForParse) {
+          // Server handles PDF (Claude native), Word (mammoth), and plain text
           result = await parseResumeFile(fileForParse);
-          setRawText("");
         } else if (rawText) {
           result = await parseResumeText(rawText);
         } else {
@@ -507,7 +510,7 @@ export default function ResumePage() {
   }, [viewingVersion]);
 
   const canParse =
-    tab === "paste" ? pasteText.trim().length >= 20 : !!(fileForParse || rawText);
+    tab === "paste" ? pasteText.trim().length >= 20 : !!fileForParse;
   const canRewrite = (rawText || pasteText).trim().length >= 20;
 
   return (
@@ -557,10 +560,16 @@ export default function ResumePage() {
             ) : (
               <>
                 <p className="font-medium text-gray-700">Drop your resume here</p>
-                <p className="mt-1 text-xs text-gray-400">PDF, TXT · click to browse</p>
+                <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), TXT · click to browse</p>
               </>
             )}
-            <input ref={fileInputRef} type="file" accept=".pdf,.txt,text/plain,application/pdf" className="hidden" onChange={handleFileInput} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+              className="hidden"
+              onChange={handleFileInput}
+            />
           </div>
         )}
 
