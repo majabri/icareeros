@@ -13,6 +13,8 @@ import { cookies } from "next/headers";
 import { FeatureFlagToggle } from "@/components/admin/FeatureFlagToggle";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { AdminAnalyticsPanel } from "@/components/admin/AdminAnalyticsPanel";
+import { AdminSystemHealth } from "@/components/admin/AdminSystemHealth";
+import { AdminCommandConsole } from "@/components/admin/AdminCommandConsole";
 import type { Metadata } from "next";
 import type { TicketPriority, TicketStatus } from "@/services/supportService";
 import { statusBadgeClass, statusLabel, priorityBadgeClass } from "@/services/supportService";
@@ -187,7 +189,7 @@ export default async function AdminPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
@@ -322,6 +324,16 @@ export default async function AdminPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* System Health section */}
+      <section className="mt-10 border-t border-gray-100 pt-8">
+        <AdminSystemHealth />
+      </section>
+
+      {/* Command Console section */}
+      <section className="mt-10 border-t border-gray-100 pt-8">
+        <AdminCommandConsole />
       </section>
 
       {/* Quick links */}
