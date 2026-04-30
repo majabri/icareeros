@@ -1,5 +1,5 @@
 /**
- * /admin — feature-flag control panel + support ticket queue + user management
+ * /admin — feature-flag control panel + analytics + user management + support tickets
  *
  * Server Component: fetches all data from Supabase directly.
  * Only accessible to majabri714@gmail.com — anyone else is redirected to /dashboard.
@@ -12,6 +12,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { FeatureFlagToggle } from "@/components/admin/FeatureFlagToggle";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
+import { AdminAnalyticsPanel } from "@/components/admin/AdminAnalyticsPanel";
 import type { Metadata } from "next";
 import type { TicketPriority, TicketStatus } from "@/services/supportService";
 import { statusBadgeClass, statusLabel, priorityBadgeClass } from "@/services/supportService";
@@ -29,19 +30,9 @@ async function makeSupabaseServer() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(
-          cookiesToSet: Array<{
-            name: string;
-            value: string;
-            options: CookieOptions;
-          }>
-        ) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         },
       },
     }
@@ -71,7 +62,6 @@ interface AdminUser {
   email: string | null;
   full_name: string | null;
   created_at: string;
-  updated_at: string;
   plan: string;
   plan_status: string;
   cycle_count: number;
@@ -89,21 +79,25 @@ export default async function AdminPage() {
   const supabase = await makeSupabaseServer();
 
   // Auth guard
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?redirect=/admin");
   if (user.email !== ADMIN_EMAIL) redirect("/dashboard");
 
   const svc = makeServiceClient();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Parallel fetches: flags, tickets, users, subscriptions, cycle counts
+  // Parallel fetches
   const [
     { data: flags, error: flagsError },
     { data: tickets },
     { data: profiles },
     { data: subscriptions },
-    { data: cycleCounts },
+    { data: allCycles },
+    { data: allAnalyses },
+    { data: recentAnalyses },
+    { data: allRuns },
+    { data: allSupportTickets },
   ] = await Promise.all([
     supabase.from("feature_flags").select("key, enabled, updated_at").order("key"),
     supabase
@@ -112,43 +106,61 @@ export default async function AdminPage() {
       .in("status", ["open", "in_progress"])
       .order("created_at", { ascending: false })
       .limit(50),
-    svc
-      .from("profiles")
-      .select("user_id, email, full_name, created_at, updated_at")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    svc
-      .from("user_subscriptions")
-      .select("user_id, plan, status"),
-    svc
-      .from("career_os_cycles")
-      .select("user_id")
-      .then(({ data }) => {
-        if (!data) return { data: {} as Record<string, number> };
-        const counts: Record<string, number> = {};
-        for (const row of data) {
-          counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;
-        }
-        return { data: counts };
-      }),
+    svc.from("profiles").select("user_id, email, full_name, created_at").order("created_at", { ascending: false }).limit(100),
+    svc.from("user_subscriptions").select("user_id, plan, status"),
+    svc.from("career_os_cycles").select("user_id, status"),
+    svc.from("analysis_history").select("id"),
+    svc.from("analysis_history").select("id").gte("created_at", thirtyDaysAgo),
+    svc.from("agent_runs").select("jobs_found, jobs_matched"),
+    svc.from("support_tickets").select("id, status"),
   ]);
 
   if (flagsError) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <p className="text-red-600">Failed to load feature flags: {flagsError.message}</p>
+        <p className="text-red-600">Failed to load admin panel: {flagsError.message}</p>
       </div>
     );
   }
 
-  const openTickets = (tickets ?? []) as AdminTicket[];
+  // ── Analytics aggregations ──────────────────────────────────────────────────
+  const totalUsers = (profiles ?? []).length;
+  const newUsersLast7Days = (profiles ?? []).filter(
+    p => new Date(p.created_at) >= new Date(sevenDaysAgo)
+  ).length;
 
-  // Build merged user list
   const subMap = new Map(
     (subscriptions ?? []).map(s => [s.user_id, { plan: s.plan as string, plan_status: s.status as string }])
   );
-  const cycleMap = (cycleCounts as unknown as Record<string, number>) ?? {};
+  const planDist = { free: 0, pro: 0, premium: 0 };
+  for (const p of profiles ?? []) {
+    const plan = (subMap.get(p.user_id)?.plan ?? "free") as keyof typeof planDist;
+    if (plan in planDist) planDist[plan]++;
+    else planDist.free++;
+  }
 
+  const cycleRows = allCycles ?? [];
+  const cycleCountByUser: Record<string, number> = {};
+  for (const row of cycleRows) {
+    cycleCountByUser[row.user_id] = (cycleCountByUser[row.user_id] ?? 0) + 1;
+  }
+  const totalCycles = cycleRows.length;
+  const activeCycles = cycleRows.filter(c => c.status === "active").length;
+
+  const totalAnalysesCount = (allAnalyses ?? []).length;
+  const analysesLast30Days = (recentAnalyses ?? []).length;
+
+  const runs = allRuns ?? [];
+  const totalAgentRuns = runs.length;
+  const jobsFound = runs.reduce((sum, r) => sum + (r.jobs_found ?? 0), 0);
+  const jobsMatched = runs.reduce((sum, r) => sum + (r.jobs_matched ?? 0), 0);
+
+  const supportRows = allSupportTickets ?? [];
+  const totalTicketsCount = supportRows.length;
+  const openTicketsCount = supportRows.filter(t => t.status === "open" || t.status === "in_progress").length;
+
+  // ── User table data ─────────────────────────────────────────────────────────
+  const openTickets = (tickets ?? []) as AdminTicket[];
   const adminUsers: AdminUser[] = (profiles ?? []).map(p => {
     const sub = subMap.get(p.user_id);
     return {
@@ -156,10 +168,9 @@ export default async function AdminPage() {
       email: p.email,
       full_name: p.full_name,
       created_at: p.created_at,
-      updated_at: p.updated_at,
       plan: sub?.plan ?? "free",
       plan_status: sub?.plan_status ?? "active",
-      cycle_count: cycleMap[p.user_id] ?? 0,
+      cycle_count: cycleCountByUser[p.user_id] ?? 0,
     };
   });
 
@@ -169,12 +180,34 @@ export default async function AdminPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage feature flags, users, support tickets, and platform settings.
+          Platform analytics, user management, feature flags, and support tickets.
         </p>
       </div>
 
-      {/* Feature Flags section */}
+      {/* Analytics section */}
       <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">Platform Analytics</h2>
+          <span className="text-xs text-gray-400">live data</span>
+        </div>
+        <AdminAnalyticsPanel
+          totalUsers={totalUsers}
+          newUsersLast7Days={newUsersLast7Days}
+          planDist={planDist}
+          totalAnalyses={totalAnalysesCount}
+          analysesLast30Days={analysesLast30Days}
+          totalAgentRuns={totalAgentRuns}
+          jobsFound={jobsFound}
+          jobsMatched={jobsMatched}
+          totalTickets={totalTicketsCount}
+          openTickets={openTicketsCount}
+          totalCycles={totalCycles}
+          activeCycles={activeCycles}
+        />
+      </section>
+
+      {/* Feature Flags section */}
+      <section className="mt-10 border-t border-gray-100 pt-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-800">Feature Flags</h2>
           <span className="text-xs text-gray-400">{flags?.length ?? 0} flags</span>
@@ -194,51 +227,33 @@ export default async function AdminPage() {
             No users yet.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Plan
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cycles
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Joined
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cycles</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {adminUsers.map(u => (
                   <tr key={u.user_id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 truncate max-w-[180px]">
-                        {u.email ?? "—"}
-                      </p>
-                      {u.full_name && (
-                        <p className="text-xs text-gray-400 truncate max-w-[180px]">{u.full_name}</p>
-                      )}
+                      <p className="font-medium text-gray-900 truncate max-w-[180px]">{u.email ?? "—"}</p>
+                      {u.full_name && <p className="text-xs text-gray-400 truncate max-w-[180px]">{u.full_name}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${planBadgeClass(u.plan)}`}
-                      >
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${planBadgeClass(u.plan)}`}>
                         {u.plan}
                       </span>
                       {u.plan_status !== "active" && (
                         <span className="ml-1 text-xs text-red-400">{u.plan_status}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 tabular-nums">
-                      {u.cycle_count}
-                    </td>
+                    <td className="px-4 py-3 text-gray-600 tabular-nums">{u.cycle_count}</td>
                     <td className="px-4 py-3 text-gray-400 text-xs tabular-nums whitespace-nowrap">
                       {new Date(u.created_at).toLocaleDateString()}
                     </td>
@@ -252,11 +267,7 @@ export default async function AdminPage() {
                         >
                           View ↗
                         </a>
-                        <AdminUserActions
-                          userId={u.user_id}
-                          currentPlan={u.plan}
-                          email={u.email ?? u.user_id}
-                        />
+                        <AdminUserActions userId={u.user_id} currentPlan={u.plan} email={u.email ?? u.user_id} />
                       </div>
                     </td>
                   </tr>
@@ -273,7 +284,6 @@ export default async function AdminPage() {
           <h2 className="text-lg font-semibold text-gray-800">Open Support Tickets</h2>
           <span className="text-xs text-gray-400">{openTickets.length} tickets</span>
         </div>
-
         {openTickets.length === 0 ? (
           <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
             🎉 No open tickets — inbox is clear.
@@ -281,19 +291,12 @@ export default async function AdminPage() {
         ) : (
           <ul className="space-y-3">
             {openTickets.map(ticket => (
-              <li
-                key={ticket.id}
-                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
-              >
+              <li key={ticket.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(ticket.status)}`}
-                  >
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(ticket.status)}`}>
                     {statusLabel(ticket.status)}
                   </span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${priorityBadgeClass(ticket.priority)}`}
-                  >
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${priorityBadgeClass(ticket.priority)}`}>
                     {ticket.priority}
                   </span>
                   <span className="ml-auto text-xs text-gray-400">
@@ -314,26 +317,12 @@ export default async function AdminPage() {
         <h2 className="mb-4 text-lg font-semibold text-gray-800">Quick Links</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            {
-              label: "Supabase",
-              href: "https://supabase.com/dashboard/project/kuneabeiwcxavvyyfjkx",
-            },
-            {
-              label: "Vercel",
-              href: "https://vercel.com/jabri-solutions/icareeros/settings/environment-variables",
-            },
-            {
-              label: "Stripe",
-              href: "https://dashboard.stripe.com/acct_1TK0yp2K7LVuzb7t/dashboard",
-            },
+            { label: "Supabase", href: "https://supabase.com/dashboard/project/kuneabeiwcxavvyyfjkx" },
+            { label: "Vercel",   href: "https://vercel.com/jabri-solutions/icareeros/settings/environment-variables" },
+            { label: "Stripe",   href: "https://dashboard.stripe.com/acct_1TK0yp2K7LVuzb7t/dashboard" },
           ].map(({ label, href }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors"
-            >
+            <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors">
               {label} ↗
             </a>
           ))}
