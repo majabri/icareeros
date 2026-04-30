@@ -1,49 +1,20 @@
 /**
  * resumeService.ts
  *
- * Client-side service for the Resume Builder / Career Profile feature.
- * AI calls route through Supabase Edge Functions (ANTHROPIC_API_KEY lives there).
+ * Client-side service for Resume Builder / Career Profile.
+ * Resume PARSING is done locally — no Anthropic API calls:
+ *   1. POST /api/resume/extract-text  → server extracts raw text (pdf-parse / mammoth / utf-8)
+ *   2. parseResumeLocally(text)       → regex heuristic parser (no AI)
  *
- * - parseResumeText     → edge fn: parse-resume (text path)
- * - parseResumeFile     → edge fn: parse-resume (converts file client-side first)
- * - saveResumeVersion   → INSERT into resume_versions
- * - listResumeVersions  → SELECT from resume_versions
- * - deleteResumeVersion → DELETE from resume_versions
- * - rewriteResume       → POST /api/resume/rewrite (Sonnet, plan-gated)
+ * Resume REWRITE still calls /api/resume/rewrite (Claude Sonnet, plan-gated).
  */
 
 import { createClient } from "@/lib/supabase";
+import { parseResumeLocally } from "@/lib/parseResumeLocally";
+export type { ParsedResume, ParsedContact, ParsedExperience, ParsedEducation } from "@/lib/parseResumeLocally";
+import type { ParsedResume } from "@/lib/parseResumeLocally";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export interface ParsedContact {
-  name: string;
-  email: string;
-  phone: string;
-  location: string;
-}
-
-export interface ParsedExperience {
-  title: string;
-  company: string;
-  period: string;
-  bullets: string[];
-}
-
-export interface ParsedEducation {
-  degree: string;
-  school: string;
-  year: string;
-}
-
-export interface ParsedResume {
-  contact: ParsedContact;
-  summary: string;
-  experience: ParsedExperience[];
-  education: ParsedEducation[];
-  skills: string[];
-  certifications: string[];
-}
+// ── Resume Version type ───────────────────────────────────────────────────────
 
 export interface ResumeVersion {
   id: string;
@@ -56,83 +27,38 @@ export interface ResumeVersion {
   updated_at: string;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function isWordFile(file: File): boolean {
-  return (
-    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    file.type === "application/msword" ||
-    file.name.toLowerCase().endsWith(".docx") ||
-    file.name.toLowerCase().endsWith(".doc")
-  );
-}
-
-function isPdfFile(file: File): boolean {
-  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-}
-
-/** Convert an ArrayBuffer to base64 without stack-overflowing on large files */
-function toBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const CHUNK = 8192;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
 // ── Parse ─────────────────────────────────────────────────────────────────────
 
 /**
- * Parse raw resume text via the parse-resume Supabase edge function.
+ * Parse raw resume text — no API call.
  */
-export async function parseResumeText(text: string): Promise<ParsedResume> {
-  const supabase = createClient();
-  const { data, error } = await supabase.functions.invoke("parse-resume", {
-    body: { text },
-  });
-  if (error) throw new Error(error.message ?? "Parse failed");
-  if (data?.error) throw new Error(data.error);
-  return data as ParsedResume;
+export function parseResumeText(text: string): ParsedResume {
+  return parseResumeLocally(text);
 }
 
 /**
- * Parse a file (PDF, Word .docx/.doc, or plain text).
- * Files are converted client-side before sending to the edge function.
+ * Upload a file, extract its text server-side, then parse locally.
+ * Supports PDF, Word (.docx/.doc), plain text.
+ * No Anthropic API call — purely deterministic.
  */
 export async function parseResumeFile(file: File): Promise<ParsedResume> {
-  const supabase = createClient();
+  if (file.size > 10 * 1024 * 1024) throw new Error("File too large (max 10 MB)");
 
-  let body: { text?: string; pdfBase64?: string };
+  const formData = new FormData();
+  formData.append("file", file);
 
-  if (isPdfFile(file)) {
-    // Send PDF as base64 — Claude handles it natively as a document block
-    const arrayBuffer = await file.arrayBuffer();
-    body = { pdfBase64: toBase64(arrayBuffer) };
+  const res = await fetch("/api/resume/extract-text", {
+    method: "POST",
+    body: formData,
+  });
 
-  } else if (isWordFile(file)) {
-    // Extract text from Word doc client-side using mammoth
-    const mammoth = await import("mammoth");
-    const arrayBuffer = await file.arrayBuffer();
-    const { value: text, messages } = await mammoth.default.extractRawText({ arrayBuffer });
-    if (messages.length > 0) {
-      console.warn("[parseResumeFile] mammoth warnings:", messages.map((m) => m.message).join("; "));
-    }
-    if (!text.trim()) throw new Error("Could not extract text from Word document. Try saving as PDF or pasting the text.");
-    body = { text };
-
-  } else {
-    // Plain text / other
-    const text = await file.text();
-    if (text.trim().length < 20) throw new Error("File appears to be empty or too short to parse.");
-    body = { text };
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Text extraction failed (${res.status})`);
   }
 
-  const { data, error } = await supabase.functions.invoke("parse-resume", { body });
-  if (error) throw new Error(error.message ?? "Parse failed");
-  if (data?.error) throw new Error(data.error);
-  return data as ParsedResume;
+  const { text } = (await res.json()) as { text: string };
+  return parseResumeLocally(text);
 }
 
 // ── Supabase CRUD ─────────────────────────────────────────────────────────────
@@ -174,7 +100,7 @@ export async function deleteResumeVersion(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-// ── Rewrite ───────────────────────────────────────────────────────────────────
+// ── Rewrite (still AI — Claude Sonnet, plan-gated) ───────────────────────────
 
 export interface RewriteResult {
   rewrittenText: string;
