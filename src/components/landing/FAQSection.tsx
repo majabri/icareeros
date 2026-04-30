@@ -1,3 +1,5 @@
+"use client";
+
 const FAQS = [
   { q:"Q: Will this really get me hired?",
     a:"iCareerOS dramatically improves your odds by handling the mechanics (resume optimization, application tailoring, interview prep). But your fit, experience, and interview performance still matter. We give you the edge." },
