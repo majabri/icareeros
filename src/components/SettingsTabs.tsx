@@ -6,7 +6,7 @@ const TABS = [
   { href: "/settings/account",  label: "Settings" },
   { href: "/settings/email",    label: "Notifications" },
   { href: "/settings/billing",  label: "Billing" },
-  { href: "/support",           label: "Support" },
+  { href: "/settings/support",  label: "Support" },
 ];
 
 export function SettingsTabs() {
