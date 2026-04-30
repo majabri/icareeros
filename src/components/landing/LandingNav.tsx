@@ -26,7 +26,7 @@ export function LandingNav() {
         backgroundClip: "text", letterSpacing: "-0.5px",
       }}>iCareerOS</div>
 
-      <ul style={{ display: "flex", listStyle: "none", gap: "3rem", alignItems: "center", margin: 0, padding: 0 }}>
+      <ul style={{ display: "flex", listStyle: "none", gap: "2rem", alignItems: "center", margin: 0, padding: 0 }}>
         {[["#lifecycle","The Journey"],["#features","Features"],["#stats","Impact"]].map(([href,label]) => (
           <li key={href}>
             <a href={href} style={{ textDecoration: "none", color: "var(--neutral-700)", fontWeight: 500, fontSize: "0.95rem", transition: "color 0.3s" }}
@@ -34,6 +34,33 @@ export function LandingNav() {
                onMouseLeave={e => (e.currentTarget.style.color = "var(--neutral-700)")}>{label}</a>
           </li>
         ))}
+        <li>
+          <a href="/auth/login" style={{
+            border: "2px solid var(--primary)",
+            color: "var(--primary)",
+            background: "transparent",
+            padding: "0.65rem 1.5rem",
+            borderRadius: "50px",
+            fontWeight: 600,
+            textDecoration: "none",
+            fontSize: "0.95rem",
+            transition: "all 0.3s",
+            display: "inline-block",
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.background = "var(--primary)";
+            el.style.color = "var(--neutral-100)";
+            el.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.background = "transparent";
+            el.style.color = "var(--primary)";
+            el.style.transform = "";
+          }}
+          >Sign In</a>
+        </li>
         <li>
           <a href="#cta" style={{
             background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
