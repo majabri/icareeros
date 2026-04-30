@@ -1,72 +1,39 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 const STATS = [
-  { value: 6, unit: "", label: "Career OS Stages", suffix: "" },
-  { value: 80, unit: "%", label: "of users report clarity within first cycle", suffix: "" },
-  { value: 120, unit: "d", label: "median time to first measurable outcome", suffix: "" },
-  { value: 15, unit: "%", label: "avg salary increase after 2 cycles", suffix: "+" },
+  { n:"92%",  label:"Report increased confidence in career decisions" },
+  { n:"3.5x", label:"Faster path to landing target role" },
+  { n:"50K+", label:"Career transformations supported" },
+  { n:"4.9/5",label:"Rating from career seekers" },
 ];
-
-function useCountUp(target: number, active: boolean) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!active) return;
-    let start = 0;
-    const duration = 1600;
-    const step = (timestamp: number) => {
-      if (!start) start = timestamp;
-      const progress = Math.min((timestamp - start) / duration, 1);
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.floor(eased * target));
-      if (progress < 1) requestAnimationFrame(step);
-      else setCount(target);
-    };
-    requestAnimationFrame(step);
-  }, [active, target]);
-
-  return count;
-}
-
-function StatCard({ stat, active }: { stat: typeof STATS[0]; active: boolean }) {
-  const count = useCountUp(stat.value, active);
-  return (
-    <div className="text-center">
-      <div className="mb-1 text-5xl font-extrabold tabular-nums text-white">
-        {stat.suffix}{count}{stat.unit}
-      </div>
-      <p className="text-sm leading-snug text-blue-200">{stat.label}</p>
-    </div>
-  );
-}
 
 export function StatsSection() {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); io.disconnect(); } },
-      { threshold: 0.3 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible"); });
+    }, { threshold: 0.1, rootMargin: "0px 0px -80px 0px" });
+    ref.current?.querySelectorAll(".fade-in").forEach(el => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   return (
-    <section
-      ref={ref}
-      className="bg-gradient-to-br from-blue-700 via-blue-800 to-violet-900 py-20"
-    >
-      <div className="mx-auto max-w-5xl px-6">
-        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
-          {STATS.map((s) => (
-            <StatCard key={s.label} stat={s} active={visible} />
+    <section id="stats" style={{
+      padding:"6rem 3rem", textAlign:"center",
+      background:"linear-gradient(135deg,var(--primary) 0%,var(--secondary) 50%,var(--tertiary) 100%)",
+      color:"var(--neutral-100)",
+    }}>
+      <div ref={ref} style={{ maxWidth:1200, margin:"0 auto" }}>
+        <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-100)" }}>Real Results, Real People</h2>
+        <p style={{ fontSize:"1.1rem", color:"rgba(255,255,255,0.9)", marginBottom:"4rem" }}>Join thousands transforming their careers</p>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))", gap:"3rem" }}>
+          {STATS.map(s => (
+            <div key={s.n} className="fade-in" style={{ textAlign:"center" }}>
+              <div style={{ fontSize:"3rem", fontWeight:800, marginBottom:"0.5rem", textShadow:"0 2px 4px rgba(0,0,0,0.1)" }}>{s.n}</div>
+              <div style={{ fontSize:"1rem", opacity:0.95 }}>{s.label}</div>
+            </div>
           ))}
         </div>
       </div>

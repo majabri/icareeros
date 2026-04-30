@@ -1,126 +1,73 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================
-   iCareerOS Design System — JBS Dark Theme
-   ========================================= */
-
-@layer base {
-  :root {
-    --brand:           #00f2ff;
-    --brand-dim:       rgba(0,242,255,0.15);
-    --bg-page:         #050505;
-    --bg-surface:      #0a0a0a;
-    --bg-surface-2:    #0f1515;
-    --border-theme:    rgba(0,242,255,0.15);
-    --text-primary:    #ffffff;
-    --text-secondary:  rgba(255,255,255,0.65);
-    --text-muted:      rgba(255,255,255,0.38);
-    --gradient-brand:  linear-gradient(135deg, #00f2ff, #00d4e8);
-    --shadow-brand:    0 8px 32px -4px rgba(0,242,255,0.25);
-    --shadow-card:     0 4px 24px -4px rgba(0,242,255,0.06), 0 1px 4px rgba(0,0,0,0.4);
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    @apply antialiased overflow-x-hidden;
-    background-color: var(--bg-page);
-    color: var(--text-primary);
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-
-  h1, h2, h3 {
-    font-family: 'Inter', sans-serif;
-    font-weight: 900;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    color: #ffffff;
-  }
+:root {
+  --primary:       #00d9ff;
+  --primary-dark:  #00a8cc;
+  --secondary:     #ff6b6b;
+  --tertiary:      #4ecdc4;
+  --neutral-100:   #ffffff;
+  --neutral-200:   #f8f9fa;
+  --neutral-300:   #e9ecef;
+  --neutral-700:   #495057;
+  --neutral-900:   #212529;
 }
 
-@layer utilities {
-  /* Brand gradient — text */
-  .text-brand-gradient {
-    background: var(--gradient-brand);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  /* Brand gradient — background */
-  .bg-brand-gradient { background: var(--gradient-brand); }
+html { scroll-behavior: smooth; }
 
-  /* Glass card */
-  .glass {
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border-theme);
-  }
-  .glass-strong {
-    background: rgba(255,255,255,0.07);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(0,242,255,0.2);
-  }
-
-  /* Shadow helpers */
-  .shadow-brand { box-shadow: var(--shadow-brand); }
-  .shadow-card  { box-shadow: var(--shadow-card); }
-
-  /* Pill / badge */
-  .badge-brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.375rem 1rem;
-    border-radius: 9999px;
-    background: rgba(0,242,255,0.08);
-    border: 1px solid rgba(0,242,255,0.3);
-    color: var(--brand);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  /* Fade-up animation */
-  .animate-fade-up {
-    animation: fade-up 0.55s ease-out both;
-  }
-  @keyframes fade-up {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Pain point card hover glow */
-  .card-dark {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-theme);
-    border-radius: 1rem;
-    transition: box-shadow 0.2s, border-color 0.2s;
-  }
-  .card-dark:hover {
-    box-shadow: var(--shadow-card);
-    border-color: rgba(0,242,255,0.3);
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  color: var(--neutral-900);
+  background: var(--neutral-100);
+  line-height: 1.6;
+  overflow-x: hidden;
 }
 
-/* Accessibility */
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+/* Shared button styles */
+.btn {
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 1rem;
+  text-decoration: none;
+  display: inline-block;
 }
-.sr-only {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%);
+  color: var(--neutral-100);
+  box-shadow: 0 4px 20px rgba(0,217,255,0.25);
 }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 35px rgba(0,217,255,0.35);
 }
+.btn-secondary {
+  background: var(--neutral-100);
+  color: var(--primary);
+  border: 2px solid var(--primary);
+}
+.btn-secondary:hover {
+  background: var(--primary);
+  color: var(--neutral-100);
+  transform: translateY(-2px);
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.fade-in.visible {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
