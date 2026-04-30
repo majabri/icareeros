@@ -1,3 +1,4 @@
+"use client";
 export function CTASection() {
   return (
     <section id="cta" style={{ padding:"5rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)", textAlign:"center" }}>
