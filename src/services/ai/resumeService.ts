@@ -3,7 +3,7 @@
  *
  * Client-side service for the Resume Builder feature.
  * - parseResumeText     → POST /api/resume/parse (text path)
- * - parseResumeFile     → POST /api/resume/parse (PDF base64 path)
+ * - parseResumeFile     → POST /api/resume/parse (FormData — PDF | DOCX | DOC | TXT)
  * - saveResumeVersion   → INSERT into resume_versions
  * - listResumeVersions  → SELECT from resume_versions
  * - deleteResumeVersion → DELETE from resume_versions
@@ -74,21 +74,18 @@ export async function parseResumeText(text: string): Promise<ParsedResume> {
 }
 
 /**
- * Parse a PDF file (sent as base64) via the server-side API route.
+ * Parse a file (PDF, Word .docx/.doc, or plain text) via the server-side API route.
+ * Sends as FormData so the server can handle format-specific extraction.
  */
 export async function parseResumeFile(file: File): Promise<ParsedResume> {
-  const arrayBuffer = await file.arrayBuffer();
-  const uint8 = new Uint8Array(arrayBuffer);
-  let binary = "";
-  for (let i = 0; i < uint8.length; i++) {
-    binary += String.fromCharCode(uint8[i]);
-  }
-  const fileBase64 = btoa(binary);
+  const formData = new FormData();
+  formData.append("file", file);
 
+  // Note: do NOT set Content-Type header — the browser sets it automatically
+  // with the correct multipart boundary when using FormData.
   const res = await fetch("/api/resume/parse", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileBase64, mimeType: file.type }),
+    body: formData,
   });
 
   if (!res.ok) {
