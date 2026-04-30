@@ -7,6 +7,7 @@ export const fr: Translations = {
     interview: "Entretien",
     resume: "CV",
     offers: "Offres",
+    recruiter: "Recruteur",
     support: "Support",
     billing: "Facturation",
     profile: "Profil",
