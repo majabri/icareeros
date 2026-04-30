@@ -2,20 +2,22 @@
 
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-
-const NAV_LINKS = [
-  { href: "/dashboard",        label: "Career OS",     icon: "🔄" },
-  { href: "/jobs",             label: "Opportunities", icon: "💼" },
-  { href: "/interview",        label: "Interview",     icon: "🎤" },
-  { href: "/resume",           label: "Resume",        icon: "📄" },
-  { href: "/offers",           label: "Offers",        icon: "🤝" },
-  { href: "/profile",          label: "Profile",       icon: "👤" },
-  { href: "/support",         label: "Support",      icon: "🎫" },
-  { href: "/settings/billing", label: "Billing",       icon: "💳" },
-];
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export function AppNav() {
   const pathname = usePathname();
+  const { t } = useTranslation();
+
+  const NAV_LINKS = [
+    { href: "/dashboard",        label: t.nav.careerOS,      icon: "🔄" },
+    { href: "/jobs",             label: t.nav.opportunities,  icon: "💼" },
+    { href: "/interview",        label: t.nav.interview,      icon: "🎤" },
+    { href: "/resume",           label: t.nav.resume,         icon: "📄" },
+    { href: "/offers",           label: t.nav.offers,         icon: "🤝" },
+    { href: "/support",          label: t.nav.support,        icon: "🎫" },
+    { href: "/settings/billing", label: t.nav.billing,        icon: "💳" },
+  ];
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -54,13 +56,16 @@ export function AppNav() {
           })}
         </div>
 
-        {/* Sign out */}
-        <button
-          onClick={handleSignOut}
-          className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
-        >
-          Sign out
-        </button>
+        {/* Right: language switcher + sign out */}
+        <div className="flex items-center gap-2 shrink-0">
+          <LanguageSwitcher />
+          <button
+            onClick={handleSignOut}
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          >
+            {t.nav.signOut}
+          </button>
+        </div>
       </div>
     </nav>
   );
