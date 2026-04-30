@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
+import { cache } from "@/lib/cache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,11 @@ export async function POST(req: NextRequest) {
   if (!opps || opps.length === 0) {
     return NextResponse.json({ ranges: {} });
   }
+
+  // ── Cache check ─────────────────────────────────────────────────────────────
+  const cacheKey = cache.key("salary", opportunityIds.sort());
+  const cached = await cache.get<Record<string, unknown>>(cacheKey);
+  if (cached) return NextResponse.json({ ranges: cached });
 
   // ── Build prompt ────────────────────────────────────────────────────────────
   const opportunitiesText = (opps as OpportunityRow[])
@@ -152,5 +158,7 @@ Example:
     return NextResponse.json({ ranges: {} });
   }
 
+  // Cache for 24h — salary data changes slowly
+  await cache.set(cacheKey, ranges, 24 * 60 * 60);
   return NextResponse.json({ ranges });
 }

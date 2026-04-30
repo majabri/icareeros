@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
+import { cache } from "@/lib/cache";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ scores: {} });
   }
 
+  // ── Cache check (per user+opportunity set, TTL 6h) ──────────────────────────
+  const userId = user.id;
+  const cacheKey = cache.key("fit", userId, opportunityIds.sort());
+  const cachedScores = await cache.get<Record<string, unknown>>(cacheKey);
+  if (cachedScores) return NextResponse.json({ scores: cachedScores });
+
   // ── Build prompt ────────────────────────────────────────────────────────────
   const opportunitiesText = (opps as Opportunity[])
     .map((opp, i) =>
@@ -198,5 +205,7 @@ Example format:
     return NextResponse.json({ scores: {} });
   }
 
+  // Cache fit scores for 6h — profile rarely changes that fast
+  await cache.set(cacheKey, scores, 6 * 60 * 60);
   return NextResponse.json({ scores });
 }
