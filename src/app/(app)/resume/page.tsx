@@ -13,7 +13,16 @@ import {
   type RewriteResult,
   rewriteResume,
 } from "@/services/ai/resumeService";
-import type { FitCheckResult } from "@/app/api/resume/fit-check/route";
+import { createClient } from "@/lib/supabase";
+
+interface FitCheckResult {
+  fitScore: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  missingSkills: string[];
+  recommendations: string[];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -170,19 +179,14 @@ export default function FitCheckPage() {
           ? `Job URL: ${jobUrl}\n\n(Assess based on the URL context provided)`
           : jobDescription;
 
-      const res = await fetch("/api/resume/fit-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText, jobDescription: jobText }),
+      const supabase = createClient();
+      const { data, error: fnError } = await supabase.functions.invoke("fit-check", {
+        body: { resumeText, jobDescription: jobText },
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? `Server error ${res.status}`);
-      }
-
-      const data: FitCheckResult = await res.json();
-      setResult(data);
+      if (fnError) throw new Error(fnError.message ?? "Fit check failed");
+      if (data?.error) throw new Error(data.error);
+      const data2: FitCheckResult = data as FitCheckResult;
+      setResult(data2);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fit check failed");
     } finally {
