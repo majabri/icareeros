@@ -10,6 +10,7 @@ export const es: Translations = {
     recruiter: "Reclutador",
     support: "Soporte",
     billing: "Facturación",
+    settings: "Configuración",
     profile: "Perfil",
     signOut: "Cerrar sesión",
   },
@@ -122,6 +123,7 @@ export const es: Translations = {
   settings: {
     title: "Configuración",
     billing: "Facturación",
+    settings: "Configuración",
     emailPrefs: "Correo",
     account: "Cuenta",
     exportData: "Exportar tus datos",
