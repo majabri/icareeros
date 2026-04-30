@@ -8,12 +8,20 @@ interface AuthFormProps {
   mode: "login" | "signup";
 }
 
+// Username aliases → real Supabase email
+const USERNAME_MAP: Record<string, string> = {
+  azadmin: "azadmin@icareeros.com",
+};
+
+// Emails that land on /admin after login
+const ADMIN_EMAILS = ["majabri714@gmail.com", "azadmin@icareeros.com"];
+
 export function AuthForm({ mode }: AuthFormProps) {
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [success, setSuccess]   = useState<string | null>(null);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword]     = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [success, setSuccess]       = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -26,35 +34,36 @@ export function AuthForm({ mode }: AuthFormProps) {
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: identifier,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });
         if (error) throw error;
-        // Fire-and-forget welcome email — don't await to keep UX snappy
         sendEmail({
-          to: email,
+          to: identifier,
           subject: "Welcome to iCareerOS — your career OS is ready",
-          html: `<p>Hi ${email},</p><p>Welcome to iCareerOS! <a href="${window.location.origin}/dashboard">Go to your dashboard</a>.</p>`,
+          html: `<p>Hi ${identifier},</p><p>Welcome to iCareerOS! <a href="${window.location.origin}/dashboard">Go to your dashboard</a>.</p>`,
           text: `Welcome to iCareerOS! Visit: ${window.location.origin}/dashboard`,
-        }).catch(() => {
-          // non-critical — ignore email delivery failures silently
-        });
+        }).catch(() => {});
         setSuccess(
           "Check your email — we've sent you a confirmation link to activate your account."
         );
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        // Resolve username alias → email
+        const email = USERNAME_MAP[identifier.toLowerCase().trim()] ?? identifier.trim();
+
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
-        // Redirect handled by middleware on next navigation
-        window.location.href =
-          new URLSearchParams(window.location.search).get("redirect") ??
-          "/dashboard";
+
+        // Admin users go to /admin; everyone else to /dashboard (or ?redirect=)
+        const isAdmin = ADMIN_EMAILS.includes(data.user?.email ?? "");
+        const redirect = new URLSearchParams(window.location.search).get("redirect");
+        window.location.href = redirect ?? (isAdmin ? "/admin" : "/dashboard");
       }
     } catch (err: unknown) {
       setError(
@@ -79,20 +88,20 @@ export function AuthForm({ mode }: AuthFormProps) {
       )}
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-          Email address
+        <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+          {mode === "login" ? "Email or username" : "Email address"}
         </label>
         <input
-          id="email"
-          type="email"
-          autoComplete="email"
+          id="identifier"
+          type="text"
+          autoComplete={mode === "login" ? "username" : "email"}
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
                      text-gray-900 placeholder-gray-400 shadow-sm
                      focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          placeholder="you@example.com"
+          placeholder={mode === "login" ? "you@example.com or username" : "you@example.com"}
         />
       </div>
 

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   title: "Admin — iCareerOS",
 };
 
-const ADMIN_EMAIL = "majabri714@gmail.com";
+const ADMIN_EMAILS = ["majabri714@gmail.com", "azadmin@icareeros.com"];
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -81,7 +81,7 @@ export default async function AdminPage() {
   // Auth guard
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?redirect=/admin");
-  if (user.email !== ADMIN_EMAIL) redirect("/dashboard");
+  if (!ADMIN_EMAILS.includes(user.email ?? "")) redirect("/dashboard");
 
   const svc = makeServiceClient();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
