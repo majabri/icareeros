@@ -15,6 +15,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
+import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,10 @@ export async function POST(req: NextRequest) {
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // ── Plan limit check ──────────────────────────────────────────────────────
+    const limitBlock = await checkPlanLimit(supabase, user.id, "aiCoach");
+    if (limitBlock) return limitBlock;
 
     // 2. Parse body
     const body = (await req.json().catch(() => ({}))) as {

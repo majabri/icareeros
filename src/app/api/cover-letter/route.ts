@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CoverLetterResult } from "@/services/ai/coverLetterService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
+import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,10 @@ export async function POST(req: Request) {
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // ── Plan limit check ──────────────────────────────────────────────────────
+    const limitBlock = await checkPlanLimit(supabase, user.id, "coverLetters");
+    if (limitBlock) return limitBlock;
 
     // 2. Parse body
     const body = await req.json().catch(() => ({})) as {
