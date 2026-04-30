@@ -29,6 +29,7 @@ export interface Translations {
     recruiter: string;
     support: string;
     billing: string;
+    settings: string;
     profile: string;
     signOut: string;
   };
@@ -155,6 +156,7 @@ export interface Translations {
   settings: {
     title: string;
     billing: string;
+    settings: string;
     emailPrefs: string;
     account: string;
     exportData: string;
