@@ -39,3 +39,21 @@ export async function confirmUserEmail(userId: string): Promise<{ error?: string
   revalidatePath("/admin");
   return {};
 }
+
+/**
+ * Update a support ticket's status.
+ * Admin-only — uses service-role to bypass RLS.
+ */
+export async function updateTicketStatus(
+  ticketId: string,
+  status: "open" | "in_progress" | "resolved" | "closed"
+): Promise<{ error?: string }> {
+  const svc = makeSvc();
+  const { error } = await svc
+    .from("support_tickets")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", ticketId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/tickets");
+  return {};
+}
