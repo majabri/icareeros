@@ -26,6 +26,7 @@ export interface Translations {
     interview: string;
     resume: string;
     offers: string;
+    recruiter: string;
     support: string;
     billing: string;
     profile: string;

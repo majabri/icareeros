@@ -324,3 +324,58 @@ export function jobAlertEmail(
 
   return { subject, html, text };
 }
+
+// ── Re-engagement email ────────────────────────────────────────────────────────
+
+/**
+ * Re-engagement email — sent to users inactive for 7+ days.
+ */
+export function reEngagementEmail(
+  userEmail: string,
+  currentStage: string,
+  unsubscribeToken: string,
+): { subject: string; html: string; text: string } {
+  const appUrl = `${BASE_URL}/dashboard`;
+  const unsubUrl = `${BASE_URL}/api/email/preferences?token=${unsubscribeToken}&action=unsubscribe`;
+
+  const stageLabel = currentStage
+    ? currentStage.charAt(0).toUpperCase() + currentStage.slice(1)
+    : "Evaluate";
+
+  const html = wrap(`
+    <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a;">
+      Your career journey is waiting 👋
+    </h2>
+    <p style="margin:0 0 12px;font-size:15px;color:#475569;line-height:1.6;">
+      Hi there — you haven't visited iCareerOS in a while. Your career OS is paused at
+      the <strong>${stageLabel}</strong> stage and ready to continue whenever you are.
+    </p>
+    <p style="margin:0 0 12px;font-size:15px;color:#475569;line-height:1.6;">
+      Consistency is the #1 predictor of career progress. Even 10 minutes today can
+      move you closer to your next milestone.
+    </p>
+    <ul style="margin:16px 0;padding-left:20px;color:#475569;font-size:14px;line-height:2;">
+      <li>📋 Review your current <strong>${stageLabel}</strong> stage action items</li>
+      <li>🔍 Check new job matches in your Opportunity Radar</li>
+      <li>💡 Get fresh AI coaching advice tailored to your profile</li>
+    </ul>
+    ${ctaButton(appUrl, "Continue Your Career Journey →")}
+    <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">
+      <a href="${unsubUrl}" style="color:#94a3b8;">Unsubscribe from re-engagement emails</a>
+    </p>
+  `);
+
+  const text = `Your career journey is waiting!
+
+You haven't visited iCareerOS in a while. Your career OS is paused at the ${stageLabel} stage.
+
+Visit your dashboard: ${appUrl}
+
+Unsubscribe: ${unsubUrl}`;
+
+  return {
+    subject: "Your iCareerOS journey is waiting — pick up where you left off",
+    html,
+    text,
+  };
+}
