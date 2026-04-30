@@ -36,3 +36,4 @@ test-results/
 # k6 load test output
 scripts/load-test-results.json
 
+package-lock.json
