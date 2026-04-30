@@ -6,6 +6,10 @@ const nextConfig = {
   // Strict mode enabled for React best practices
   reactStrictMode: true,
 
+  // Exclude pdf-parse from Next.js bundler — it reads test files at import time
+  // causing ENOENT errors during build. External packages load natively via Node.
+  serverExternalPackages: ['pdf-parse'],
+
   // Skip ESLint during Vercel builds — linting runs in the pre-deploy CI check
   eslint: { ignoreDuringBuilds: true },
 

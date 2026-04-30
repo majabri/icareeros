@@ -37,11 +37,14 @@ export function parseResumeText(text: string): ParsedResume {
 }
 
 /**
- * Upload a file, extract its text server-side, then parse locally.
- * Supports PDF, Word (.docx/.doc), plain text.
+ * Upload a file, extract its raw text server-side, then parse locally.
+ * Returns BOTH the raw extracted text and the structured parsed data so callers
+ * can store the full-fidelity original text while still having structured fields.
  * No Anthropic API call — purely deterministic.
  */
-export async function parseResumeFile(file: File): Promise<ParsedResume> {
+export async function parseResumeFile(
+  file: File,
+): Promise<{ parsed: ParsedResume; rawText: string }> {
   if (file.size > 10 * 1024 * 1024) throw new Error("File too large (max 10 MB)");
 
   const formData = new FormData();
@@ -57,8 +60,9 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     throw new Error(err.error ?? `Text extraction failed (${res.status})`);
   }
 
-  const { text } = (await res.json()) as { text: string };
-  return parseResumeLocally(text);
+  const { text: rawText } = (await res.json()) as { text: string };
+  const parsed = parseResumeLocally(rawText);
+  return { parsed, rawText };
 }
 
 // ── Supabase CRUD ─────────────────────────────────────────────────────────────

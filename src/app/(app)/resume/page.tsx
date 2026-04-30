@@ -151,21 +151,9 @@ export default function FitCheckPage() {
       let resumeText = "";
 
       if (resumeSource === "upload" && uploadedFile) {
-        const parsed = await parseResumeFile(uploadedFile);
-        // Flatten parsed resume to text for the fit-check API
-        resumeText = [
-          parsed.contact.name,
-          parsed.contact.email,
-          parsed.contact.location,
-          parsed.summary,
-          ...parsed.experience.flatMap(e => [
-            `${e.title} at ${e.company} (${e.period})`,
-            ...e.bullets,
-          ]),
-          ...parsed.education.map(e => `${e.degree} — ${e.school} ${e.year}`),
-          "Skills: " + parsed.skills.join(", "),
-          parsed.certifications.length ? "Certifications: " + parsed.certifications.join(", ") : "",
-        ].filter(Boolean).join("\n");
+        // rawText = original extracted text — best quality for AI analysis
+        const { rawText } = await parseResumeFile(uploadedFile);
+        resumeText = rawText;
       } else if (resumeSource === "vault" && selectedVersion) {
         resumeText = selectedVersion.resume_text;
       }

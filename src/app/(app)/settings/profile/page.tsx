@@ -156,6 +156,7 @@ export default function CareerProfilePage() {
   const [parseMsg, setParseMsg]             = useState<Msg | null>(null);
   const [showSaveModal, setShowSaveModal]   = useState(false);
   const [pendingText, setPendingText]       = useState<string | null>(null);
+  const [pendingParsed, setPendingParsed]   = useState<import("@/lib/parseResumeLocally").ParsedResume | null>(null);
   const [vaultSaving, setVaultSaving]       = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -253,22 +254,11 @@ export default function CareerProfilePage() {
     setParsing(true);
     setParseMsg(null);
     try {
-      const parsed = await parseResumeFile(uploadedFile);
-      // Flatten to text for storage
-      const text = [
-        parsed.contact.name,
-        parsed.contact.email,
-        parsed.contact.location,
-        parsed.summary,
-        ...parsed.experience.flatMap(e => [
-          `${e.title} at ${e.company} (${e.period})`,
-          ...e.bullets,
-        ]),
-        ...parsed.education.map(e => `${e.degree} — ${e.school} ${e.year}`),
-        "Skills: " + parsed.skills.join(", "),
-        parsed.certifications.length ? "Certifications: " + parsed.certifications.join(", ") : "",
-      ].filter(Boolean).join("\n");
-      setPendingText(text);
+      // rawText preserves the original resume content (shown in View overlay + sent to AI)
+      // parsed   holds structured fields stored in parsed_data for downstream use
+      const { rawText, parsed } = await parseResumeFile(uploadedFile);
+      setPendingParsed(parsed);
+      setPendingText(rawText);
       setShowSaveModal(true);
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
@@ -284,12 +274,14 @@ export default function CareerProfilePage() {
     try {
       await saveResumeVersion({
         versionName: name,
-        resumeText:  pendingText,
+        resumeText:  pendingText,          // raw extracted text — full fidelity
         jobType:     jobType || undefined,
+        parsedData:  pendingParsed ?? undefined,
       });
       setShowSaveModal(false);
       setUploadedFile(null);
       setPendingText(null);
+      setPendingParsed(null);
       setParseMsg({ type: "success", text: "Resume saved to vault." });
       await loadVersions();
     } catch (err) {
