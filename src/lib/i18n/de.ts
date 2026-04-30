@@ -10,6 +10,7 @@ export const de: Translations = {
     recruiter: "Personalvermittlung",
     support: "Support",
     billing: "Abrechnung",
+    settings: "Einstellungen",
     profile: "Profil",
     signOut: "Abmelden",
   },
@@ -122,6 +123,7 @@ export const de: Translations = {
   settings: {
     title: "Einstellungen",
     billing: "Abrechnung",
+    settings: "Einstellungen",
     emailPrefs: "E-Mail",
     account: "Konto",
     exportData: "Daten exportieren",
