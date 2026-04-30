@@ -6,6 +6,30 @@ export const metadata: Metadata = {
   title: "iCareerOS — Your AI Career Operating System",
   description:
     "Evaluate, advise, learn, act, coach, and achieve your career goals with AI-powered guidance.",
+  metadataBase: new URL("https://icareeros.com"),
+  openGraph: {
+    title: "iCareerOS — Your AI Career Operating System",
+    description:
+      "The AI-powered career OS that guides you from evaluation to achievement. Land your next role faster.",
+    url: "https://icareeros.com",
+    siteName: "iCareerOS",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "iCareerOS — Your AI Career Operating System",
+    description:
+      "The AI-powered career OS that guides you from evaluation to achievement.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  alternates: {
+    canonical: "https://icareeros.com",
+  },
 };
 
 export default function RootLayout({

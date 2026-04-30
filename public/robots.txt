@@ -1,0 +1,16 @@
+# iCareerOS — robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /jobs
+Disallow: /profile
+Disallow: /settings
+Disallow: /admin
+Disallow: /interview
+Disallow: /resume
+Disallow: /offers
+Disallow: /support
+Disallow: /recruiter
+
+Sitemap: https://icareeros.com/sitemap.xml
