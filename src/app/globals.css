@@ -24,7 +24,22 @@ body {
   background: var(--neutral-100);
   line-height: 1.6;
   overflow-x: hidden;
+  /* Prevent content from hiding under iOS Safari address bar */
+  -webkit-text-size-adjust: 100%;
 }
+
+/* Mobile: ensure tap targets are comfortably sized */
+@media (max-width: 639px) {
+  button, a { min-height: 44px; }
+  input, textarea, select { font-size: 16px !important; /* prevents iOS zoom on focus */ }
+}
+
+/* Hide scrollbar on the mobile bottom tab bar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
 
 /* Shared button styles */
 .btn {
