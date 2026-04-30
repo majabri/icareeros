@@ -29,46 +29,39 @@ export function FAQSection() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="bg-white py-24">
+    <section id="faq" className="py-24" style={{ background: "var(--bg-surface)", borderTop: "1px solid var(--border-theme)" }}>
       <div className="mx-auto max-w-3xl px-6">
         <div className="mb-14 text-center">
-          <span className="mb-3 inline-block rounded-full bg-teal-50 px-4 py-1 text-sm font-semibold text-teal-600">
-            Got Questions?
-          </span>
-          <h2 className="text-4xl font-extrabold tracking-tight text-gray-900">
-            Frequently Asked Questions
-          </h2>
+          <span className="badge-brand mb-4">Got Questions?</span>
+          <h2 className="mt-4 text-4xl uppercase text-white">Frequently Asked Questions</h2>
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div style={{ borderTop: "1px solid var(--border-theme)" }}>
           {FAQS.map((faq, i) => (
-            <div key={i} className="py-5">
+            <div key={i} style={{ borderBottom: "1px solid var(--border-theme)" }}>
               <button
-                className="flex w-full items-start justify-between gap-4 text-left"
+                className="flex w-full items-start justify-between gap-4 py-5 text-left"
                 onClick={() => setOpen(open === i ? null : i)}
                 aria-expanded={open === i}
               >
-                <span className="text-base font-semibold text-gray-800">{faq.q}</span>
+                <span className="text-sm font-bold uppercase tracking-wide text-white">{faq.q}</span>
                 <span
                   className="mt-0.5 flex-shrink-0 text-xl font-light transition-transform duration-200"
-                  style={{
-                    color: "#00d9ff",
-                    transform: open === i ? "rotate(45deg)" : "rotate(0deg)",
-                  }}
+                  style={{ color: "var(--brand)", transform: open === i ? "rotate(45deg)" : "rotate(0deg)" }}
                 >
                   +
                 </span>
               </button>
               {open === i && (
-                <p className="mt-3 text-sm leading-relaxed text-gray-500">{faq.a}</p>
+                <p className="pb-5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{faq.a}</p>
               )}
             </div>
           ))}
         </div>
 
-        <p className="mt-10 text-center text-sm text-gray-400">
+        <p className="mt-10 text-center text-sm" style={{ color: "var(--text-muted)" }}>
           Still have questions?{" "}
-          <a href="mailto:support@icareeros.com" className="font-medium text-cyan-600 hover:underline">
+          <a href="mailto:support@icareeros.com" className="font-bold hover:underline" style={{ color: "var(--brand)" }}>
             Contact us
           </a>
         </p>
