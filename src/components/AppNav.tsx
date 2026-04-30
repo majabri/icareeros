@@ -17,7 +17,7 @@ export function AppNav() {
     { href: "/offers",           label: t.nav.offers,         icon: "🤝" },
     { href: "/recruiter",        label: t.nav.recruiter,      icon: "🔍" },
     { href: "/support",          label: t.nav.support,        icon: "🎫" },
-    { href: "/settings/billing", label: t.nav.billing,        icon: "💳" },
+    { href: "/settings",         label: t.nav.settings,       icon: "⚙️" },
   ];
 
   async function handleSignOut() {
