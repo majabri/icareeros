@@ -46,26 +46,27 @@ export default function ProfileSettingsPage() {
   const [loading, setLoading]             = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      if (!u) { setLoading(false); return; }
-      setUser(u);
-      supabase
-        .from("user_profiles")
-        .select("full_name, avatar_url")
-        .eq("user_id", u.id)
-        .maybeSingle()
-        .then(({ data: profile }) => {
-          if (profile) {
-            setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
-            setAvatarUrl(profile.avatar_url ?? null);
-          } else {
-            // Fall back to OAuth metadata
-            setFullName(u.user_metadata?.full_name ?? "");
-          }
-        })
-        .finally(() => setLoading(false));
-    });
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const u = data.user;
+        if (!u) return;
+        setUser(u);
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("full_name, avatar_url")
+          .eq("user_id", u.id)
+          .maybeSingle();
+        if (profile) {
+          setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
+          setAvatarUrl(profile.avatar_url ?? null);
+        } else {
+          setFullName(u.user_metadata?.full_name ?? "");
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
