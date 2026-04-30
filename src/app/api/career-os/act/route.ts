@@ -18,6 +18,7 @@ import type { ActResult } from "@/services/ai/actService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import type { LearnResult } from "@/services/ai/learnService";
+import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,10 @@ export async function POST(req: Request) {
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // ── Plan limit check ──────────────────────────────────────────────────────
+    const limitBlock = await checkPlanLimit(supabase, user.id, "aiCoach");
+    if (limitBlock) return limitBlock;
 
     // 2. Parse body
     const body = await req.json().catch(() => ({})) as { cycle_id?: string };
