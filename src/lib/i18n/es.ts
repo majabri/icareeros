@@ -10,7 +10,7 @@ export const es: Translations = {
     recruiter: "Reclutador",
     support: "Soporte",
     billing: "Facturación",
-    settings: "Configuración",
+    settings: "Perfil",
     profile: "Perfil",
     signOut: "Cerrar sesión",
   },
