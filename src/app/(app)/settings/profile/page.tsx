@@ -1,6 +1,9 @@
 /**
  * /settings/profile — Career Profile
  * Resume vault (upload + saved versions) + career preference fields.
+ * When a resume is parsed & saved, profile fields are auto-filled from the
+ * parsed data: name, phone, linkedin, summary, location, current position,
+ * and skills — matching the behaviour of the legacy azjobs platform.
  */
 "use client";
 
@@ -13,6 +16,7 @@ import {
   deleteResumeVersion,
   type ResumeVersion,
 } from "@/services/ai/resumeService";
+import type { ParsedResume } from "@/lib/parseResumeLocally";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -136,6 +140,9 @@ export default function CareerProfilePage() {
 
   // Career fields
   const [fullName, setFullName]               = useState("");
+  const [phone, setPhone]                     = useState("");
+  const [linkedinUrl, setLinkedinUrl]         = useState("");
+  const [summary, setSummary]                 = useState("");
   const [currentPosition, setCurrentPosition] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
   const [targetRoles, setTargetRoles]         = useState<string[]>([]);
@@ -156,7 +163,7 @@ export default function CareerProfilePage() {
   const [parseMsg, setParseMsg]             = useState<Msg | null>(null);
   const [showSaveModal, setShowSaveModal]   = useState(false);
   const [pendingText, setPendingText]       = useState<string | null>(null);
-  const [pendingParsed, setPendingParsed]   = useState<import("@/lib/parseResumeLocally").ParsedResume | null>(null);
+  const [pendingParsed, setPendingParsed]   = useState<ParsedResume | null>(null);
   const [vaultSaving, setVaultSaving]       = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -171,11 +178,14 @@ export default function CareerProfilePage() {
         setUserId(u.id);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("full_name, current_position, experience_level, target_roles, skills, location, open_to_remote")
+          .select("full_name, phone, linkedin_url, summary, current_position, experience_level, target_roles, skills, location, open_to_remote")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
           setFullName(profile.full_name ?? "");
+          setPhone(profile.phone ?? "");
+          setLinkedinUrl(profile.linkedin_url ?? "");
+          setSummary(profile.summary ?? "");
           setCurrentPosition(profile.current_position ?? "");
           setExperienceLevel(profile.experience_level ?? "");
           setTargetRoles(profile.target_roles ?? []);
@@ -215,6 +225,9 @@ export default function CareerProfilePage() {
         {
           user_id:          userId,
           full_name:        fullName.trim() || null,
+          phone:            phone.trim() || null,
+          linkedin_url:     linkedinUrl.trim() || null,
+          summary:          summary.trim() || null,
           current_position: currentPosition.trim() || null,
           experience_level: experienceLevel || null,
           target_roles:     targetRoles,
@@ -239,6 +252,7 @@ export default function CareerProfilePage() {
     setUploadedFile(file);
     setParseMsg(null);
     setPendingText(null);
+    setPendingParsed(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -248,14 +262,12 @@ export default function CareerProfilePage() {
     if (file) handleFile(file);
   }, [handleFile]);
 
-  // Parse file and prompt save
+  // Parse file → show save modal
   async function handleUploadAndSave() {
     if (!uploadedFile) return;
     setParsing(true);
     setParseMsg(null);
     try {
-      // rawText preserves the original resume content (shown in View overlay + sent to AI)
-      // parsed   holds structured fields stored in parsed_data for downstream use
       const { rawText, parsed } = await parseResumeFile(uploadedFile);
       setPendingParsed(parsed);
       setPendingText(rawText);
@@ -267,22 +279,42 @@ export default function CareerProfilePage() {
     }
   }
 
-  // Save to vault
+  // Save to vault + auto-fill profile fields
   async function handleVaultSave(name: string, jobType: string) {
     if (!pendingText) return;
     setVaultSaving(true);
     try {
       await saveResumeVersion({
         versionName: name,
-        resumeText:  pendingText,          // raw extracted text — full fidelity
+        resumeText:  pendingText,
         jobType:     jobType || undefined,
         parsedData:  pendingParsed ?? undefined,
       });
+
+      // Auto-fill profile fields from parsed resume — only overwrite blank fields
+      if (pendingParsed) {
+        const p = pendingParsed;
+        if (!fullName.trim() && p.contact.name)         setFullName(p.contact.name);
+        if (!phone.trim() && p.contact.phone)            setPhone(p.contact.phone);
+        if (!location.trim() && p.contact.location)      setLocation(p.contact.location);
+        if (!summary.trim() && p.summary)                setSummary(p.summary);
+        if (!currentPosition.trim() && p.experience[0]) setCurrentPosition(p.experience[0].title);
+        if (p.skills.length > 0) {
+          setSkills((prev) => {
+            const existing = new Set(prev.map((s) => s.toLowerCase()));
+            return [...prev, ...p.skills.filter((s) => !existing.has(s.toLowerCase()))];
+          });
+        }
+      }
+
       setShowSaveModal(false);
       setUploadedFile(null);
       setPendingText(null);
       setPendingParsed(null);
-      setParseMsg({ type: "success", text: "Resume saved to vault." });
+      setParseMsg({
+        type: "success",
+        text: "Resume saved. Profile fields pre-filled — review and click \"Save career profile\".",
+      });
       await loadVersions();
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
@@ -320,7 +352,7 @@ export default function CareerProfilePage() {
           <div>
             <h2 className="text-base font-semibold text-gray-900">Resume Vault</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Upload your resume to save a version. Saved versions can be used in Fit Check.
+              Upload your resume to save a version and auto-fill your profile. Saved versions can be used in Fit Check.
             </p>
           </div>
 
@@ -342,7 +374,7 @@ export default function CareerProfilePage() {
             ) : (
               <>
                 <p className="text-sm font-medium text-gray-700">Drop resume here or click to browse</p>
-                <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), or TXT</p>
+                <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), or TXT · auto-fills your profile</p>
               </>
             )}
             <input
@@ -421,6 +453,44 @@ export default function CareerProfilePage() {
         <form onSubmit={(e) => void handleSaveProfile(e)}>
           <div className="space-y-8">
 
+            {/* Personal info */}
+            <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Personal information</h2>
+                <p className="mt-1 text-sm text-gray-500">Auto-filled from your resume — review and update as needed.</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Full name</label>
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. (248) 555-0100"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn URL</label>
+                <input type="url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
+                  placeholder="https://www.linkedin.com/in/yourname"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Professional summary</label>
+                <textarea value={summary} onChange={(e) => setSummary(e.target.value)}
+                  rows={4}
+                  placeholder="Brief description of your background and what you're looking for…"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              </div>
+            </section>
+
             {/* Where you are */}
             <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
               <div>
@@ -429,34 +499,17 @@ export default function CareerProfilePage() {
                   Your current role and experience. Used to calibrate advice and match scores.
                 </p>
               </div>
-              <div className="mb-4 max-w-sm">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Full name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Current position</label>
-                  <input
-                    type="text"
-                    value={currentPosition}
-                    onChange={(e) => setCurrentPosition(e.target.value)}
+                  <input type="text" value={currentPosition} onChange={(e) => setCurrentPosition(e.target.value)}
                     placeholder="e.g. Senior Product Manager"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Experience level</label>
-                  <select
-                    value={experienceLevel}
-                    onChange={(e) => setExperienceLevel(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
+                  <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
                     <option value="">Select level</option>
                     {EXPERIENCE_LEVELS.map(({ value, label }) => (
                       <option key={value} value={value}>{label}</option>
@@ -490,28 +543,17 @@ export default function CareerProfilePage() {
             <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Location &amp; work style</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Helps surface the right opportunities for your situation.
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Helps surface the right opportunities for your situation.</p>
               </div>
               <div className="max-w-sm">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
                   placeholder="e.g. New York, NY · San Francisco Bay Area"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
               <label className="flex cursor-pointer items-center gap-3">
                 <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={openToRemote}
-                    onChange={(e) => setOpenToRemote(e.target.checked)}
-                    className="peer sr-only"
-                  />
+                  <input type="checkbox" checked={openToRemote} onChange={(e) => setOpenToRemote(e.target.checked)} className="peer sr-only" />
                   <div className="h-5 w-9 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-600" />
                   <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
                 </div>
@@ -521,11 +563,8 @@ export default function CareerProfilePage() {
 
             {/* Save */}
             <div className="flex items-center gap-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              >
+              <button type="submit" disabled={saving}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
                 {saving ? "Saving…" : "Save career profile"}
               </button>
               {profileMsg && (
@@ -542,7 +581,7 @@ export default function CareerProfilePage() {
       {showSaveModal && (
         <SaveModal
           onSave={(name, jobType) => void handleVaultSave(name, jobType)}
-          onClose={() => { setShowSaveModal(false); setPendingText(null); }}
+          onClose={() => { setShowSaveModal(false); setPendingText(null); setPendingParsed(null); }}
           saving={vaultSaving}
         />
       )}
