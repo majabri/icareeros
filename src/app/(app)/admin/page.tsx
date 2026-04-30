@@ -1,15 +1,17 @@
 /**
- * /admin — feature-flag control panel + support ticket queue
+ * /admin — feature-flag control panel + support ticket queue + user management
  *
- * Server Component: fetches flags + tickets from Supabase directly.
+ * Server Component: fetches all data from Supabase directly.
  * Only accessible to majabri714@gmail.com — anyone else is redirected to /dashboard.
  */
 
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { FeatureFlagToggle } from "@/components/admin/FeatureFlagToggle";
+import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import type { Metadata } from "next";
 import type { TicketPriority, TicketStatus } from "@/services/supportService";
 import { statusBadgeClass, statusLabel, priorityBadgeClass } from "@/services/supportService";
@@ -46,6 +48,14 @@ async function makeSupabaseServer() {
   );
 }
 
+/** Service-role client — bypasses RLS for admin reads */
+function makeServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 interface AdminTicket {
   id: string;
   subject: string;
@@ -54,6 +64,25 @@ interface AdminTicket {
   status: TicketStatus;
   created_at: string;
   user_id: string;
+}
+
+interface AdminUser {
+  user_id: string;
+  email: string | null;
+  full_name: string | null;
+  created_at: string;
+  updated_at: string;
+  plan: string;
+  plan_status: string;
+  cycle_count: number;
+}
+
+function planBadgeClass(plan: string): string {
+  switch (plan) {
+    case "premium": return "bg-purple-100 text-purple-700";
+    case "pro":     return "bg-blue-100 text-blue-700";
+    default:        return "bg-gray-100 text-gray-600";
+  }
 }
 
 export default async function AdminPage() {
@@ -66,23 +95,47 @@ export default async function AdminPage() {
   if (!user) redirect("/auth/login?redirect=/admin");
   if (user.email !== ADMIN_EMAIL) redirect("/dashboard");
 
-  // Load feature flags
-  const { data: flags, error: flagsError } = await supabase
-    .from("feature_flags")
-    .select("key, enabled, updated_at")
-    .order("key");
+  const svc = makeServiceClient();
 
-  // Load open support tickets (newest first, limit 50)
-  const { data: tickets } = await supabase
-    .from("support_tickets")
-    .select("id, subject, body, priority, status, created_at, user_id")
-    .in("status", ["open", "in_progress"])
-    .order("created_at", { ascending: false })
-    .limit(50);
+  // Parallel fetches: flags, tickets, users, subscriptions, cycle counts
+  const [
+    { data: flags, error: flagsError },
+    { data: tickets },
+    { data: profiles },
+    { data: subscriptions },
+    { data: cycleCounts },
+  ] = await Promise.all([
+    supabase.from("feature_flags").select("key, enabled, updated_at").order("key"),
+    supabase
+      .from("support_tickets")
+      .select("id, subject, body, priority, status, created_at, user_id")
+      .in("status", ["open", "in_progress"])
+      .order("created_at", { ascending: false })
+      .limit(50),
+    svc
+      .from("profiles")
+      .select("user_id, email, full_name, created_at, updated_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    svc
+      .from("user_subscriptions")
+      .select("user_id, plan, status"),
+    svc
+      .from("career_os_cycles")
+      .select("user_id")
+      .then(({ data }) => {
+        if (!data) return { data: {} as Record<string, number> };
+        const counts: Record<string, number> = {};
+        for (const row of data) {
+          counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;
+        }
+        return { data: counts };
+      }),
+  ]);
 
   if (flagsError) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mx-auto max-w-3xl px-4 py-10">
         <p className="text-red-600">Failed to load feature flags: {flagsError.message}</p>
       </div>
     );
@@ -90,13 +143,33 @@ export default async function AdminPage() {
 
   const openTickets = (tickets ?? []) as AdminTicket[];
 
+  // Build merged user list
+  const subMap = new Map(
+    (subscriptions ?? []).map(s => [s.user_id, { plan: s.plan as string, plan_status: s.status as string }])
+  );
+  const cycleMap = (cycleCounts as unknown as Record<string, number>) ?? {};
+
+  const adminUsers: AdminUser[] = (profiles ?? []).map(p => {
+    const sub = subMap.get(p.user_id);
+    return {
+      user_id: p.user_id,
+      email: p.email,
+      full_name: p.full_name,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      plan: sub?.plan ?? "free",
+      plan_status: sub?.plan_status ?? "active",
+      cycle_count: cycleMap[p.user_id] ?? 0,
+    };
+  });
+
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage feature flags, support tickets, and platform settings.
+          Manage feature flags, users, support tickets, and platform settings.
         </p>
       </div>
 
@@ -107,6 +180,91 @@ export default async function AdminPage() {
           <span className="text-xs text-gray-400">{flags?.length ?? 0} flags</span>
         </div>
         <FeatureFlagToggle initial={flags ?? []} />
+      </section>
+
+      {/* Users section */}
+      <section className="mt-10 border-t border-gray-100 pt-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">Users</h2>
+          <span className="text-xs text-gray-400">{adminUsers.length} users</span>
+        </div>
+
+        {adminUsers.length === 0 ? (
+          <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+            No users yet.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-gray-100 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Plan
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Cycles
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Joined
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {adminUsers.map(u => (
+                  <tr key={u.user_id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900 truncate max-w-[180px]">
+                        {u.email ?? "—"}
+                      </p>
+                      {u.full_name && (
+                        <p className="text-xs text-gray-400 truncate max-w-[180px]">{u.full_name}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${planBadgeClass(u.plan)}`}
+                      >
+                        {u.plan}
+                      </span>
+                      {u.plan_status !== "active" && (
+                        <span className="ml-1 text-xs text-red-400">{u.plan_status}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 tabular-nums">
+                      {u.cycle_count}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs tabular-nums whitespace-nowrap">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={`https://supabase.com/dashboard/project/kuneabeiwcxavvyyfjkx/auth/users?search=${u.email ?? u.user_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          View ↗
+                        </a>
+                        <AdminUserActions
+                          userId={u.user_id}
+                          currentPlan={u.plan}
+                          email={u.email ?? u.user_id}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* Support Tickets section */}
