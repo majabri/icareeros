@@ -10,7 +10,7 @@ export const en: Translations = {
     recruiter: "Recruiter",
     support: "Support",
     billing: "Billing",
-    settings: "Settings",
+    settings: "Profile",
     profile: "Profile",
     signOut: "Sign out",
   },
