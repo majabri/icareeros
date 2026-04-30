@@ -1,744 +1,533 @@
+/**
+ * /resume — Fit Check
+ * Upload or pick a saved resume, paste or type a job description,
+ * and get an AI-powered fit assessment with actionable recommendations.
+ */
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  parseResumeText,
   parseResumeFile,
-  saveResumeVersion,
   listResumeVersions,
-  deleteResumeVersion,
-  rewriteResume,
-  type ParsedResume,
   type ResumeVersion,
   type RewriteResult,
+  rewriteResume,
 } from "@/services/ai/resumeService";
+import type { FitCheckResult } from "@/app/api/resume/fit-check/route";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
+function ScoreRing({ score }: { score: number }) {
+  const color =
+    score >= 80 ? "text-emerald-600" :
+    score >= 60 ? "text-blue-600" :
+    score >= 40 ? "text-amber-500" :
+                  "text-red-500";
+  const bg =
+    score >= 80 ? "bg-emerald-50 border-emerald-200" :
+    score >= 60 ? "bg-blue-50 border-blue-200" :
+    score >= 40 ? "bg-amber-50 border-amber-200" :
+                  "bg-red-50 border-red-200";
+  const label =
+    score >= 80 ? "Strong fit" :
+    score >= 60 ? "Good fit" :
+    score >= 40 ? "Partial fit" :
+                  "Weak fit";
+
+  return (
+    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 ${bg} px-8 py-6`}>
+      <span className={`text-6xl font-black tabular-nums ${color}`}>{score}</span>
+      <span className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-400">/100</span>
+      <span className={`mt-2 text-sm font-semibold ${color}`}>{label}</span>
+    </div>
+  );
+}
+
+function Pill({ text, color }: { text: string; color: "green" | "red" | "amber" | "blue" }) {
+  const cls = {
+    green: "bg-emerald-50 text-emerald-700",
+    red:   "bg-red-50 text-red-700",
+    amber: "bg-amber-50 text-amber-700",
+    blue:  "bg-blue-50 text-blue-700",
+  }[color];
+  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>{text}</span>;
 }
 
 function downloadTxt(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
   a.download = filename.endsWith(".txt") ? filename : `${filename}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function ContactCard({ contact }: { contact: ParsedResume["contact"] }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Contact</h3>
-      <p className="text-lg font-bold text-gray-900">{contact.name || "—"}</p>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-        {contact.email && <span>✉ {contact.email}</span>}
-        {contact.phone && <span>📞 {contact.phone}</span>}
-        {contact.location && <span>📍 {contact.location}</span>}
-      </div>
-    </div>
-  );
-}
-
-function SummaryCard({ summary }: { summary: string }) {
-  if (!summary) return null;
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Summary</h3>
-      <p className="text-sm leading-relaxed text-gray-700">{summary}</p>
-    </div>
-  );
-}
-
-function ExperienceCard({ experience }: { experience: ParsedResume["experience"] }) {
-  if (!experience.length) return null;
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Experience</h3>
-      <div className="space-y-5">
-        {experience.map((exp, i) => (
-          <div key={i}>
-            <div className="flex flex-wrap items-baseline justify-between gap-1">
-              <p className="font-semibold text-gray-900">{exp.title}</p>
-              <p className="text-xs text-gray-400">{exp.period}</p>
-            </div>
-            <p className="text-sm text-blue-600">{exp.company}</p>
-            {exp.bullets.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {exp.bullets.map((b, j) => (
-                  <li key={j} className="flex gap-2 text-sm text-gray-600">
-                    <span className="mt-1 shrink-0 text-gray-300">•</span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EducationCard({ education }: { education: ParsedResume["education"] }) {
-  if (!education.length) return null;
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Education</h3>
-      <div className="space-y-3">
-        {education.map((edu, i) => (
-          <div key={i} className="flex flex-wrap items-baseline justify-between gap-1">
-            <div>
-              <p className="font-medium text-gray-900">{edu.degree}</p>
-              <p className="text-sm text-gray-600">{edu.school}</p>
-            </div>
-            <p className="text-xs text-gray-400">{edu.year}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SkillsCard({ skills, certifications }: { skills: string[]; certifications: string[] }) {
-  if (!skills.length && !certifications.length) return null;
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      {skills.length > 0 && (
-        <>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Skills</h3>
-          <div className="flex flex-wrap gap-2">
-            {skills.map((s, i) => (
-              <span key={i} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{s}</span>
-            ))}
-          </div>
-        </>
-      )}
-      {certifications.length > 0 && (
-        <>
-          <h3 className="mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Certifications</h3>
-          <div className="flex flex-wrap gap-2">
-            {certifications.map((c, i) => (
-              <span key={i} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{c}</span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function RewritePanel({
-  originalText,
-  result,
-  onSaveRewritten,
-}: {
-  originalText: string;
-  result: RewriteResult;
-  onSaveRewritten: () => void;
-}) {
-  const [view, setView] = useState<"diff" | "rewritten">("diff");
-
-  return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-semibold text-gray-900">✨ AI Rewrite Ready</h3>
-        <div className="flex gap-2">
-          <button
-            onClick={() => downloadTxt("resume-rewritten.txt", result.rewrittenText)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            ⬇ Download .txt
-          </button>
-          <button
-            onClick={onSaveRewritten}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-          >
-            💾 Save as Version
-          </button>
-        </div>
-      </div>
-
-      {/* Improvements */}
-      <div className="mb-4 rounded-lg bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Improvements Made ({result.improvements.length})
-        </p>
-        <ul className="space-y-1">
-          {result.improvements.map((imp, i) => (
-            <li key={i} className="flex gap-2 text-sm text-gray-700">
-              <span className="mt-0.5 text-emerald-500">✓</span>
-              <span>{imp}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-xs text-gray-400">~{result.wordCount} words</p>
-      </div>
-
-      {/* View toggle */}
-      <div className="mb-3 flex rounded-lg border border-gray-200 bg-white p-0.5">
-        <button
-          onClick={() => setView("diff")}
-          className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${view === "diff" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          Side-by-side
-        </button>
-        <button
-          onClick={() => setView("rewritten")}
-          className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${view === "rewritten" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          Rewritten only
-        </button>
-      </div>
-
-      {view === "diff" ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Original</p>
-            <pre className="max-h-72 overflow-y-auto rounded-lg bg-gray-50 p-3 text-xs leading-relaxed text-gray-600 whitespace-pre-wrap border border-gray-200">
-              {originalText}
-            </pre>
-          </div>
-          <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">Rewritten</p>
-            <pre className="max-h-72 overflow-y-auto rounded-lg bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-900 whitespace-pre-wrap border border-emerald-200">
-              {result.rewrittenText}
-            </pre>
-          </div>
-        </div>
-      ) : (
-        <pre className="max-h-96 overflow-y-auto rounded-lg bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-900 whitespace-pre-wrap border border-emerald-200">
-          {result.rewrittenText}
-        </pre>
-      )}
-    </div>
-  );
-}
-
-function SaveModal({
-  onSave,
-  onClose,
-  saving,
-  defaultName,
-}: {
-  onSave: (name: string, jobType: string) => void;
-  onClose: () => void;
-  saving: boolean;
-  defaultName?: string;
-}) {
-  const [name, setName] = useState(
-    defaultName ??
-      `Resume ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-  );
-  const [jobType, setJobType] = useState("");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-        <h3 className="mb-4 text-lg font-bold text-gray-900">Save Resume Version</h3>
-        <label className="mb-1 block text-sm font-medium text-gray-700">Version name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. Software Engineer — Google"
-        />
-        <label className="mb-1 block text-sm font-medium text-gray-700">
-          Job type <span className="text-gray-400">(optional)</span>
-        </label>
-        <input
-          type="text"
-          value={jobType}
-          onChange={(e) => setJobType(e.target.value)}
-          className="mb-6 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. Engineering, Product, Finance"
-        />
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onSave(name.trim() || "My Resume", jobType.trim())}
-            disabled={saving}
-            className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VersionHistoryItem({
-  v,
-  onDelete,
-  onView,
-}: {
-  v: ResumeVersion;
-  onDelete: (id: string) => void;
-  onView: (v: ResumeVersion) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3">
-      <div>
-        <p className="font-medium text-gray-900">{v.version_name}</p>
-        <p className="text-xs text-gray-400">
-          {v.job_type && <span className="mr-2 text-blue-500">{v.job_type}</span>}
-          {new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={() => downloadTxt(v.version_name, v.resume_text)}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
-        >
-          ⬇ .txt
-        </button>
-        <button
-          onClick={() => onView(v)}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
-        >
-          View
-        </button>
-        <button
-          onClick={() => onDelete(v.id)}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-type InputTab = "paste" | "upload";
-type SaveMode = "parsed" | "rewritten";
+type ResumeSource = "upload" | "vault";
+type JobSource    = "paste" | "url";
 
-export default function ResumePage() {
-  const [tab, setTab] = useState<InputTab>("paste");
-  const [pasteText, setPasteText] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [fileForParse, setFileForParse] = useState<File | null>(null);
-
-  const [parsing, setParsing] = useState(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<ParsedResume | null>(null);
-  const [rawText, setRawText] = useState<string>("");
-
-  // Rewrite state
-  const [rewriting, setRewriting] = useState(false);
-  const [rewriteResult, setRewriteResult] = useState<RewriteResult | null>(null);
-  const [targetRole, setTargetRole] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [showRewriteForm, setShowRewriteForm] = useState(false);
-
-  // Save state
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [saveMode, setSaveMode] = useState<SaveMode>("parsed");
-  const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState<string | null>(null);
-
-  // Versions
-  const [versions, setVersions] = useState<ResumeVersion[]>([]);
-  const [versionsLoaded, setVersionsLoaded] = useState(false);
-  const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
-
+export default function FitCheckPage() {
+  // ── Resume source ─────────────────────────────────────────────────
+  const [resumeSource, setResumeSource] = useState<ResumeSource>("upload");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver]         = useState(false);
+  const [versions, setVersions]         = useState<ResumeVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<ResumeVersion | null>(null);
+  const [versionsLoaded, setVersionsLoaded]   = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadVersions = useCallback(async () => {
-    try {
-      const vs = await listResumeVersions();
-      setVersions(vs);
-      setVersionsLoaded(true);
-    } catch (e) {
-      console.error("Failed to load versions", e);
-    }
+  // ── Job source ────────────────────────────────────────────────────
+  const [jobSource, setJobSource]           = useState<JobSource>("paste");
+  const [jobDescription, setJobDescription] = useState("");
+  const [jobUrl, setJobUrl]                 = useState("");
+
+  // ── Fit check state ───────────────────────────────────────────────
+  const [checking, setChecking]   = useState(false);
+  const [result, setResult]       = useState<FitCheckResult | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+
+  // ── Rewrite state ─────────────────────────────────────────────────
+  const [rewriting, setRewriting]         = useState(false);
+  const [rewriteResult, setRewriteResult] = useState<RewriteResult | null>(null);
+  const [showRewrite, setShowRewrite]     = useState(false);
+
+  // ── Resume text (resolved from source) ───────────────────────────
+  const [resolvedResumeText, setResolvedResumeText] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const vs = await listResumeVersions();
+        setVersions(vs);
+        setVersionsLoaded(true);
+      } catch (e) {
+        console.error("Failed to load versions", e);
+        setVersionsLoaded(true);
+      }
+    })();
   }, []);
 
-  useState(() => { void loadVersions(); });
-
-  // File handling — all types go through FormData; TXT also reads client-side for rewrite
-  const handleFile = useCallback(async (file: File) => {
-    setFileName(file.name);
-    setParseError(null);
-    setParsed(null);
+  const handleFile = useCallback((file: File) => {
+    setUploadedFile(file);
+    setResult(null);
     setRewriteResult(null);
-
-    // All file types (PDF, Word .docx/.doc, TXT) are sent to the server via FormData
-    setFileForParse(file);
-
-    // For plain text files, also read client-side to enable the AI Rewrite button
-    const isText = file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
-    if (isText) {
-      try {
-        const text = await readFileAsText(file);
-        setRawText(text);
-      } catch {
-        setRawText("");
-      }
-    } else {
-      setRawText("");
-    }
+    setError(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) void handleFile(file);
+    if (file) handleFile(file);
   }, [handleFile]);
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) void handleFile(file);
-  }, [handleFile]);
+  // Derive the effective job text (URL is used as-is; we embed it in the prompt)
+  const effectiveJob = jobSource === "paste" ? jobDescription.trim() : jobUrl.trim();
 
-  // Parse
-  const handleParse = useCallback(async () => {
-    setParsing(true);
-    setParseError(null);
-    setParsed(null);
+  const hasResume =
+    resumeSource === "upload" ? !!uploadedFile : !!selectedVersion;
+  const hasJob = effectiveJob.length > 10;
+  const canCheck = hasResume && hasJob && !checking;
+
+  async function handleCheck() {
+    setChecking(true);
+    setError(null);
+    setResult(null);
     setRewriteResult(null);
+    setShowRewrite(false);
 
     try {
-      let result: ParsedResume;
-      if (tab === "paste") {
-        if (pasteText.trim().length < 20) {
-          throw new Error("Please paste your resume text (at least a few lines).");
-        }
-        result = await parseResumeText(pasteText);
-        setRawText(pasteText);
-      } else {
-        if (fileForParse) {
-          // Server handles PDF (Claude native), Word (mammoth), and plain text
-          result = await parseResumeFile(fileForParse);
-        } else if (rawText) {
-          result = await parseResumeText(rawText);
-        } else {
-          throw new Error("Please upload a file first.");
-        }
+      let resumeText = "";
+
+      if (resumeSource === "upload" && uploadedFile) {
+        const parsed = await parseResumeFile(uploadedFile);
+        // Flatten parsed resume to text for the fit-check API
+        resumeText = [
+          parsed.contact.name,
+          parsed.contact.email,
+          parsed.contact.location,
+          parsed.summary,
+          ...parsed.experience.flatMap(e => [
+            `${e.title} at ${e.company} (${e.period})`,
+            ...e.bullets,
+          ]),
+          ...parsed.education.map(e => `${e.degree} — ${e.school} ${e.year}`),
+          "Skills: " + parsed.skills.join(", "),
+          parsed.certifications.length ? "Certifications: " + parsed.certifications.join(", ") : "",
+        ].filter(Boolean).join("\n");
+      } else if (resumeSource === "vault" && selectedVersion) {
+        resumeText = selectedVersion.resume_text;
       }
-      setParsed(result);
-    } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Parse failed");
-    } finally {
-      setParsing(false);
-    }
-  }, [tab, pasteText, fileForParse, rawText]);
 
-  // Rewrite
-  const handleRewrite = useCallback(async () => {
-    const sourceText = rawText || pasteText;
-    if (!sourceText.trim()) return;
+      if (!resumeText) throw new Error("Could not extract resume text.");
 
-    setRewriting(true);
-    setParseError(null);
+      setResolvedResumeText(resumeText);
 
-    try {
-      const result = await rewriteResume({
-        resumeText: sourceText,
-        targetRole: targetRole.trim() || undefined,
-        jobDescription: jobDescription.trim() || undefined,
+      const jobText =
+        jobSource === "url"
+          ? `Job URL: ${jobUrl}\n\n(Assess based on the URL context provided)`
+          : jobDescription;
+
+      const res = await fetch("/api/resume/fit-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeText, jobDescription: jobText }),
       });
-      setRewriteResult(result);
-      setShowRewriteForm(false);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `Server error ${res.status}`);
+      }
+
+      const data: FitCheckResult = await res.json();
+      setResult(data);
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Rewrite failed");
+      setError(e instanceof Error ? e.message : "Fit check failed");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleRewrite() {
+    if (!resolvedResumeText) return;
+    setRewriting(true);
+    try {
+      const rr = await rewriteResume({
+        resumeText:     resolvedResumeText,
+        jobDescription: jobSource === "paste" ? jobDescription : undefined,
+        targetRole:     undefined,
+      });
+      setRewriteResult(rr);
+      setShowRewrite(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Rewrite failed");
     } finally {
       setRewriting(false);
     }
-  }, [rawText, pasteText, targetRole, jobDescription]);
-
-  // Save
-  const openSaveModal = useCallback((mode: SaveMode) => {
-    setSaveMode(mode);
-    setShowSaveModal(true);
-  }, []);
-
-  const handleSave = useCallback(async (name: string, jobType: string) => {
-    setSaving(true);
-    try {
-      const textToSave =
-        saveMode === "rewritten" && rewriteResult
-          ? rewriteResult.rewrittenText
-          : rawText || pasteText;
-
-      await saveResumeVersion({
-        versionName: name,
-        resumeText: textToSave,
-        jobType: jobType || undefined,
-        parsedData: saveMode === "parsed" ? (parsed ?? undefined) : undefined,
-      });
-      setShowSaveModal(false);
-      setSavedMsg("Saved!");
-      setTimeout(() => setSavedMsg(null), 3000);
-      await loadVersions();
-    } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Save failed");
-      setShowSaveModal(false);
-    } finally {
-      setSaving(false);
-    }
-  }, [saveMode, rewriteResult, rawText, pasteText, parsed, loadVersions]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await deleteResumeVersion(id);
-      setVersions((vs) => vs.filter((v) => v.id !== id));
-      if (viewingVersion?.id === id) setViewingVersion(null);
-    } catch (e) {
-      console.error("Delete failed", e);
-    }
-  }, [viewingVersion]);
-
-  const canParse =
-    tab === "paste" ? pasteText.trim().length >= 20 : !!fileForParse;
-  const canRewrite = (rawText || pasteText).trim().length >= 20;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">📄 Resume Builder</h1>
+
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">🎯 Fit Check</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Paste or upload your resume — AI parses, rewrites, and stores versions.
+            See how well your resume matches a job — and get AI coaching to close the gap.
           </p>
         </div>
 
-        {/* Input tabs */}
-        <div className="mb-4 flex rounded-xl border border-gray-200 bg-white p-1">
-          {(["paste", "upload"] as InputTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => { setTab(t); setParsed(null); setParseError(null); setRewriteResult(null); }}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${tab === t ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"}`}
-            >
-              {t === "paste" ? "✏️ Paste Text" : "📁 Upload File"}
-            </button>
-          ))}
-        </div>
+        <div className="space-y-6">
 
-        {/* Input area */}
-        {tab === "paste" ? (
-          <textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            placeholder="Paste your resume here…"
-            rows={12}
-            className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
-        ) : (
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`mb-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50/40"}`}
-          >
-            <span className="mb-2 text-3xl">📄</span>
-            {fileName ? (
-              <p className="font-medium text-gray-800">{fileName}</p>
+          {/* ── Step 1: Resume ─────────────────────────────────────── */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Step 1 — Your Resume
+            </h2>
+
+            {/* Source toggle */}
+            <div className="mb-4 flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+              <button
+                onClick={() => { setResumeSource("upload"); setResult(null); }}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${resumeSource === "upload" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                📁 Upload file
+              </button>
+              <button
+                onClick={() => { setResumeSource("vault"); setResult(null); }}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${resumeSource === "vault" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                📚 Saved versions {versionsLoaded && versions.length > 0 && `(${versions.length})`}
+              </button>
+            </div>
+
+            {resumeSource === "upload" ? (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors ${
+                  dragOver ? "border-blue-400 bg-blue-50" :
+                  uploadedFile ? "border-emerald-300 bg-emerald-50" :
+                  "border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40"
+                }`}
+              >
+                <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
+                {uploadedFile ? (
+                  <p className="font-medium text-gray-800">{uploadedFile.name}</p>
+                ) : (
+                  <>
+                    <p className="font-medium text-gray-700">Drop your resume here</p>
+                    <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), or TXT · click to browse</p>
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+              </div>
             ) : (
-              <>
-                <p className="font-medium text-gray-700">Drop your resume here</p>
-                <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), TXT · click to browse</p>
-              </>
+              <div>
+                {!versionsLoaded ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  </div>
+                ) : versions.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                    <p className="text-sm text-gray-500">No saved versions yet.</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Go to <a href="/settings/profile" className="text-blue-500 underline">My Career</a> to upload and save a resume version.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {versions.map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => { setSelectedVersion(v); setResult(null); }}
+                        className={`w-full rounded-lg border px-4 py-3 text-left transition-colors ${
+                          selectedVersion?.id === v.id
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium text-gray-900">{v.version_name}</p>
+                          {selectedVersion?.id === v.id && (
+                            <span className="text-xs font-semibold text-blue-600">Selected ✓</span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-gray-400">
+                          {v.job_type && <span className="mr-2 text-blue-500">{v.job_type}</span>}
+                          {new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-              className="hidden"
-              onChange={handleFileInput}
-            />
-          </div>
-        )}
+          </section>
 
-        {/* Action buttons */}
-        <div className="mb-6 flex gap-3">
+          {/* ── Step 2: Job ────────────────────────────────────────── */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Step 2 — The Job
+            </h2>
+
+            <div className="mb-4 flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+              <button
+                onClick={() => { setJobSource("paste"); setResult(null); }}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${jobSource === "paste" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                ✏️ Paste description
+              </button>
+              <button
+                onClick={() => { setJobSource("url"); setResult(null); }}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${jobSource === "url" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                🔗 Job URL
+              </button>
+            </div>
+
+            {jobSource === "paste" ? (
+              <textarea
+                value={jobDescription}
+                onChange={(e) => { setJobDescription(e.target.value); setResult(null); }}
+                placeholder="Paste the full job description here…"
+                rows={8}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            ) : (
+              <input
+                type="url"
+                value={jobUrl}
+                onChange={(e) => { setJobUrl(e.target.value); setResult(null); }}
+                placeholder="https://www.linkedin.com/jobs/view/..."
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            )}
+          </section>
+
+          {/* ── CTA ───────────────────────────────────────────────── */}
           <button
-            onClick={() => void handleParse()}
-            disabled={!canParse || parsing}
-            className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+            onClick={() => void handleCheck()}
+            disabled={!canCheck}
+            className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
           >
-            {parsing ? "Parsing…" : "✨ Parse Resume"}
+            {checking ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Analyzing fit…
+              </span>
+            ) : "🎯 Check Fit"}
           </button>
-          {canRewrite && (
-            <button
-              onClick={() => setShowRewriteForm((v) => !v)}
-              className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
-            >
-              🔁 AI Rewrite
-            </button>
+
+          {/* ── Error ─────────────────────────────────────────────── */}
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              ⚠ {error}
+            </div>
+          )}
+
+          {/* ── Results ───────────────────────────────────────────── */}
+          {result && (
+            <div className="space-y-5">
+
+              {/* Score + summary */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                  <ScoreRing score={result.fitScore} />
+                  <div className="flex-1">
+                    <h2 className="mb-2 text-base font-semibold text-gray-900">Overall Assessment</h2>
+                    <p className="text-sm leading-relaxed text-gray-700">{result.summary}</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Strengths */}
+              {result.strengths.length > 0 && (
+                <section className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-emerald-600">
+                    ✓ Strengths
+                  </h2>
+                  <ul className="space-y-2">
+                    {result.strengths.map((s, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-gray-700">
+                        <span className="mt-0.5 shrink-0 text-emerald-500">●</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Gaps */}
+              {result.gaps.length > 0 && (
+                <section className="rounded-xl border border-amber-100 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-amber-600">
+                    ⚠ Gaps
+                  </h2>
+                  <ul className="space-y-2">
+                    {result.gaps.map((g, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-gray-700">
+                        <span className="mt-0.5 shrink-0 text-amber-400">●</span>
+                        <span>{g}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Missing skills */}
+              {result.missingSkills.length > 0 && (
+                <section className="rounded-xl border border-red-100 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-500">
+                    Missing Skills
+                  </h2>
+                  <div className="flex flex-wrap gap-2">
+                    {result.missingSkills.map((s, i) => (
+                      <Pill key={i} text={s} color="red" />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Recommendations */}
+              {result.recommendations.length > 0 && (
+                <section className="rounded-xl border border-blue-100 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-blue-600">
+                    💡 Recommendations
+                  </h2>
+                  <ol className="space-y-2">
+                    {result.recommendations.map((r, i) => (
+                      <li key={i} className="flex gap-3 text-sm text-gray-700">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                          {i + 1}
+                        </span>
+                        <span>{r}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
+              {/* Rewrite CTA */}
+              {!rewriteResult && (
+                <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="font-semibold text-gray-900">Rewrite resume for this job</h2>
+                      <p className="mt-0.5 text-sm text-gray-600">
+                        AI tailors your resume to match the job description and address the gaps above.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void handleRewrite()}
+                      disabled={rewriting}
+                      className="shrink-0 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      {rewriting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Rewriting…
+                        </span>
+                      ) : "✨ Rewrite Resume"}
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* Rewrite result */}
+              {rewriteResult && (
+                <section className="rounded-xl border border-emerald-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="font-semibold text-gray-900">✨ Rewritten Resume</h2>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadTxt("resume-rewritten.txt", rewriteResult.rewrittenText)}
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        ⬇ Download .txt
+                      </button>
+                    </div>
+                  </div>
+
+                  {rewriteResult.improvements.length > 0 && (
+                    <div className="mb-4 rounded-lg bg-emerald-50 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                        Changes made ({rewriteResult.improvements.length})
+                      </p>
+                      <ul className="space-y-1">
+                        {rewriteResult.improvements.map((imp, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-emerald-800">
+                            <span className="mt-0.5 text-emerald-500">✓</span>
+                            <span>{imp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-xl bg-gray-50 p-4 text-sm text-gray-800">
+                    {rewriteResult.rewrittenText}
+                  </pre>
+                </section>
+              )}
+            </div>
           )}
         </div>
-
-        {/* Rewrite form */}
-        {showRewriteForm && (
-          <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
-            <h3 className="mb-3 font-semibold text-gray-900">AI Rewrite Options</h3>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Target role <span className="text-gray-400">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-              placeholder="e.g. Senior Software Engineer at Google"
-              className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            />
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Job description <span className="text-gray-400">(optional, improves tailoring)</span>
-            </label>
-            <textarea
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Paste the job description here…"
-              rows={4}
-              className="mb-4 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            />
-            <button
-              onClick={() => void handleRewrite()}
-              disabled={rewriting}
-              className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-            >
-              {rewriting ? "Rewriting with AI…" : "✨ Rewrite Now"}
-            </button>
-          </div>
-        )}
-
-        {/* Error */}
-        {parseError && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {parseError}
-          </div>
-        )}
-
-        {/* Rewrite result */}
-        {rewriteResult && (
-          <div className="mb-6">
-            <RewritePanel
-              originalText={rawText || pasteText}
-              result={rewriteResult}
-              onSaveRewritten={() => openSaveModal("rewritten")}
-            />
-          </div>
-        )}
-
-        {/* Parsed result */}
-        {parsed && (
-          <div className="mb-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-800">Parsed Resume</h2>
-              <div className="flex items-center gap-3">
-                {savedMsg && <span className="text-sm font-medium text-emerald-600">{savedMsg}</span>}
-                <button
-                  onClick={() => downloadTxt("resume-original.txt", rawText || pasteText)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  ⬇ .txt
-                </button>
-                <button
-                  onClick={() => openSaveModal("parsed")}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  💾 Save Version
-                </button>
-              </div>
-            </div>
-            <ContactCard contact={parsed.contact} />
-            <SummaryCard summary={parsed.summary} />
-            <ExperienceCard experience={parsed.experience} />
-            <EducationCard education={parsed.education} />
-            <SkillsCard skills={parsed.skills} certifications={parsed.certifications} />
-          </div>
-        )}
-
-        {/* Version history */}
-        {versionsLoaded && (
-          <div>
-            <h2 className="mb-3 text-base font-semibold text-gray-800">
-              Saved Versions
-              {versions.length > 0 && (
-                <span className="ml-2 text-xs font-normal text-gray-400">({versions.length})</span>
-              )}
-            </h2>
-            {versions.length === 0 ? (
-              <p className="text-sm text-gray-400">No saved versions yet. Parse your resume and save it.</p>
-            ) : (
-              <div className="space-y-2">
-                {versions.map((v) => (
-                  <VersionHistoryItem key={v.id} v={v} onDelete={(id) => void handleDelete(id)} onView={setViewingVersion} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
-
-      {/* Save modal */}
-      {showSaveModal && (
-        <SaveModal
-          defaultName={
-            saveMode === "rewritten"
-              ? `Rewritten ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-              : undefined
-          }
-          onSave={(name, jobType) => void handleSave(name, jobType)}
-          onClose={() => setShowSaveModal(false)}
-          saving={saving}
-        />
-      )}
-
-      {/* View version overlay */}
-      {viewingVersion && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto max-w-3xl rounded-2xl bg-gray-50 p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">{viewingVersion.version_name}</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => downloadTxt(viewingVersion.version_name, viewingVersion.resume_text)}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  ⬇ .txt
-                </button>
-                <button onClick={() => setViewingVersion(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-200">✕</button>
-              </div>
-            </div>
-            {viewingVersion.parsed_data ? (
-              <div className="space-y-4">
-                <ContactCard contact={viewingVersion.parsed_data.contact} />
-                <SummaryCard summary={viewingVersion.parsed_data.summary} />
-                <ExperienceCard experience={viewingVersion.parsed_data.experience} />
-                <EducationCard education={viewingVersion.parsed_data.education} />
-                <SkillsCard skills={viewingVersion.parsed_data.skills} certifications={viewingVersion.parsed_data.certifications} />
-              </div>
-            ) : (
-              <pre className="whitespace-pre-wrap rounded-xl bg-white p-4 text-sm text-gray-700">{viewingVersion.resume_text}</pre>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
