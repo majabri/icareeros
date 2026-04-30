@@ -70,17 +70,19 @@ export default function SettingsSupportPage() {
   }
 
   return (
-    <>
-      {/* Description */}
-      <p className="mb-6 text-sm text-gray-500">
-        Have a question or found a bug? We typically respond within 24 hours.
-      </p>
+    <div>
+      {/* Section header — matches billing/profile pattern */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">Support</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Have a question or found a bug? We typically respond within 24 hours.
+        </p>
+      </div>
 
       {/* New ticket form */}
-      <section className="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold text-gray-800">Submit a ticket</h2>
+      <div className="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-base font-semibold text-gray-800">Submit a ticket</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Subject */}
           <div>
             <label htmlFor="subject" className="mb-1 block text-sm font-medium text-gray-700">
               Subject
@@ -98,7 +100,6 @@ export default function SettingsSupportPage() {
             />
           </div>
 
-          {/* Body */}
           <div>
             <label htmlFor="body" className="mb-1 block text-sm font-medium text-gray-700">
               Details
@@ -117,7 +118,6 @@ export default function SettingsSupportPage() {
             <p className="mt-1 text-right text-xs text-gray-400">{body.length}/5000</p>
           </div>
 
-          {/* Priority */}
           <div>
             <span className="mb-1 block text-sm font-medium text-gray-700">Priority</span>
             <div className="flex gap-2 flex-wrap">
@@ -157,11 +157,11 @@ export default function SettingsSupportPage() {
             {submitting ? "Submitting…" : "Submit ticket"}
           </button>
         </form>
-      </section>
+      </div>
 
       {/* Ticket history */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-gray-800">My tickets</h2>
+      <div>
+        <h3 className="mb-4 text-base font-semibold text-gray-800">My tickets</h3>
 
         {loading && (
           <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -205,7 +205,7 @@ export default function SettingsSupportPage() {
             ))}
           </ul>
         )}
-      </section>
-    </>
+      </div>
+    </div>
   );
 }
