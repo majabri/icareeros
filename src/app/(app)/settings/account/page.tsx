@@ -1,6 +1,6 @@
 /**
  * /settings/account — Account & Security
- * Identity (name + avatar), password change, data export, account deletion
+ * Identity (name + phone + avatar), password change, data export, account deletion
  */
 "use client";
 
@@ -33,6 +33,7 @@ export default function AccountSecurityPage() {
   // Identity
   const [user, setUser]                     = useState<User | null>(null);
   const [fullName, setFullName]             = useState("");
+  const [phone, setPhone]                   = useState("");
   const [avatarUrl, setAvatarUrl]           = useState<string | null>(null);
   const [avatarFile, setAvatarFile]         = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview]   = useState<string | null>(null);
@@ -64,11 +65,12 @@ export default function AccountSecurityPage() {
         setUser(u);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("full_name, avatar_url")
+          .select("full_name, phone, avatar_url")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
           setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
+          setPhone(profile.phone ?? "");
           setAvatarUrl(profile.avatar_url ?? null);
         } else {
           setFullName(u.user_metadata?.full_name ?? "");
@@ -113,6 +115,7 @@ export default function AccountSecurityPage() {
         {
           user_id:    user.id,
           full_name:  fullName.trim(),
+          phone:      phone.trim() || null,
           avatar_url: finalAvatarUrl,
           updated_at: new Date().toISOString(),
         },
@@ -197,7 +200,7 @@ export default function AccountSecurityPage() {
         <section className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Identity</h2>
-            <p className="mt-1 text-sm text-gray-500">Your display name and profile picture.</p>
+            <p className="mt-1 text-sm text-gray-500">Your display name, phone number, and profile picture.</p>
           </div>
 
           {/* Avatar */}
@@ -229,16 +232,29 @@ export default function AccountSecurityPage() {
             </div>
           </div>
 
-          {/* Full name */}
-          <div className="max-w-sm">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Full name</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+          {/* Name + phone in 2-column grid */}
+          <div className="grid gap-4 sm:grid-cols-2 max-w-xl">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Full name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Phone number</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+1 (555) 000-0000"
+                autoComplete="tel"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           {/* Email (read-only) */}

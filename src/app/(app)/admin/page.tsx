@@ -65,6 +65,7 @@ interface AdminUser {
   plan: string;
   plan_status: string;
   cycle_count: number;
+  email_confirmed: boolean;
 }
 
 function planBadgeClass(plan: string): string {
@@ -98,6 +99,7 @@ export default async function AdminPage() {
     { data: recentAnalyses },
     { data: allRuns },
     { data: allSupportTickets },
+    { data: authUsersData },
   ] = await Promise.all([
     supabase.from("feature_flags").select("key, enabled, updated_at").order("key"),
     supabase
@@ -113,7 +115,16 @@ export default async function AdminPage() {
     svc.from("analysis_history").select("id").gte("created_at", thirtyDaysAgo),
     svc.from("agent_runs").select("jobs_found, jobs_matched"),
     svc.from("support_tickets").select("id, status"),
+    svc.auth.admin.listUsers({ perPage: 1000 }),
   ]);
+
+  // Build a map of user_id → email confirmed
+  const emailConfirmedMap = new Map<string, boolean>(
+    (authUsersData?.users ?? []).map(u => [
+      u.id,
+      !!u.email_confirmed_at,
+    ])
+  );
 
   if (flagsError) {
     return (
@@ -171,6 +182,7 @@ export default async function AdminPage() {
       plan: sub?.plan ?? "free",
       plan_status: sub?.plan_status ?? "active",
       cycle_count: cycleCountByUser[p.user_id] ?? 0,
+      email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
     };
   });
 
@@ -267,7 +279,7 @@ export default async function AdminPage() {
                         >
                           View ↗
                         </a>
-                        <AdminUserActions userId={u.user_id} currentPlan={u.plan} email={u.email ?? u.user_id} />
+                        <AdminUserActions userId={u.user_id} currentPlan={u.plan} email={u.email ?? u.user_id} emailConfirmed={u.email_confirmed} />
                       </div>
                     </td>
                   </tr>

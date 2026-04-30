@@ -89,7 +89,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       <div>
         <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
-          {mode === "login" ? "Email or username" : "Email address"}
+          {mode === "login" ? "Email" : "Email address"}
         </label>
         <input
           id="identifier"
@@ -101,7 +101,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
                      text-gray-900 placeholder-gray-400 shadow-sm
                      focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          placeholder={mode === "login" ? "you@example.com or username" : "you@example.com"}
+          placeholder={mode === "login" ? "you@example.com" : "you@example.com"}
         />
       </div>
 

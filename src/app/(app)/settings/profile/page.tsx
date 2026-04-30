@@ -135,6 +135,7 @@ export default function CareerProfilePage() {
   const supabase = createClient();
 
   // Career fields
+  const [fullName, setFullName]               = useState("");
   const [currentPosition, setCurrentPosition] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
   const [targetRoles, setTargetRoles]         = useState<string[]>([]);
@@ -169,10 +170,11 @@ export default function CareerProfilePage() {
         setUserId(u.id);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("current_position, experience_level, target_roles, skills, location, open_to_remote")
+          .select("full_name, current_position, experience_level, target_roles, skills, location, open_to_remote")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
+          setFullName(profile.full_name ?? "");
           setCurrentPosition(profile.current_position ?? "");
           setExperienceLevel(profile.experience_level ?? "");
           setTargetRoles(profile.target_roles ?? []);
@@ -211,6 +213,7 @@ export default function CareerProfilePage() {
       const { error } = await supabase.from("user_profiles").upsert(
         {
           user_id:          userId,
+          full_name:        fullName.trim() || null,
           current_position: currentPosition.trim() || null,
           experience_level: experienceLevel || null,
           target_roles:     targetRoles,
@@ -433,6 +436,16 @@ export default function CareerProfilePage() {
                 <p className="mt-1 text-sm text-gray-500">
                   Your current role and experience. Used to calibrate advice and match scores.
                 </p>
+              </div>
+              <div className="mb-4 max-w-sm">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Full name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
