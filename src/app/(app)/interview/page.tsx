@@ -559,7 +559,7 @@ export default function InterviewPage() {
 
   // ── Active interview ───────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col" style={{ height: "calc(100dvh - 65px)" }}>
+    <div className="flex flex-col h-[calc(100dvh-129px)] sm:h-[calc(100dvh-65px)]">
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 shrink-0">
         <button
           onClick={resetInterview}
@@ -627,3 +627,4 @@ export default function InterviewPage() {
     </div>
   );
 }
+
