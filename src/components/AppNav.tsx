@@ -59,12 +59,15 @@ export function AppNav() {
 
         {/* Right: language switcher + sign out */}
         <div className="flex items-center gap-2 shrink-0">
-          <LanguageSwitcher />
+          <span className="hidden sm:block"><LanguageSwitcher /></span>
           <button
             onClick={handleSignOut}
             className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            title={t.nav.signOut}
+            aria-label={t.nav.signOut}
           >
-            {t.nav.signOut}
+            <span className="hidden sm:inline">{t.nav.signOut}</span>
+            <span className="sm:hidden" aria-hidden="true">↩</span>
           </button>
         </div>
       </div>

@@ -277,7 +277,7 @@ export default function ReferralProgram() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-5 pb-4 text-center">
             <div className="text-2xl font-bold">{invitations.length}</div>
