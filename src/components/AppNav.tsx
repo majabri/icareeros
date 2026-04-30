@@ -23,7 +23,7 @@ export function AppNav() {
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    window.location.href = "/auth/login";
+    window.location.href = "https://icareeros.com/";
   }
 
   return (
