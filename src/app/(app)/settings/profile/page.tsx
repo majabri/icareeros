@@ -1,49 +1,102 @@
 /**
- * /settings/profile — display name, avatar upload, password change
+ * /settings/profile — My Career
+ * Career preferences stored in user_profiles:
+ *   current_position, experience_level, target_roles, skills, location, open_to_remote
  */
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase";
-import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string };
 
-function StatusBanner({ msg }: { msg: Msg | null }) {
-  if (!msg) return null;
+const EXPERIENCE_LEVELS = [
+  { value: "entry",     label: "Entry level (0–2 years)" },
+  { value: "mid",       label: "Mid-level (3–5 years)" },
+  { value: "senior",    label: "Senior (6–10 years)" },
+  { value: "executive", label: "Executive (10+ years)" },
+];
+
+/** Tag chip input — press Enter or comma to add a tag */
+function TagInput({
+  tags,
+  onChange,
+  placeholder,
+}: {
+  tags: string[];
+  onChange: (t: string[]) => void;
+  placeholder?: string;
+}) {
+  const [input, setInput] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+
+  function add(raw: string) {
+    const val = raw.trim().replace(/,+$/, "");
+    if (val && !tags.includes(val)) onChange([...tags, val]);
+    setInput("");
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add(input);
+    }
+    if (e.key === "Backspace" && !input && tags.length) {
+      onChange(tags.slice(0, -1));
+    }
+  }
+
   return (
     <div
-      className={`rounded-lg border px-4 py-2.5 text-sm ${
-        msg.type === "success"
-          ? "border-green-200 bg-green-50 text-green-700"
-          : "border-red-200 bg-red-50 text-red-700"
-      }`}
+      className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 cursor-text"
+      onClick={() => ref.current?.focus()}
     >
-      {msg.type === "success" ? "✓ " : "⚠ "}{msg.text}
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange(tags.filter((t) => t !== tag));
+            }}
+            className="ml-0.5 text-blue-400 hover:text-blue-600"
+            aria-label={`Remove ${tag}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        ref={ref}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKey}
+        onBlur={() => { if (input.trim()) add(input); }}
+        placeholder={tags.length === 0 ? placeholder : ""}
+        className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+      />
     </div>
   );
 }
 
-export default function ProfileSettingsPage() {
+export default function MyCareerPage() {
   const supabase = createClient();
 
-  const [user, setUser]           = useState<User | null>(null);
-  const [fullName, setFullName]   = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [avatarFile, setAvatarFile]     = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [currentPosition, setCurrentPosition] = useState("");
+  const [experienceLevel, setExperienceLevel] = useState("");
+  const [targetRoles, setTargetRoles]         = useState<string[]>([]);
+  const [skills, setSkills]                   = useState<string[]>([]);
+  const [location, setLocation]               = useState("");
+  const [openToRemote, setOpenToRemote]       = useState(false);
 
-  // Password
-  const [newPassword, setNewPassword]         = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  // Status
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [pwSaving, setPwSaving]           = useState(false);
-  const [profileMsg, setProfileMsg]       = useState<Msg | null>(null);
-  const [pwMsg, setPwMsg]                 = useState<Msg | null>(null);
-  const [loading, setLoading]             = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [msg, setMsg]         = useState<Msg | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId]   = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -51,17 +104,19 @@ export default function ProfileSettingsPage() {
         const { data } = await supabase.auth.getUser();
         const u = data.user;
         if (!u) return;
-        setUser(u);
+        setUserId(u.id);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("full_name, avatar_url")
+          .select("current_position, experience_level, target_roles, skills, location, open_to_remote")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
-          setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
-          setAvatarUrl(profile.avatar_url ?? null);
-        } else {
-          setFullName(u.user_metadata?.full_name ?? "");
+          setCurrentPosition(profile.current_position ?? "");
+          setExperienceLevel(profile.experience_level ?? "");
+          setTargetRoles(profile.target_roles ?? []);
+          setSkills(profile.skills ?? []);
+          setLocation(profile.location ?? "");
+          setOpenToRemote(profile.open_to_remote ?? false);
         }
       } finally {
         setLoading(false);
@@ -70,88 +125,33 @@ export default function ProfileSettingsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setProfileMsg({ type: "error", text: "Image must be under 2 MB." });
-      return;
-    }
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
-    setProfileMsg(null);
-  }
-
-  async function handleSaveProfile(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
-    setProfileSaving(true);
-    setProfileMsg(null);
+    if (!userId) return;
+    setSaving(true);
+    setMsg(null);
     try {
-      let finalAvatarUrl = avatarUrl;
-
-      if (avatarFile) {
-        const ext  = avatarFile.name.split(".").pop() ?? "jpg";
-        const path = `${user.id}/avatar.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from("avatars")
-          .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type });
-        if (uploadErr) throw new Error(uploadErr.message);
-        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-        // Bust cache with a version param
-        finalAvatarUrl = `${urlData.publicUrl}?v=${Date.now()}`;
-      }
-
       const { error } = await supabase.from("user_profiles").upsert(
         {
-          user_id:    user.id,
-          full_name:  fullName.trim(),
-          avatar_url: finalAvatarUrl,
-          updated_at: new Date().toISOString(),
+          user_id:          userId,
+          current_position: currentPosition.trim() || null,
+          experience_level: experienceLevel || null,
+          target_roles:     targetRoles,
+          skills:           skills,
+          location:         location.trim() || null,
+          open_to_remote:   openToRemote,
+          updated_at:       new Date().toISOString(),
         },
         { onConflict: "user_id" },
       );
       if (error) throw new Error(error.message);
-
-      setAvatarUrl(finalAvatarUrl);
-      setAvatarFile(null);
-      setProfileMsg({ type: "success", text: "Profile updated." });
+      setMsg({ type: "success", text: "Career profile saved." });
     } catch (err) {
-      setProfileMsg({ type: "error", text: (err as Error).message });
+      setMsg({ type: "error", text: (err as Error).message });
     } finally {
-      setProfileSaving(false);
+      setSaving(false);
     }
   }
-
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    setPwMsg(null);
-    if (newPassword.length < 8) {
-      setPwMsg({ type: "error", text: "Password must be at least 8 characters." });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPwMsg({ type: "error", text: "Passwords do not match." });
-      return;
-    }
-    setPwSaving(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw new Error(error.message);
-      setNewPassword("");
-      setConfirmPassword("");
-      setPwMsg({ type: "success", text: "Password updated." });
-    } catch (err) {
-      setPwMsg({ type: "error", text: (err as Error).message });
-    } finally {
-      setPwSaving(false);
-    }
-  }
-
-  const displayAvatar = avatarPreview ?? avatarUrl;
-  const initials = fullName
-    ? fullName.trim().split(/\s+/).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-    : (user?.email?.[0] ?? "U").toUpperCase();
 
   if (loading) {
     return (
@@ -162,141 +162,131 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* ── Profile card ─────────────────────────────────────────────── */}
-      <form onSubmit={handleSaveProfile}>
-        <section className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <form onSubmit={handleSave}>
+      <div className="space-y-8">
+
+        {/* ── Where you are ───────────────────────────────────────── */}
+        <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Profile</h2>
+            <h2 className="text-base font-semibold text-gray-900">Where you are</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Update your display name and profile picture.
+              Your current role and experience. Used to calibrate advice and match scores.
             </p>
           </div>
 
-          {/* Avatar */}
-          <div className="flex items-center gap-5">
-            <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full bg-blue-600 flex items-center justify-center">
-              {displayAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={displayAvatar} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-2xl font-bold text-white">{initials}</span>
-              )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Current position
+              </label>
+              <input
+                type="text"
+                value={currentPosition}
+                onChange={(e) => setCurrentPosition(e.target.value)}
+                placeholder="e.g. Senior Product Manager"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
             </div>
             <div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                onChange={handleAvatarChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Experience level
+              </label>
+              <select
+                value={experienceLevel}
+                onChange={(e) => setExperienceLevel(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                Change photo
-              </button>
-              <p className="mt-1.5 text-xs text-gray-400">
-                PNG, JPG, GIF or WebP · max 2 MB
-              </p>
+                <option value="">Select level</option>
+                {EXPERIENCE_LEVELS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
           </div>
+        </section>
 
-          {/* Full name */}
+        {/* ── Where you're going ──────────────────────────────────── */}
+        <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Where you're going</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Target roles and skills you're building toward. Press Enter or comma after each item.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Target roles</label>
+            <TagInput
+              tags={targetRoles}
+              onChange={setTargetRoles}
+              placeholder="e.g. VP of Product, Director of Engineering…"
+            />
+            <p className="mt-1 text-xs text-gray-400">Press Enter or comma after each role</p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Key skills</label>
+            <TagInput
+              tags={skills}
+              onChange={setSkills}
+              placeholder="e.g. Python, Product Strategy, SQL…"
+            />
+            <p className="mt-1 text-xs text-gray-400">Press Enter or comma after each skill</p>
+          </div>
+        </section>
+
+        {/* ── Location & work style ────────────────────────────────── */}
+        <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Location & work style</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Helps surface the right opportunities for your situation.
+            </p>
+          </div>
+
           <div className="max-w-sm">
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Full name
-            </label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
             <input
               type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g. New York, NY · San Francisco Bay Area"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
-          {/* Email (read-only) */}
-          <div className="max-w-sm">
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email address
-            </label>
-            <input
-              type="email"
-              value={user?.email ?? ""}
-              readOnly
-              className="w-full cursor-default rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Email cannot be changed here. Contact support if needed.
-            </p>
-          </div>
+          <label className="flex cursor-pointer items-center gap-3">
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={openToRemote}
+                onChange={(e) => setOpenToRemote(e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="h-5 w-9 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-600" />
+              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Open to remote opportunities</span>
+          </label>
+        </section>
 
-          <StatusBanner msg={profileMsg} />
-
+        {/* ── Save ────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-4">
           <button
             type="submit"
-            disabled={profileSaving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
-            {profileSaving ? "Saving…" : "Save changes"}
+            {saving ? "Saving…" : "Save career profile"}
           </button>
-        </section>
-      </form>
+          {msg && (
+            <span className={`text-sm ${msg.type === "success" ? "text-green-600" : "text-red-600"}`}>
+              {msg.type === "success" ? "✓ " : "⚠ "}{msg.text}
+            </span>
+          )}
+        </div>
 
-      {/* ── Password card ─────────────────────────────────────────────── */}
-      <form onSubmit={handleChangePassword}>
-        <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Change password</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Set a new password. If you signed in with Google or Apple you can use this
-              to add a password to your account.
-            </p>
-          </div>
-
-          <div className="max-w-sm space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                New password
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
-                autoComplete="new-password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Confirm password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password"
-                autoComplete="new-password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <StatusBanner msg={pwMsg} />
-
-          <button
-            type="submit"
-            disabled={pwSaving || !newPassword || !confirmPassword}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-          >
-            {pwSaving ? "Updating…" : "Update password"}
-          </button>
-        </section>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }
