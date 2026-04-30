@@ -2,10 +2,10 @@
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/settings/profile",       label: "Profile" },
-  { href: "/settings/account",       label: "Account" },
-  { href: "/settings/email",         label: "Notifications" },
-  { href: "/settings/billing",       label: "Billing" },
+  { href: "/settings/profile",  label: "My Career" },
+  { href: "/settings/account",  label: "Account & Security" },
+  { href: "/settings/email",    label: "Notifications" },
+  { href: "/settings/billing",  label: "Billing" },
 ];
 
 export function SettingsTabs() {
