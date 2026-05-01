@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 
 export interface FitCheckResult {
   fitScore: number;
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const anthropic = createTracedClient(user.id, "resume/fit-check");
 
   const prompt = `You are an expert career coach and ATS analyst. Assess how well a candidate's resume fits a job description.
 

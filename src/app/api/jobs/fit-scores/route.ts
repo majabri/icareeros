@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import { cache } from "@/lib/cache";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ Example format:
   const userMessage = `CANDIDATE PROFILE:\n${userContext}\n\nOPPORTUNITIES TO SCORE:\n${opportunitiesText}\n\nReturn the JSON score map now.`;
 
   // ── Call Claude Haiku ───────────────────────────────────────────────────────
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = createTracedClient(user.id, "jobs/fit-scores");
 
   let raw: string;
   try {

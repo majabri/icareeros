@@ -11,7 +11,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import { sendMail } from "@/lib/mailer";
 import { weeklyInsightsEmail, type WeeklyInsight } from "@/lib/emailTemplates";
 
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceKey,
   );
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const anthropic = createTracedClient("system", "cron/weekly-insights");
 
   // 1. Fetch opted-in users
   const { data: prefs, error: prefsError } = await supabase
