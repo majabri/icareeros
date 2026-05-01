@@ -91,20 +91,20 @@ export function HeroSection() {
 
       <div style={{ maxWidth: 900, position: "relative", zIndex: 2 }}>
         <div style={{ color:"var(--primary)", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
-          Your Career Transformation Starts Here
+          Career Operating System
         </div>
 
         <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.2, letterSpacing:"-1px", color:"var(--neutral-900)" }}>
-          Build Your Best Career —<br/>Every Single Stage
+          The career OS that runs<br/>on outcomes, not advice.
         </h1>
 
-        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--neutral-700)", maxWidth:700, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
-          From exploring possibilities to celebrating wins, iCareerOS guides you through every phase of your career journey with AI-powered insights, personalized learning, and human mentorship.
+        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--neutral-700)", maxWidth:680, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
+          Most career tools give you information. iCareerOS gives you a system — six stages that loop from Evaluate to Achieve, built to keep moving until you hit your next milestone.
         </p>
 
         <div style={{ display:"flex", gap:"1.5rem", justifyContent:"center", flexWrap:"wrap" }}>
-          <a href="#cta" className="btn btn-primary">Launch Your Journey →</a>
-          <a href="#features" className="btn btn-secondary">Explore Features</a>
+          <a href="#cta" className="btn btn-primary">Start your first cycle →</a>
+          <a href="#lifecycle" className="btn btn-secondary">See how it works</a>
         </div>
       </div>
     </section>
