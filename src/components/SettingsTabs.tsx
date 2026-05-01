@@ -1,9 +1,9 @@
 "use client";
 import { usePathname } from "next/navigation";
 
-// Career Profile is now a standalone /profile page — settings only covers account/billing/notifications
 const TABS = [
-  { href: "/settings/account",  label: "Account" },
+  { href: "/settings/profile",  label: "Career Profile" },
+  { href: "/settings/account",  label: "Settings" },
   { href: "/settings/email",    label: "Notifications" },
   { href: "/settings/billing",  label: "Billing" },
   { href: "/settings/support",  label: "Support" },
