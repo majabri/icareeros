@@ -3,11 +3,11 @@
  *
  * Regex + heuristic resume parser — no API calls.
  * Works on plain text extracted from PDF / Word / text files.
- * Produces the same ParsedResume shape as the old AI route.
+ * Produces the same ParsedResume shape consumed by the profile page.
  */
 
 export interface ParsedContact {
-  name: string; email: string; phone: string; location: string;
+  name: string; email: string; phone: string; location: string; linkedin: string;
 }
 export interface ParsedExperience {
   title: string; company: string; period: string; bullets: string[];
@@ -28,6 +28,7 @@ export interface ParsedResume {
 
 const EMAIL_RE    = /[\w.+\-]+@[\w\-]+\.[\w.]+/;
 const PHONE_RE    = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}/;
+const LINKEDIN_RE = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[\w\-%.]+\/?/i;
 const YEAR_RE     = /\b(19|20)\d{2}\b/;
 const DATE_RANGE  = /((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?\d{4}\s*[-–—]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|[Pp]resent|[Cc]urrent)/;
 
@@ -63,17 +64,18 @@ function stripBullet(line: string) {
 export function parseResumeLocally(rawText: string): ParsedResume {
   const lines = rawText.split(/\r?\n/).map(l => l.trimEnd());
 
-  // ── 1. Contact (scan header — first ~20 lines) ────────────────────────────
-  let name = "", email = "", phone = "", location = "";
-  for (let i = 0; i < Math.min(20, lines.length); i++) {
+  // ── 1. Contact (scan header — first ~25 lines) ────────────────────────────
+  let name = "", email = "", phone = "", location = "", linkedin = "";
+  for (let i = 0; i < Math.min(25, lines.length); i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    if (!email) { const m = line.match(EMAIL_RE); if (m) { email = m[0]; continue; } }
-    if (!phone) { const m = line.match(PHONE_RE); if (m) { phone = m[0]; continue; } }
+    if (!linkedin) { const m = line.match(LINKEDIN_RE); if (m) { linkedin = m[0].startsWith("http") ? m[0] : "https://" + m[0]; continue; } }
+    if (!email)    { const m = line.match(EMAIL_RE);    if (m) { email    = m[0]; continue; } }
+    if (!phone)    { const m = line.match(PHONE_RE);    if (m) { phone    = m[0]; continue; } }
     // City, State / City, Country heuristic
     if (!location && /^[A-Z][a-zA-Z\s]+,\s*[A-Z]{2,}/.test(line)) { location = line; continue; }
-    // First short non-blank line that looks like a name (no @, no digits, < 50 chars)
-    if (!name && line.length < 50 && !/[\d@]/.test(line) && /[A-Za-z]{2}/.test(line)) {
+    // First short non-blank line that looks like a name (no @, no digits, no URL, < 50 chars)
+    if (!name && line.length < 50 && !/[\d@:/]/.test(line) && /[A-Za-z]{2}/.test(line)) {
       name = line;
     }
   }
@@ -116,14 +118,12 @@ export function parseResumeLocally(rawText: string): ParsedResume {
 
     const dateMatch = t.match(DATE_RANGE);
     if (dateMatch) {
-      // Save previous job
       if (currentJob) experience.push(currentJob);
-      // The period line often also contains title/company
       const period = dateMatch[0];
       const rest = t.replace(period, "").replace(/[|,\-–—]+/g, " ").trim();
       const parts = rest.split(/\s{2,}|[|,]/).map(p => p.trim()).filter(Boolean);
       currentJob = {
-        title: parts[0] ?? "",
+        title:   parts[0] ?? "",
         company: parts[1] ?? "",
         period,
         bullets: [],
@@ -132,7 +132,6 @@ export function parseResumeLocally(rawText: string): ParsedResume {
       if (isBullet(t)) {
         currentJob.bullets.push(stripBullet(t));
       } else if (!currentJob.company && t.length < 80) {
-        // Line after date-range line is often company or title
         currentJob.company = t;
       }
     }
@@ -156,14 +155,13 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     } else if (currentEdu) {
       if (!currentEdu.school && t.length < 80) currentEdu.school = t;
     } else {
-      // No year yet — treat as degree line
       currentEdu = { degree: t, school: "", year: "" };
     }
   }
   if (currentEdu) education.push(currentEdu);
 
   return {
-    contact: { name, email, phone, location },
+    contact: { name, email, phone, location, linkedin },
     summary,
     experience,
     education,

@@ -259,6 +259,7 @@ export default function CareerProfilePage() {
         if (!fullName.trim() && p.contact.name)         setFullName(p.contact.name);
         if (!phone.trim() && p.contact.phone)            setPhone(p.contact.phone);
         if (!location.trim() && p.contact.location)      setLocation(p.contact.location);
+        if (!linkedinUrl.trim() && p.contact.linkedin)   setLinkedinUrl(p.contact.linkedin);
         if (!summary.trim() && p.summary)                setSummary(p.summary);
         if (!currentPosition.trim() && p.experience[0]) setCurrentPosition(p.experience[0].title);
 
@@ -275,15 +276,15 @@ export default function CareerProfilePage() {
           setWorkExp(p.experience.map(e => ({
             title:       e.title,
             company:     e.company,
-            startDate:   e.dates.split(/[-–]/)[0]?.trim() ?? "",
-            endDate:     e.dates.split(/[-–]/)[1]?.trim() ?? "",
-            description: e.description.join(" "),
+            startDate:   e.period.split(/[-–—]/)[0]?.trim() ?? "",
+            endDate:     e.period.split(/[-–—]/)[1]?.trim() ?? "",
+            description: e.bullets.join(" "),
           })));
         }
 
         // Education — fill if empty
         if (education.length === 0 && p.education.length > 0) {
-          setEducation(p.education.map(e => ({ degree: e.degree, institution: e.institution, year: e.year })));
+          setEducation(p.education.map(e => ({ degree: e.degree, institution: e.school, year: e.year })));
         }
 
         // Certifications — merge
