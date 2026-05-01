@@ -41,7 +41,6 @@ const NAV = [
   { href: "/career",       label: "Flight Plan",    icon: "flightplan"  },
   { href: "/gigs",         label: "Open Market",    icon: "openmarket"  },
   { href: "/services",     label: "Skill Store",    icon: "skillstore"  },
-  { href: "/settings",     label: "Settings",       icon: "settings"    },
 ] as const;
 
 interface Props {
@@ -52,15 +51,6 @@ interface Props {
 export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [userName, setUserName] = useState<string>("");
-
-  useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
-      const meta = data.user?.user_metadata;
-      setUserName(meta?.full_name ?? data.user?.email?.split("@")[0] ?? "");
-    });
-  }, []);
-
   // Close drawer on navigation
   useEffect(() => { setMobileOpen(false); }, [pathname, setMobileOpen]);
 
@@ -97,14 +87,11 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
 
   const UserFooter = ({ showLabel }: { showLabel: boolean }) => (
     <div className="border-t border-gray-100 px-2 py-3">
-      {showLabel && userName && (
-        <div className="px-3 py-1.5 text-xs text-gray-400 truncate">{userName}</div>
-      )}
       <button
         onClick={signOut}
         className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors
           ${!showLabel ? "justify-center px-2" : ""}`}
-        title={!showLabel ? "Sign out" : undefined}
+        title="Sign out"
       >
         <span className="text-gray-400"><Ic d={ICONS.signout} /></span>
         {showLabel && <span>Sign out</span>}
