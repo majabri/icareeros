@@ -1,16 +1,12 @@
-"use client"
+"use client";
 
 /**
  * /profile — Career Profile
- * Matches the azjobs reference layout:
- *   Resume Vault → Personal Info → Summary → Skills →
- *   Work Experience → Education → Certifications →
- *   Where you are → Location & work style
- *
- * Resume import auto-fills all sections from parsed data (no AI).
- * No "Search & Match Criteria" section.
+ * Full parity with azjobs reference layout.
+ * Sections: Resume Vault → Personal Info → Summary → Skills →
+ *   Search & Match Criteria → Work Experience → Education →
+ *   Certifications → Portfolio
  */
-"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
@@ -32,12 +28,58 @@ interface Edu      { degree: string; institution: string; year: string; }
 const EMPTY_EXP  = (): WorkExp => ({ title: "", company: "", startDate: "", endDate: "", description: "" });
 const EMPTY_EDU  = (): Edu    => ({ degree: "", institution: "", year: "" });
 
-const EXPERIENCE_LEVELS = [
-  { value: "entry",     label: "Entry level (0–2 years)" },
-  { value: "mid",       label: "Mid-level (3–5 years)" },
-  { value: "senior",    label: "Senior (6–10 years)" },
-  { value: "executive", label: "Executive (10+ years)" },
+const CAREER_LEVELS = [
+  { value: "entry",     label: "Entry-Level / Junior" },
+  { value: "mid",       label: "Mid-Level" },
+  { value: "senior",    label: "Senior" },
+  { value: "manager",   label: "Manager" },
+  { value: "director",  label: "Director" },
+  { value: "vp",        label: "VP / Senior Leadership" },
+  { value: "executive", label: "C-Level / Executive" },
 ];
+
+const WORK_MODES = [
+  { value: "remote",    label: "Remote" },
+  { value: "hybrid",    label: "Hybrid" },
+  { value: "in-office", label: "In-Office" },
+];
+
+const JOB_TYPES = [
+  { value: "full-time",   label: "Full-Time" },
+  { value: "part-time",   label: "Part-Time" },
+  { value: "contract",    label: "Contract" },
+  { value: "short-term",  label: "Short-Term" },
+];
+
+const COUNTRIES = [
+  "United States","Canada","United Kingdom","Germany","France","Australia","India",
+  "Netherlands","Sweden","Switzerland","Ireland","Singapore","United Arab Emirates",
+  "Japan","Brazil","Mexico","Spain","Italy","South Korea","New Zealand","Israel",
+  "Poland","Portugal","Belgium","Denmark","Norway","Finland","Austria",
+  "Czech Republic","South Africa","Nigeria","Kenya","Egypt","Saudi Arabia",
+  "Qatar","China","Philippines","Indonesia","Malaysia","Thailand","Vietnam",
+  "Colombia","Argentina","Chile",
+];
+
+// ── Profile completeness ──────────────────────────────────────────────────────
+function computeCompleteness(data: {
+  fullName: string; summary: string; skills: string[]; workExp: WorkExp[];
+  education: Edu[]; certifications: string[]; location: string;
+  targetRoles: string[]; versions: ResumeVersion[];
+}): number {
+  const checks = [
+    !!data.fullName,
+    !!data.summary,
+    data.skills.length > 0,
+    data.workExp.length > 0,
+    data.education.length > 0,
+    data.certifications.length > 0,
+    !!data.location,
+    data.targetRoles.length > 0,
+    data.versions.length > 0,
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
 function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (t: string[]) => void; placeholder?: string }) {
@@ -67,6 +109,32 @@ function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (
         onBlur={() => { if (input.trim()) add(input); }}
         placeholder={tags.length === 0 ? placeholder : ""}
         className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none" />
+    </div>
+  );
+}
+
+// ── CheckboxGroup ─────────────────────────────────────────────────────────────
+function CheckboxGroup({ options, selected, onChange }: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  function toggle(val: string) {
+    onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
+  }
+  return (
+    <div className="flex flex-wrap gap-3">
+      {options.map(opt => (
+        <label key={opt.value} className="flex cursor-pointer items-center gap-2 select-none">
+          <input
+            type="checkbox"
+            checked={selected.includes(opt.value)}
+            onChange={() => toggle(opt.value)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">{opt.label}</span>
+        </label>
+      ))}
     </div>
   );
 }
@@ -116,26 +184,40 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 export default function CareerProfilePage() {
   const supabase = createClient();
 
+  // — auth
+  const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId]       = useState<string | null>(null);
+  const [cycleId, setCycleId]     = useState<string | null>(null);
+
   // — basic profile fields
   const [fullName, setFullName]               = useState("");
   const [phone, setPhone]                     = useState("");
   const [linkedinUrl, setLinkedinUrl]         = useState("");
   const [summary, setSummary]                 = useState("");
   const [skills, setSkills]                   = useState<string[]>([]);
-  const [currentPosition, setCurrentPosition] = useState("");
-  const [experienceLevel, setExperienceLevel] = useState("");
-  const [targetRoles, setTargetRoles]         = useState<string[]>([]);
-  const [location, setLocation]               = useState("");
-  const [openToRemote, setOpenToRemote]       = useState(false);
+
+  // — search & match criteria
+  const [currentPosition, setCurrentPosition]   = useState("");
+  const [careerLevels, setCareerLevels]         = useState<string[]>([]);
+  const [targetRoles, setTargetRoles]           = useState<string[]>([]);
+  const [locationCountry, setLocationCountry]   = useState("");
+  const [locationState, setLocationState]       = useState("");
+  const [locationCity, setLocationCity]         = useState("");
+  const [location, setLocation]                 = useState("");  // legacy text field
+  const [workMode, setWorkMode]                 = useState<string[]>([]);
+  const [jobType, setJobType]                   = useState<string[]>([]);
+  const [salaryMin, setSalaryMin]               = useState<string>("");
+  const [salaryMax, setSalaryMax]               = useState<string>("");
+  const [minFitScore, setMinFitScore]           = useState(30);
+  const [searchMode, setSearchMode]             = useState("balanced");
 
   // — rich resume sections
-  const [workExp, setWorkExp]             = useState<WorkExp[]>([]);
-  const [education, setEducation]         = useState<Edu[]>([]);
+  const [workExp, setWorkExp]               = useState<WorkExp[]>([]);
+  const [education, setEducation]           = useState<Edu[]>([]);
   const [certifications, setCertifications] = useState<string[]>([]);
+  const [portfolioItems, setPortfolioItems] = useState<{title:string;url:string;desc:string}[]>([]);
 
-  const [portfolioItems, setPortfolioItems]   = useState<{title:string;url:string;desc:string}[]>([]);
-  const [cycleId, setCycleId]                 = useState<string | null>(null);
-  const [userId, setUserId]                   = useState<string | null>(null);
+  // — ui state
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving]                 = useState(false);
   const [profileMsg, setProfileMsg]         = useState<Msg | null>(null);
@@ -154,7 +236,7 @@ export default function CareerProfilePage() {
   const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load profile
+  // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
       try {
@@ -162,25 +244,34 @@ export default function CareerProfilePage() {
         const u = data.user;
         if (!u) return;
         setUserId(u.id);
+        setUserEmail(u.email ?? "");
         const cycle = await getActiveCycle(u.id);
         if (cycle?.id) setCycleId(cycle.id);
         const { data: p } = await supabase
           .from("user_profiles")
-          .select("full_name, phone, linkedin_url, summary, current_position, experience_level, target_roles, skills, location, open_to_remote, work_experience, education, certifications, portfolio_items")
+          .select("full_name,phone,linkedin_url,summary,current_position,target_roles,career_levels,skills,location,open_to_remote,work_experience,education,certifications,portfolio_items,work_mode,job_type,salary_min,salary_max,min_fit_score,search_mode,location_country,location_state,location_city")
           .eq("user_id", u.id)
           .maybeSingle();
         if (p) {
           setFullName(p.full_name ?? "");
           setPhone(p.phone ?? "");
           setLinkedinUrl(p.linkedin_url ?? "");
-          if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
           setSummary(p.summary ?? "");
           setCurrentPosition(p.current_position ?? "");
-          setExperienceLevel(p.experience_level ?? "");
           setTargetRoles(p.target_roles ?? []);
           setSkills(p.skills ?? []);
           setLocation(p.location ?? "");
-          setOpenToRemote(p.open_to_remote ?? false);
+          setLocationCountry(p.location_country ?? "");
+          setLocationState(p.location_state ?? "");
+          setLocationCity(p.location_city ?? "");
+          setWorkMode(p.work_mode ?? []);
+          setJobType(p.job_type ?? []);
+          setSalaryMin(p.salary_min != null ? String(p.salary_min) : "");
+          setSalaryMax(p.salary_max != null ? String(p.salary_max) : "");
+          setMinFitScore(p.min_fit_score ?? 30);
+          setSearchMode(p.search_mode ?? "balanced");
+          setCareerLevels(p.career_levels ?? []);
+          if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
           setWorkExp((p.work_experience as WorkExp[]) ?? []);
           setEducation((p.education as Edu[]) ?? []);
           setCertifications(p.certifications ?? []);
@@ -198,7 +289,10 @@ export default function CareerProfilePage() {
   }, []);
   useEffect(() => { void loadVersions(); }, [loadVersions]);
 
-  // Save profile
+  // ── Completeness ─────────────────────────────────────────────────────────
+  const completeness = computeCompleteness({ fullName, summary, skills, workExp, education, certifications, location: location || locationCity, targetRoles, versions });
+
+  // ── Save profile ─────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) return;
@@ -206,31 +300,37 @@ export default function CareerProfilePage() {
     try {
       const { error } = await supabase.from("user_profiles").upsert(
         {
-          user_id: userId,
-          full_name: fullName.trim() || null,
-          phone: phone.trim() || null,
-          linkedin_url: linkedinUrl.trim() || null,
-          summary: summary.trim() || null,
+          user_id:          userId,
+          full_name:        fullName.trim() || null,
+          phone:            phone.trim() || null,
+          linkedin_url:     linkedinUrl.trim() || null,
+          summary:          summary.trim() || null,
           current_position: currentPosition.trim() || null,
-          experience_level: experienceLevel || null,
-          target_roles: targetRoles,
+          target_roles:     targetRoles,
           skills,
-          location: location.trim() || null,
-          open_to_remote: openToRemote,
-          work_experience: workExp,
-          portfolio_items: portfolioItems,
+          location:         location.trim() || locationCity.trim() || null,
+          location_country: locationCountry || null,
+          location_state:   locationState.trim() || null,
+          location_city:    locationCity.trim() || null,
+          work_mode:        workMode,
+          job_type:         jobType,
+          salary_min:       salaryMin ? parseInt(salaryMin, 10) : null,
+          salary_max:       salaryMax ? parseInt(salaryMax, 10) : null,
+          min_fit_score:    minFitScore,
+          search_mode:      searchMode,
+          career_levels:    careerLevels,
+          work_experience:  workExp,
+          portfolio_items:  portfolioItems,
           education,
           certifications,
-          updated_at: new Date().toISOString(),
+          updated_at:       new Date().toISOString(),
         },
         { onConflict: "user_id" },
       );
       if (error) throw new Error(error.message);
       setProfileMsg({ type: "success", text: "Profile saved." });
-
-      // Trigger Evaluate AI stage if an active cycle exists
       if (userId && cycleId) {
-        void advanceStage(userId, cycleId, "evaluate").catch(() => {/* non-blocking */});
+        void advanceStage(userId, cycleId, "evaluate").catch(() => {});
       }
     } catch (err) {
       setProfileMsg({ type: "error", text: (err as Error).message });
@@ -239,7 +339,7 @@ export default function CareerProfilePage() {
     }
   }
 
-  // File handling
+  // ── File handling ─────────────────────────────────────────────────────────
   const handleFile = useCallback((file: File) => {
     setUploadedFile(file); setParseMsg(null); setPendingText(null); setPendingParsed(null);
   }, []);
@@ -261,23 +361,22 @@ export default function CareerProfilePage() {
     }
   }
 
-  async function handleVaultSave(name: string, jobType: string) {
+  async function handleVaultSave(name: string, jobTypeVal: string) {
     if (!pendingText) return;
     setVaultSaving(true);
     try {
-      await saveResumeVersion({ versionName: name, resumeText: pendingText, jobType: jobType || undefined, parsedData: pendingParsed ?? undefined });
+      await saveResumeVersion({ versionName: name, resumeText: pendingText, jobType: jobTypeVal || undefined, parsedData: pendingParsed ?? undefined });
 
-      // Auto-fill from parsed — only blank fields overwritten
       if (pendingParsed) {
         const p = pendingParsed;
-        if (!fullName.trim() && p.contact.name)         setFullName(p.contact.name);
-        if (!phone.trim() && p.contact.phone)            setPhone(p.contact.phone);
-        if (!location.trim() && p.contact.location)      setLocation(p.contact.location);
-        if (!linkedinUrl.trim() && p.contact.linkedin)   setLinkedinUrl(p.contact.linkedin);
-        if (!summary.trim() && p.summary)                setSummary(p.summary);
-        if (!currentPosition.trim() && p.experience[0]) setCurrentPosition(p.experience[0].title);
+        if (!fullName.trim() && p.contact.name)          setFullName(p.contact.name);
+        if (!phone.trim() && p.contact.phone)             setPhone(p.contact.phone);
+        if (!linkedinUrl.trim() && p.contact.linkedin)    setLinkedinUrl(p.contact.linkedin);
+        if (!locationCity.trim() && p.contact.location)   setLocationCity(p.contact.location);
+        if (!location.trim() && p.contact.location)       setLocation(p.contact.location);
+        if (!summary.trim() && p.summary)                 setSummary(p.summary);
+        if (!currentPosition.trim() && p.experience[0])  setCurrentPosition(p.experience[0].title);
 
-        // Skills — merge, deduplicate
         if (p.skills.length > 0) {
           setSkills(prev => {
             const existing = new Set(prev.map(s => s.toLowerCase()));
@@ -285,7 +384,6 @@ export default function CareerProfilePage() {
           });
         }
 
-        // Work experience — fill if empty
         if (workExp.length === 0 && p.experience.length > 0) {
           setWorkExp(p.experience.map(e => ({
             title:       e.title,
@@ -296,12 +394,10 @@ export default function CareerProfilePage() {
           })));
         }
 
-        // Education — fill if empty
         if (education.length === 0 && p.education.length > 0) {
           setEducation(p.education.map(e => ({ degree: e.degree, institution: e.school, year: e.year })));
         }
 
-        // Certifications — merge
         if (p.certifications.length > 0) {
           setCertifications(prev => {
             const existing = new Set(prev.map(c => c.toLowerCase()));
@@ -311,7 +407,7 @@ export default function CareerProfilePage() {
       }
 
       setShowSaveModal(false); setUploadedFile(null); setPendingText(null); setPendingParsed(null);
-      setParseMsg({ type: "success", text: 'Resume saved. Profile pre-filled — review and click "Save profile".' });
+      setParseMsg({ type: "success", text: 'Resume saved. Profile pre-filled — review and click "Save Profile".' });
       await loadVersions();
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message }); setShowSaveModal(false);
@@ -325,13 +421,10 @@ export default function CareerProfilePage() {
     catch (e) { console.error("Delete failed", e); }
   }
 
-  // Work experience helpers
   function updateExp(i: number, field: keyof WorkExp, value: string) {
     setWorkExp(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
   }
   function removeExp(i: number) { setWorkExp(prev => prev.filter((_, idx) => idx !== i)); }
-
-  // Education helpers
   function updateEdu(i: number, field: keyof Edu, value: string) {
     setEducation(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
   }
@@ -346,10 +439,37 @@ export default function CareerProfilePage() {
   return (
     <>
       <form onSubmit={e => void handleSaveProfile(e)}>
+        {/* ── Page header with completeness ──────────────────────────── */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Profile Completeness</span>
+              <span className="text-sm font-semibold text-blue-600">{completeness}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                style={{ width: `${completeness}%` }}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 sm:ml-6">
+            <button type="submit" disabled={saving}
+              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {saving ? "Saving…" : "Save Profile"}
+            </button>
+            {profileMsg && (
+              <span className={`text-sm ${profileMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                {profileMsg.type === "success" ? "✓ " : "⚠ "}{profileMsg.text}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="space-y-8">
 
-          {/* ── Resume Vault ───────────────────────────────────────── */}
-          <Section title="Resume Vault" subtitle="Upload PDF, Word, or TXT — auto-fills every section below.">
+          {/* ── Resume Vault ─────────────────────────────────────────── */}
+          <Section title="Import from Resume" subtitle="Upload PDF, Word, or TXT — auto-fills every section below.">
             <div
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
@@ -375,7 +495,7 @@ export default function CareerProfilePage() {
             {uploadedFile && (
               <button type="button" onClick={() => void handleUploadAndSave()} disabled={parsing}
                 className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                {parsing ? "Parsing…" : "💾 Parse & Save to Vault"}
+                {parsing ? "Parsing…" : "Upload Resume"}
               </button>
             )}
 
@@ -388,7 +508,8 @@ export default function CareerProfilePage() {
             {versionsLoaded && (
               <div>
                 <p className="mb-2 text-sm font-medium text-gray-700">
-                  Saved versions{versions.length > 0 && <span className="ml-1.5 text-xs font-normal text-gray-400">({versions.length})</span>}
+                  Resume Versions{versions.length > 0 && <span className="ml-1.5 text-xs font-normal text-gray-400">({versions.length})</span>}
+                  <span className="ml-2 text-xs text-gray-400">Create different versions tailored for different job types.</span>
                 </p>
                 {versions.length === 0
                   ? <p className="text-sm text-gray-400">No saved versions yet.</p>
@@ -415,7 +536,7 @@ export default function CareerProfilePage() {
             )}
           </Section>
 
-          {/* ── Personal Information ────────────────────────────────── */}
+          {/* ── Personal Information ──────────────────────────────────── */}
           <Section title="Personal Information" subtitle="Auto-filled from your resume — review and update as needed.">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -423,29 +544,147 @@ export default function CareerProfilePage() {
                 <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Doe" className={inputCls} />
               </div>
               <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" value={userEmail} readOnly
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+                  title="Email cannot be changed here. Contact support if needed." />
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555-123-4567" className={inputCls} />
               </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
-              <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://www.linkedin.com/in/your-profile" className={inputCls} />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
+                <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://www.linkedin.com/in/your-profile" className={inputCls} />
+              </div>
             </div>
           </Section>
 
-          {/* ── Professional Summary ────────────────────────────────── */}
+          {/* ── Professional Summary ──────────────────────────────────── */}
           <Section title="Professional Summary">
             <textarea value={summary} onChange={e => setSummary(e.target.value)} rows={4}
               placeholder="Brief overview of your background and what you bring to the table…"
               className={inputCls + " resize-none"} />
           </Section>
 
-          {/* ── Skills ─────────────────────────────────────────────── */}
+          {/* ── Skills ───────────────────────────────────────────────── */}
           <Section title="Skills" subtitle="Press Enter or comma after each skill.">
             <TagInput tags={skills} onChange={setSkills} placeholder="e.g. Python, Product Strategy, SQL…" />
           </Section>
 
-          {/* ── Work Experience ─────────────────────────────────────── */}
+          {/* ── Search & Match Criteria ───────────────────────────────── */}
+          <Section title="Search & Match Criteria" subtitle="Define what jobs you're looking for.">
+
+            {/* Target Job Titles */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Target Job Titles</label>
+              <TagInput tags={targetRoles} onChange={setTargetRoles} placeholder="e.g. VP of Product, Director of Engineering…" />
+              <p className="mt-1 text-xs text-gray-400">Press Enter or comma after each title.</p>
+            </div>
+
+            {/* Current Position */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Current Position</label>
+                <input type="text" value={currentPosition} onChange={e => setCurrentPosition(e.target.value)} placeholder="e.g. Senior Product Manager" className={inputCls} />
+              </div>
+            </div>
+
+            {/* Career Level */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Career Level <span className="text-xs font-normal text-gray-400">(select multiple)</span></label>
+              <CheckboxGroup options={CAREER_LEVELS} selected={careerLevels} onChange={setCareerLevels} />
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Location</label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">Country</label>
+                  <select value={locationCountry} onChange={e => setLocationCountry(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">Select country</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">State / Province</label>
+                  <input type="text" value={locationState} onChange={e => setLocationState(e.target.value)} placeholder="e.g. California" className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">City</label>
+                  <input type="text" value={locationCity} onChange={e => setLocationCity(e.target.value)} placeholder="e.g. San Francisco" className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Work Mode */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Work Mode</label>
+              <CheckboxGroup options={WORK_MODES} selected={workMode} onChange={setWorkMode} />
+            </div>
+
+            {/* Job Type */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Job Type</label>
+              <CheckboxGroup options={JOB_TYPES} selected={jobType} onChange={setJobType} />
+            </div>
+
+            {/* Salary Range */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Salary Range</label>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-gray-500">Minimum</label>
+                  <input type="number" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} placeholder="e.g. 80000" className={inputCls} />
+                </div>
+                <div className="mt-4 text-gray-400">—</div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-gray-500">Maximum</label>
+                  <input type="number" value={salaryMax} onChange={e => setSalaryMax(e.target.value)} placeholder="e.g. 150000" className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Min Fit Score */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Minimum Fit Score</label>
+                <span className="text-sm font-semibold text-blue-600">{minFitScore}%</span>
+              </div>
+              <input type="range" min={0} max={100} step={5} value={minFitScore} onChange={e => setMinFitScore(Number(e.target.value))}
+                className="w-full accent-blue-600" />
+              <div className="mt-1 flex justify-between text-xs text-gray-400">
+                <span>More Jobs (0%)</span>
+                <span>Higher Quality (100%)</span>
+              </div>
+            </div>
+
+            {/* Search Mode */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Search Mode</label>
+              <div className="flex gap-3">
+                {[
+                  { value: "volume",   label: "Volume" },
+                  { value: "balanced", label: "Balanced" },
+                  { value: "quality",  label: "Quality" },
+                ].map(m => (
+                  <button key={m.value} type="button" onClick={() => setSearchMode(m.value)}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                      searchMode === m.value
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600"
+                    }`}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </Section>
+
+          {/* ── Work Experience ───────────────────────────────────────── */}
           <Section title="Work Experience" subtitle="Most recent first. Auto-filled from your resume.">
             <div className="space-y-6">
               {workExp.map((e, i) => (
@@ -484,7 +723,7 @@ export default function CareerProfilePage() {
             </div>
           </Section>
 
-          {/* ── Education ───────────────────────────────────────────── */}
+          {/* ── Education ─────────────────────────────────────────────── */}
           <Section title="Education" subtitle="Auto-filled from your resume.">
             <div className="space-y-4">
               {education.map((e, i) => (
@@ -514,53 +753,16 @@ export default function CareerProfilePage() {
             </div>
           </Section>
 
-          {/* ── Certifications ──────────────────────────────────────── */}
+          {/* ── Certifications ────────────────────────────────────────── */}
           <Section title="Certifications" subtitle="Press Enter or comma after each certification.">
             <TagInput tags={certifications} onChange={setCertifications} placeholder="e.g. AWS Solutions Architect, PMP, CISSP…" />
           </Section>
 
-          {/* ── Where you are ───────────────────────────────────────── */}
-          <Section title="Where you are" subtitle="Your current role and experience level. Used to calibrate advice and match scores.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Current Position</label>
-                <input type="text" value={currentPosition} onChange={e => setCurrentPosition(e.target.value)} placeholder="e.g. Senior Product Manager" className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Experience Level</label>
-                <select value={experienceLevel} onChange={e => setExperienceLevel(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                  <option value="">Select level</option>
-                  {EXPERIENCE_LEVELS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">Target Roles</label>
-              <TagInput tags={targetRoles} onChange={setTargetRoles} placeholder="e.g. VP of Product, Director of Engineering…" />
-              <p className="mt-1 text-xs text-gray-400">Press Enter or comma after each role</p>
-            </div>
-          </Section>
-
-          {/* ── Location & work style ───────────────────────────────── */}
-          <Section title="Location &amp; Work Style" subtitle="Helps surface the right opportunities for your situation.">
-            <div className="max-w-sm">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
-              <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                placeholder="e.g. New York, NY · San Francisco Bay Area" className={inputCls} />
-            </div>
-            <label className="flex cursor-pointer items-center gap-3">
-              <div className="relative">
-                <input type="checkbox" checked={openToRemote} onChange={e => setOpenToRemote(e.target.checked)} className="peer sr-only" />
-                <div className="h-5 w-9 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-600" />
-                <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Open to remote opportunities</span>
-            </label>
-          </Section>
-
-          {/* ── Portfolio ──────────────────────────────────────────── */}
+          {/* ── Portfolio ─────────────────────────────────────────────── */}
           <Section title="Portfolio" subtitle="Showcase projects, achievements, or case studies.">
+            {portfolioItems.length === 0 && (
+              <p className="text-sm text-gray-400">No portfolio items yet. Add projects, achievements, or case studies to showcase your work.</p>
+            )}
             {portfolioItems.map((item, i) => (
               <div key={i} className="flex gap-3 items-start mb-3">
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -579,10 +781,10 @@ export default function CareerProfilePage() {
               className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium">+ Add Item</button>
           </Section>
 
-          {/* ── Save ────────────────────────────────────────────────── */}
+          {/* ── Save (bottom) ─────────────────────────────────────────── */}
           <div className="flex items-center gap-4 pb-8">
             <button type="submit" disabled={saving}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
               {saving ? "Saving…" : "Save Profile"}
             </button>
             {profileMsg && (
@@ -591,17 +793,18 @@ export default function CareerProfilePage() {
               </span>
             )}
           </div>
+
         </div>
       </form>
 
-      {/* ── Save modal ──────────────────────────────────────────────── */}
+      {/* ── Save modal ─────────────────────────────────────────────────── */}
       {showSaveModal && (
         <SaveModal onSave={(n, j) => void handleVaultSave(n, j)}
           onClose={() => { setShowSaveModal(false); setPendingText(null); setPendingParsed(null); }}
           saving={vaultSaving} />
       )}
 
-      {/* ── View version overlay ──────────────────────────────────── */}
+      {/* ── View version overlay ──────────────────────────────────────── */}
       {viewingVersion && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
