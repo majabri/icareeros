@@ -32,7 +32,7 @@ const ICONS = {
 const NAV = [
   { href: "/dashboard",    label: "Career OS",      icon: "dashboard"   },
   { href: "/mycareer",      label: "Career Profile", icon: "profile"     },
-  { href: "/resume",       label: "Fit Check",      icon: "fitcheck"    },
+  { href: "/resume",       label: "Resume Advisor", icon: "fitcheck"    },
   { href: "/jobs",         label: "Opportunities",  icon: "jobs"        },
   { href: "/auto-apply",   label: "Autopilot",      icon: "autopilot"   },
   { href: "/applications", label: "Pipeline",       icon: "pipeline"    },

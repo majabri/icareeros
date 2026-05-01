@@ -1,5 +1,5 @@
 /**
- * /resume — Fit Check
+ * /resume — Resume Advisor
  * Upload or pick a saved resume, paste or type a job description,
  * and get an AI-powered fit assessment with actionable recommendations.
  */
@@ -77,7 +77,7 @@ function downloadTxt(filename: string, content: string) {
 type ResumeSource = "upload" | "vault";
 type JobSource    = "paste" | "url";
 
-export default function FitCheckPage() {
+export default function ResumeAdvisorPage() {
   // ── Resume source ─────────────────────────────────────────────────
   const [resumeSource, setResumeSource] = useState<ResumeSource>("upload");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -206,9 +206,9 @@ export default function FitCheckPage() {
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">🎯 Fit Check</h1>
+          <h1 className="text-2xl font-bold text-gray-900">🎯 Resume Advisor</h1>
           <p className="mt-1 text-sm text-gray-500">
-            See how well your resume matches a job — and get AI coaching to close the gap.
+            Upload your resume, paste a job description, and get an instant AI-powered fit score with coaching to close the gap.
           </p>
         </div>
 
@@ -362,7 +362,7 @@ export default function FitCheckPage() {
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 Analyzing fit…
               </span>
-            ) : "🎯 Check Fit"}
+            ) : "🎯 Analyze Resume"}
           </button>
 
           {/* ── Error ─────────────────────────────────────────────── */}
