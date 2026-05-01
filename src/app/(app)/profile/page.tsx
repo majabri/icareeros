@@ -1,3 +1,5 @@
+"use client"
+
 /**
  * /settings/profile — Career Profile
  * Matches the azjobs reference layout:
@@ -169,7 +171,7 @@ export default function CareerProfilePage() {
           setPhone(p.phone ?? "");
           setLinkedinUrl(p.linkedin_url ?? "");
           if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
-          if (authData?.user?.id) setReferralLink(\`https://icareeros.com/?ref=\${authData.user.id.slice(0,8)}\`);
+          setReferralLink(`https://icareeros.com/?ref=${u.id.slice(0,8)}`);
           setSummary(p.summary ?? "");
           setCurrentPosition(p.current_position ?? "");
           setExperienceLevel(p.experience_level ?? "");
