@@ -57,7 +57,7 @@ describe("AI route detection", () => {
 });
 
 describe("Protected routes", () => {
-  const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/interview", "/resume", "/offers", "/support", "/recruiter"];
+  const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resume", "/offers", "/support", "/recruiter"];
   const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
   const isProtected = (p: string) => PROTECTED.some((r) => p.startsWith(r));

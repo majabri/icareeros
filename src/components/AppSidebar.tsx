@@ -31,7 +31,7 @@ const ICONS = {
 
 const NAV = [
   { href: "/dashboard",    label: "Career OS",      icon: "dashboard"   },
-  { href: "/profile",      label: "Career Profile", icon: "profile"     },
+  { href: "/mycareer",      label: "Career Profile", icon: "profile"     },
   { href: "/resume",       label: "Fit Check",      icon: "fitcheck"    },
   { href: "/jobs",         label: "Opportunities",  icon: "jobs"        },
   { href: "/auto-apply",   label: "Autopilot",      icon: "autopilot"   },

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
-const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/interview", "/resume", "/offers", "/support", "/recruiter"];
+const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resume", "/offers", "/support", "/recruiter"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
 // AI-heavy routes get a stricter per-user rate limit
