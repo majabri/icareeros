@@ -261,6 +261,16 @@ export default function CareerProfilePage() {
         });
       }
 
+      if (parsed.achievements.length > 0) {
+        setPortfolioItems(prev => {
+          const existingTitles = new Set(prev.map(p => p.title.toLowerCase()));
+          const newItems = parsed.achievements
+            .filter(a => !existingTitles.has(a.toLowerCase()))
+            .map(a => ({ title: a, url: "", desc: "" }));
+          return [...prev, ...newItems];
+        });
+      }
+
       setUploadedFile(null);
       setParseMsg({ type: "success", text: `"${versionName}" saved. Profile pre-filled — review and click "Save Profile".` });
       await loadVersions();
@@ -583,9 +593,9 @@ export default function CareerProfilePage() {
           </Section>
 
           {/* ── Portfolio ─────────────────────────────────────────────── */}
-          <Section title="Portfolio" subtitle="Showcase projects, achievements, or case studies.">
+          <Section title="Portfolio & Achievements" subtitle="Showcases achievements and accomplishments from your resume, plus projects and case studies.">
             {portfolioItems.length === 0 && (
-              <p className="text-sm text-gray-400">No portfolio items yet. Add projects, achievements, or case studies to showcase your work.</p>
+              <p className="text-sm text-gray-400">No items yet. Upload a resume to auto-import achievements, or add projects and case studies manually.</p>
             )}
             {portfolioItems.map((item, i) => (
               <div key={i} className="flex gap-3 items-start mb-3">

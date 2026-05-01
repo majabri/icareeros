@@ -45,6 +45,7 @@ export interface ParsedResume {
   education: ParsedEducation[];
   skills: string[];
   certifications: string[];
+  achievements: string[];
 }
 
 // ── Patterns ──────────────────────────────────────────────────────────────────
@@ -75,10 +76,12 @@ const SECTION: Record<string, RegExp> = {
     /^(technical\s+skills|skills(\s+summary)?|skill\s+set|core\s+competencies|key\s+(skills|competencies)|competencies|areas\s+of\s+expertise|technologies(\s+&\s+tools)?|tools(\s+&\s+technologies)?|technical\s+expertise|expertise|relevant\s+skills|languages\s+&\s+tools)\s*:?\s*$/i,
   certifications:
     /^(certifications?(\s+(&|and)\s+(licenses?|awards?))?|licen[cs]es?(\s+&\s+certifications?)?|credentials?|awards?(\s+&\s+certifications?)?|professional\s+(certifications?|development|credentials?)|training(\s+&\s+certifications?)?|accreditations?|continuing\s+education)\s*:?\s*$/i,
-  // "other" catches unrecognised section headers so their content doesn't pollute
-  // skills or other buckets (e.g. "Highlighted Accomplishment")
+  // "achievements" catches accomplishment / achievement sections and maps to portfolio
+  achievements:
+    /^(highlighted\s+accomplishments?|key\s+accomplishments?|accomplishments?|key\s+achievements?|notable\s+achievements?|achievements?(\s+(&|and)\s+awards?)?|awards?(\s+(&|and)\s+achievements?)?|honours?\s+(&|and)\s+awards?|recognition|notable\s+contributions?|impact|results)\s*:?\s*$/i,
+  // "other" catches remaining unrecognised section headers
   other:
-    /^(highlighted\s+accomplishments?|additional\s+information|publications?|presentations?|volunteer(\s+experience)?|projects?|interests?|hobbies|references?|languages?)\s*:?\s*$/i,
+    /^(additional\s+information|publications?|presentations?|volunteer(\s+experience)?|projects?|interests?|hobbies|references?|languages?)\s*:?\s*$/i,
 };
 
 const DEGREE_KEYWORDS = /\b(b\.?s\.?|b\.?a\.?|b\.?eng\.?|b\.?sc\.?|b\.?comm?\.?|m\.?s\.?|m\.?a\.?|m\.?b\.?a\.?|m\.?eng\.?|m\.?sc\.?|ph\.?d\.?|d\.?ba\.?|j\.?d\.?|l\.?l\.?[bm]\.?|bachelor|master(?:s)?|doctor(?:ate)?|associate|diploma|certificate|a\.?s\.?|a\.?a\.?)\b/i;
@@ -193,9 +196,9 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 2. Bucket lines into sections ─────────────────────────────────────────
-  type SectionKey = "header" | "summary" | "experience" | "education" | "skills" | "certifications" | "other";
+  type SectionKey = "header" | "summary" | "experience" | "education" | "skills" | "certifications" | "achievements" | "other";
   const buckets: Record<SectionKey, string[]> = {
-    header: [], summary: [], experience: [], education: [], skills: [], certifications: [], other: [],
+    header: [], summary: [], experience: [], education: [], skills: [], certifications: [], achievements: [], other: [],
   };
   let current: SectionKey = "header";
 
@@ -274,7 +277,20 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     }
   }
 
-  // ── 6. Experience ─────────────────────────────────────────────────────────
+  // ── 6. Achievements / Accomplishments → portfolio items ─────────────────────
+  const achieveSet = new Set<string>();
+  const achievements: string[] = [];
+  for (const rawLine of buckets.achievements) {
+    const line = isBullet(rawLine) ? stripBullet(rawLine) : rawLine.trim();
+    if (!line || line.length < 5) continue;
+    const key = line.toLowerCase();
+    if (!achieveSet.has(key)) {
+      achieveSet.add(key);
+      achievements.push(line);
+    }
+  }
+
+  // ── 7. Experience ─────────────────────────────────────────────────────────
   const experience: ParsedExperience[] = [];
   const expLines = buckets.experience.map((l: string) => l.trim());
 
@@ -469,5 +485,6 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     education,
     skills,
     certifications,
+    achievements,
   };
 }
