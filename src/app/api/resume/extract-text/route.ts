@@ -1,21 +1,27 @@
 /**
  * POST /api/resume/extract-text
  * Pure text extraction — no AI. Accepts FormData { file }.
- * Supports PDF (pdf-parse), Word (.docx only), and plain text.
+ * Supports PDF (pdf-parse), Word (.docx via mammoth, .doc via word-extractor),
+ * and plain text.
  * Returns { text: string }.
  *
- * v2 — fixes:
- *   • Detects old binary .doc format (OLE2 magic bytes) and returns a clear user error
- *   • Wraps mammoth in try-catch so corrupted DOCX gives a friendly message
+ * v3 — adds:
+ *   • Old binary .doc support via word-extractor (OLE2 Compound Document)
+ *   • Friendly error if mammoth fails on a corrupted .docx
  */
 import { NextRequest, NextResponse } from "next/server";
 import mammoth from "mammoth";
 
-function isWord(type: string, name: string) {
+function isDocx(type: string, name: string) {
   return (
     type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    name.toLowerCase().endsWith(".docx")
+  );
+}
+
+function isDoc(type: string, name: string) {
+  return (
     type === "application/msword" ||
-    name.toLowerCase().endsWith(".docx") ||
     name.toLowerCase().endsWith(".doc")
   );
 }
@@ -26,8 +32,7 @@ function isPdf(type: string, name: string) {
 
 /**
  * OLE2 Compound Document magic bytes — the header of old binary .doc files.
- * Mammoth only supports .docx (OOXML) and will throw "Could not find the body element"
- * when handed an OLE2 file, so we detect and reject early.
+ * Used to confirm an uploaded .doc is actually OLE2 and not something else.
  */
 function isOldDocFormat(buf: Buffer): boolean {
   return (
@@ -55,28 +60,17 @@ export async function POST(req: NextRequest) {
     let text = "";
 
     if (isPdf(file.type, file.name)) {
+      // ── PDF ──────────────────────────────────────────────────────────────
       const pdfParse = (await import("pdf-parse")).default;
       const data = await pdfParse(buffer);
       text = data.text;
-    } else if (isWord(file.type, file.name)) {
-      // Detect old binary .doc (OLE2) format — mammoth cannot read these
-      if (isOldDocFormat(buffer)) {
-        return NextResponse.json(
-          {
-            error:
-              "Old .doc format is not supported. Please open the file in Word and save it as .docx (File → Save As → Word Document), then upload again.",
-          },
-          { status: 422 }
-        );
-      }
 
+    } else if (isDocx(file.type, file.name)) {
+      // ── Modern .docx (OOXML) — handled by mammoth ─────────────────────
       try {
         const { value, messages } = await mammoth.extractRawText({ buffer });
         if (messages.length)
-          console.warn(
-            "[extract-text]",
-            messages.map((m) => m.message).join("; ")
-          );
+          console.warn("[extract-text]", messages.map((m) => m.message).join("; "));
         text = value;
       } catch (mammothErr) {
         const detail =
@@ -85,12 +79,59 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Could not read this Word file. If it is a .doc file, please save it as .docx and try again. If it is already a .docx, the file may be corrupted.",
+              "Could not read this .docx file — it may be corrupted. Try re-saving it in Word and uploading again.",
           },
           { status: 422 }
         );
       }
+
+    } else if (isDoc(file.type, file.name)) {
+      // ── Legacy .doc (OLE2 binary) — handled by word-extractor ─────────
+      if (!isOldDocFormat(buffer)) {
+        // File claims to be .doc but doesn't have OLE2 magic bytes —
+        // it might actually be an XML-based .doc (Word 2003 XML). Try mammoth.
+        try {
+          const { value } = await mammoth.extractRawText({ buffer });
+          text = value;
+        } catch {
+          return NextResponse.json(
+            {
+              error:
+                "This .doc file format is not supported. Please open it in Word and save it as .docx, then upload again.",
+            },
+            { status: 422 }
+          );
+        }
+      } else {
+        try {
+          // word-extractor requires a temp file path — write buffer to /tmp
+          const { writeFileSync, unlinkSync } = await import("fs");
+          const { join } = await import("path");
+          const tmpPath = join("/tmp", `doc_${Date.now()}_${Math.random().toString(36).slice(2)}.doc`);
+          writeFileSync(tmpPath, buffer);
+
+          const WordExtractor = (await import("word-extractor")).default;
+          const extractor = new WordExtractor();
+          const doc = await extractor.extract(tmpPath);
+          text = doc.getBody();
+
+          // Clean up temp file
+          try { unlinkSync(tmpPath); } catch { /* ignore */ }
+        } catch (docErr) {
+          const detail = docErr instanceof Error ? docErr.message : "unknown error";
+          console.error("[extract-text] word-extractor failed:", detail);
+          return NextResponse.json(
+            {
+              error:
+                "Could not read this .doc file. Please open it in Word and save it as .docx, then upload again.",
+            },
+            { status: 422 }
+          );
+        }
+      }
+
     } else {
+      // ── Plain text / fallback ─────────────────────────────────────────
       text = buffer.toString("utf-8");
     }
 

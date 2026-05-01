@@ -254,7 +254,7 @@ export default function ResumeAdvisorPage() {
                 ) : (
                   <>
                     <p className="font-medium text-gray-700">Drop your resume here</p>
-                    <p className="mt-1 text-xs text-gray-400">PDF, Word (.docx), or TXT · click to browse</p>
+                    <p className="mt-1 text-xs text-gray-400">PDF, Word (.doc, .docx), or TXT · click to browse</p>
                   </>
                 )}
                 <input

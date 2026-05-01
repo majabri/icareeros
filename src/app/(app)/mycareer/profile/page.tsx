@@ -422,7 +422,7 @@ export default function CareerProfilePage() {
                 ? <p className="font-medium text-gray-800">{uploadedFile.name}</p>
                 : <>
                     <p className="text-sm font-medium text-gray-700">Drop resume here or click to browse</p>
-                    <p className="mt-1 text-xs text-gray-400">PDF · Word (.docx) · TXT</p>
+                    <p className="mt-1 text-xs text-gray-400">PDF · Word (.doc, .docx) · TXT</p>
                   </>}
               <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
