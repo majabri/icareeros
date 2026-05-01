@@ -76,34 +76,6 @@ function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (
   );
 }
 
-// ── SaveModal ─────────────────────────────────────────────────────────────────
-function SaveModal({ onSave, onClose, saving }: { onSave: (name: string, jobType: string) => void; onClose: () => void; saving: boolean }) {
-  const [name, setName]         = useState(`Resume ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
-  const [jobTypeVal, setJobTypeVal] = useState("");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-        <h3 className="mb-4 text-lg font-bold text-gray-900">Save Resume Version</h3>
-        <label className="mb-1 block text-sm font-medium text-gray-700">Version name</label>
-        <input type="text" value={name} onChange={e => setName(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          placeholder="e.g. Software Engineer — Google" />
-        <label className="mb-1 block text-sm font-medium text-gray-700">Job type <span className="text-gray-400">(optional)</span></label>
-        <input type="text" value={jobTypeVal} onChange={e => setJobTypeVal(e.target.value)}
-          className="mb-6 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          placeholder="e.g. Engineering, Product, Finance" />
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave(name.trim() || "My Resume", jobTypeVal.trim())} disabled={saving}
-            className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Section wrapper ───────────────────────────────────────────────────────────
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -152,11 +124,9 @@ export default function CareerProfilePage() {
   const [dragOver, setDragOver]             = useState(false);
   const [parsing, setParsing]               = useState(false);
   const [parseMsg, setParseMsg]             = useState<Msg | null>(null);
-  const [showSaveModal, setShowSaveModal]   = useState(false);
-  const [pendingText, setPendingText]       = useState<string | null>(null);
-  const [pendingParsed, setPendingParsed]   = useState<ParsedResume | null>(null);
-  const [vaultSaving, setVaultSaving]       = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
+  const [renamingId, setRenamingId]         = useState<string | null>(null);
+  const [renameValue, setRenameValue]       = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing]               = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -240,78 +210,85 @@ export default function CareerProfilePage() {
     }
   }
 
-  // ── File handling ─────────────────────────────────────────────────────────
-  const handleFile = useCallback((file: File) => {
-    setUploadedFile(file); setParseMsg(null); setPendingText(null); setPendingParsed(null);
-  }, []);
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false);
-    const file = e.dataTransfer.files[0]; if (file) handleFile(file);
-  }, [handleFile]);
+  // ── File handling — fully automatic: select/drop → parse → save ───────────
+  // Derives version name from the filename (extension stripped, separators → spaces).
+  function deriveVersionName(file: File): string {
+    return file.name
+      .replace(/\.(pdf|docx?|txt)$/i, "")
+      .replace(/[_.\-]+/g, " ")
+      .trim() || "My Resume";
+  }
 
-  async function handleUploadAndSave() {
-    if (!uploadedFile) return;
-    setParsing(true); setParseMsg(null);
+  const handleFile = useCallback(async (file: File) => {
+    setUploadedFile(file);
+    setParseMsg(null);
+    setParsing(true);
     try {
-      const { rawText, parsed } = await parseResumeFile(uploadedFile);
-      setPendingParsed(parsed); setPendingText(rawText); setShowSaveModal(true);
+      const { rawText, parsed } = await parseResumeFile(file);
+      const versionName = deriveVersionName(file);
+
+      await saveResumeVersion({ versionName, resumeText: rawText, parsedData: parsed });
+
+      // Pre-fill profile fields (only when currently empty)
+      if (!fullName.trim() && parsed.contact.name)       setFullName(parsed.contact.name);
+      if (!phone.trim() && parsed.contact.phone)         setPhone(parsed.contact.phone);
+      if (!linkedinUrl.trim() && parsed.contact.linkedin) setLinkedinUrl(parsed.contact.linkedin);
+      if (!contactEmail.trim() && parsed.contact.email)   setContactEmail(parsed.contact.email);
+      if (!summary.trim() && parsed.summary)             setSummary(parsed.summary);
+
+      if (parsed.skills.length > 0) {
+        setSkills(prev => {
+          const existing = new Set(prev.map(s => s.toLowerCase()));
+          return [...prev, ...parsed.skills.filter(s => !existing.has(s.toLowerCase()))];
+        });
+      }
+      if (workExp.length === 0 && parsed.experience.length > 0) {
+        setWorkExp(parsed.experience.map(ex => ({
+          title:       ex.title,
+          company:     ex.company,
+          startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
+          endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
+          description: ex.bullets.join(" "),
+        })));
+      }
+      if (education.length === 0 && parsed.education.length > 0) {
+        setEducation(parsed.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year })));
+      }
+      if (parsed.certifications.length > 0) {
+        setCertifications(prev => {
+          const existing = new Set(prev.map(c => c.toLowerCase()));
+          return [...prev, ...parsed.certifications.filter(c => !existing.has(c.toLowerCase()))];
+        });
+      }
+
+      setUploadedFile(null);
+      setParseMsg({ type: "success", text: `"${versionName}" saved. Profile pre-filled — review and click "Save Profile".` });
+      await loadVersions();
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
+      setUploadedFile(null);
     } finally {
       setParsing(false);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullName, phone, linkedinUrl, contactEmail, summary, workExp, education, loadVersions]);
 
-  async function handleVaultSave(name: string, jobTypeArg: string) {
-    if (!pendingText) return;
-    setVaultSaving(true);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    const file = e.dataTransfer.files[0]; if (file) void handleFile(file);
+  }, [handleFile]);
+
+  async function handleRenameVersion(id: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed) { setRenamingId(null); return; }
+    // Optimistic update
+    setVersions(vs => vs.map(v => v.id === id ? { ...v, version_name: trimmed } : v));
+    setRenamingId(null);
     try {
-      await saveResumeVersion({ versionName: name, resumeText: pendingText, jobType: jobTypeArg || undefined, parsedData: pendingParsed ?? undefined });
-
-      if (pendingParsed) {
-        const p = pendingParsed;
-        if (!fullName.trim() && p.contact.name)       setFullName(p.contact.name);
-        if (!phone.trim() && p.contact.phone)         setPhone(p.contact.phone);
-        if (!linkedinUrl.trim() && p.contact.linkedin) setLinkedinUrl(p.contact.linkedin);
-        if (!contactEmail.trim() && p.contact.email)   setContactEmail(p.contact.email);
-        if (!summary.trim() && p.summary)             setSummary(p.summary);
-
-        if (p.skills.length > 0) {
-          setSkills(prev => {
-            const existing = new Set(prev.map(s => s.toLowerCase()));
-            return [...prev, ...p.skills.filter(s => !existing.has(s.toLowerCase()))];
-          });
-        }
-
-        if (workExp.length === 0 && p.experience.length > 0) {
-          setWorkExp(p.experience.map(ex => ({
-            title:       ex.title,
-            company:     ex.company,
-            startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
-            endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
-            description: ex.bullets.join(" "),
-          })));
-        }
-
-        if (education.length === 0 && p.education.length > 0) {
-          setEducation(p.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year })));
-        }
-
-        if (p.certifications.length > 0) {
-          setCertifications(prev => {
-            const existing = new Set(prev.map(c => c.toLowerCase()));
-            return [...prev, ...p.certifications.filter(c => !existing.has(c.toLowerCase()))];
-          });
-        }
-      }
-
-      setShowSaveModal(false); setUploadedFile(null); setPendingText(null); setPendingParsed(null);
-      setParseMsg({ type: "success", text: 'Resume saved. Profile pre-filled — review and click "Save Profile".' });
+      await supabase.from("user_resume_versions").update({ version_name: trimmed }).eq("id", id);
+    } catch {
+      // Revert on failure
       await loadVersions();
-    } catch (err) {
-      setParseMsg({ type: "error", text: (err as Error).message }); setShowSaveModal(false);
-    } finally {
-      setVaultSaving(false);
     }
   }
 
@@ -415,29 +392,27 @@ export default function CareerProfilePage() {
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { if (!parsing) fileInputRef.current?.click(); }}
               className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
                 dragOver ? "border-brand-400 bg-brand-50" :
-                uploadedFile ? "border-emerald-300 bg-emerald-50" :
+                parsing ? "border-brand-300 bg-brand-50/60 cursor-default" :
                 "border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/40"
               }`}
             >
-              <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
-              {uploadedFile
-                ? <p className="font-medium text-gray-800">{uploadedFile.name}</p>
-                : <>
-                    <p className="text-sm font-medium text-gray-700">Drop resume here or click to browse</p>
-                    <p className="mt-1 text-xs text-gray-400">PDF · Word (.doc, .docx) · TXT</p>
-                  </>}
+              <span className="mb-2 text-2xl">{parsing ? "⏳" : "📄"}</span>
+              <p className="text-sm font-medium text-gray-700">
+                {parsing ? "Processing…" : "Drop resume here or click to browse"}
+              </p>
+              {!parsing && <p className="mt-1 text-xs text-gray-400">PDF · Word (.doc, .docx) · TXT — auto-imported on drop</p>}
               <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); }} />
             </div>
 
-            {uploadedFile && (
-              <button type="button" onClick={() => void handleUploadAndSave()} disabled={parsing}
-                className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors">
-                {parsing ? "Parsing…" : "Upload Resume"}
-              </button>
+            {parsing && (
+              <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-700">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+                Parsing and saving resume…
+              </div>
             )}
 
             {parseMsg && (
@@ -457,14 +432,36 @@ export default function CareerProfilePage() {
                   : <div className="space-y-2">
                       {versions.map(v => (
                         <div key={v.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{v.version_name}</p>
-                            <p className="text-xs text-gray-400">
+                          <div className="flex-1 min-w-0 mr-3">
+                            {renamingId === v.id ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={renameValue}
+                                onChange={e => setRenameValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter")  void handleRenameVersion(v.id, renameValue);
+                                  if (e.key === "Escape") setRenamingId(null);
+                                }}
+                                onBlur={() => void handleRenameVersion(v.id, renameValue)}
+                                className="w-full rounded border border-brand-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                              />
+                            ) : (
+                              <p
+                                className="truncate text-sm font-medium text-gray-900 cursor-pointer hover:text-brand-600 group flex items-center gap-1"
+                                onClick={() => { setRenamingId(v.id); setRenameValue(v.version_name); }}
+                                title="Click to rename"
+                              >
+                                {v.version_name}
+                                <span className="opacity-0 group-hover:opacity-100 text-gray-400 text-xs">✎</span>
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-0.5">
                               {v.job_type && <span className="mr-2 text-brand-500">{v.job_type}</span>}
                               {new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 shrink-0">
                             <button type="button" onClick={() => setViewingVersion(v)}
                               className="rounded px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50">View</button>
                             <button type="button" onClick={() => void handleDelete(v.id)}
@@ -638,13 +635,6 @@ export default function CareerProfilePage() {
 
         </div>
       </form>
-
-      {/* ── Save modal ─────────────────────────────────────────────────── */}
-      {showSaveModal && (
-        <SaveModal onSave={(n, j) => void handleVaultSave(n, j)}
-          onClose={() => { setShowSaveModal(false); setPendingText(null); setPendingParsed(null); }}
-          saving={vaultSaving} />
-      )}
 
       {/* ── Clear profile confirmation modal ──────────────────────── */}
       {showClearConfirm && (
