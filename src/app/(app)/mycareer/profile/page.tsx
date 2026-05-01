@@ -156,6 +156,8 @@ export default function CareerProfilePage() {
   const [pendingParsed, setPendingParsed]   = useState<ParsedResume | null>(null);
   const [vaultSaving, setVaultSaving]       = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ResumeVersion | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing]               = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load profile ──────────────────────────────────────────────────────────
@@ -315,6 +317,44 @@ export default function CareerProfilePage() {
       setVersions(vs => vs.filter(v => v.id !== id));
       if (viewingVersion?.id === id) setViewingVersion(null);
     } catch (e) { console.error("Delete failed", e); }
+  }
+
+  async function handleClearProfile() {
+    if (!userId) return;
+    setClearing(true);
+    try {
+      // Delete all resume versions
+      for (const v of versions) {
+        try { await deleteResumeVersion(v.id); } catch { /* best-effort */ }
+      }
+      // Clear all profile fields managed by this page
+      await supabase.from("user_profiles").upsert(
+        {
+          user_id:         userId,
+          full_name:       null,
+          phone:           null,
+          linkedin_url:    null,
+          summary:         null,
+          skills:          [],
+          work_experience: [],
+          education:       [],
+          certifications:  [],
+          portfolio_items: [],
+          updated_at:      new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+      // Reset local state
+      setFullName(""); setPhone(""); setLinkedinUrl(""); setSummary("");
+      setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
+      setPortfolioItems([]); setVersions([]);
+      setProfileMsg({ type: "success", text: "Profile cleared." });
+    } catch (err) {
+      setProfileMsg({ type: "error", text: (err as Error).message });
+    } finally {
+      setClearing(false);
+      setShowClearConfirm(false);
+    }
   }
 
   function updateExp(i: number, field: keyof WorkExp, value: string) {
@@ -565,6 +605,21 @@ export default function CareerProfilePage() {
               className="mt-1 text-sm text-brand-600 hover:text-brand-700 font-medium">+ Add Item</button>
           </Section>
 
+          {/* ── Danger Zone ──────────────────────────────────────────── */}
+          <section className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-red-700">Danger Zone</h2>
+            <p className="mt-1 text-sm text-red-500">
+              Permanently delete all profile data on this page — resume versions, work experience, education, skills, and personal info. This cannot be undone.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="mt-4 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors"
+            >
+              Clear Entire Profile
+            </button>
+          </section>
+
           {/* ── Save (bottom) ─────────────────────────────────────────── */}
           <div className="flex items-center gap-4 pb-8">
             <button type="submit" disabled={saving}
@@ -586,6 +641,33 @@ export default function CareerProfilePage() {
         <SaveModal onSave={(n, j) => void handleVaultSave(n, j)}
           onClose={() => { setShowSaveModal(false); setPendingText(null); setPendingParsed(null); }}
           saving={vaultSaving} />
+      )}
+
+      {/* ── Clear profile confirmation modal ──────────────────────── */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-2 text-lg font-bold text-gray-900">Clear entire profile?</h3>
+            <p className="mb-6 text-sm text-gray-500">
+              This will permanently delete all resume versions, work experience, education, skills, certifications, portfolio items, and personal info from your profile. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleClearProfile()}
+                disabled={clearing}
+                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {clearing ? "Clearing…" : "Yes, clear everything"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── View version overlay ──────────────────────────────────────── */}
