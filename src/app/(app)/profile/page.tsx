@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * /settings/profile — Career Profile
+ * /profile — Career Profile
  * Matches the azjobs reference layout:
  *   Resume Vault → Personal Info → Summary → Skills →
  *   Work Experience → Education → Certifications →

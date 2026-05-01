@@ -278,7 +278,7 @@ export default function FitCheckPage() {
                   <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
                     <p className="text-sm text-gray-500">No saved versions yet.</p>
                     <p className="mt-1 text-xs text-gray-400">
-                      Go to <a href="/settings/profile" className="text-blue-500 underline">My Career</a> to upload and save a resume version.
+                      Go to <a href="/profile" className="text-blue-500 underline">My Career</a> to upload and save a resume version.
                     </p>
                   </div>
                 ) : (
