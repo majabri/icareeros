@@ -3,7 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
 const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resume", "/offers", "/support", "/recruiter"];
+const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
+
+// Accounts that belong to the admin panel only — never the career OS
+const ADMIN_EMAILS = ["azadmin@icareeros.com"];
 
 // AI-heavy routes get a stricter per-user rate limit
 const AI_ROUTES = [
@@ -103,17 +107,32 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // ── Auth guards ────────────────────────────────────────────────────────────
+  const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
+  const isAdminProtected = ADMIN_PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthRoute = AUTH_ONLY.some((p) => pathname.startsWith(p));
 
-  if (isProtected && !user) {
+  // Unauthenticated users hitting protected routes → login
+  if ((isProtected || isAdminProtected) && !user) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthRoute && user) {
+  // Admin accounts must stay in the admin panel — never the career OS
+  if (isProtected && user && isAdmin) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
+  // Non-admin accounts cannot access admin routes
+  if (isAdminProtected && user && !isAdmin) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // After login: admins → /admin, everyone else → /dashboard
+  if (isAuthRoute && user) {
+    const destination = isAdmin ? "/admin" : "/dashboard";
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   // ── Rate limiting (API routes only) ───────────────────────────────────────
