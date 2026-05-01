@@ -118,6 +118,9 @@ export function CareerOsDashboard() {
       }
 
       setLoading(false);
+    }).catch(() => {
+      // Fail silently — show empty dashboard rather than crashing
+      setLoading(false);
     });
   }, []);
 

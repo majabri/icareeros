@@ -168,6 +168,9 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
       // Mobile: open current stage by default
       setMobileOpen_stages(new Set([stage]));
       setStageLoaded(true);
+    }).catch(() => {
+      // Fail silently — sidebar still renders with default stage
+      setStageLoaded(true);
     });
   }, []);
 
@@ -371,7 +374,7 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
                         role="status"
                         aria-live="polite"
                         className="absolute left-0 right-0 top-full mt-1 mx-1 z-10 flex items-center gap-1.5 rounded-md bg-gray-800 px-2.5 py-1.5 text-[11px] text-white shadow-lg"
-                        style={{ animation: reducedMotion ? "none" : "fadeIn 0.15s ease" }}
+                        style={{ animation: reducedMotion ? "none" : "fadeInDown 0.15s ease" }}
                       >
                         <Ic d={ICONS.lock} size={11} />
                         Complete Stage {STAGE_ORDER.indexOf(section.stage)} ({prevStageLabel}) to unlock
@@ -571,10 +574,6 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
         </div>
       )}
 
-      {/* Keyframe for lock-notice fade-in */}
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
     </>
   );
 }
