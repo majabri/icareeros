@@ -130,6 +130,7 @@ export default function CareerProfilePage() {
   const [fullName, setFullName]               = useState("");
   const [phone, setPhone]                     = useState("");
   const [linkedinUrl, setLinkedinUrl]         = useState("");
+  const [contactEmail, setContactEmail]       = useState("");
   const [summary, setSummary]                 = useState("");
   const [skills, setSkills]                   = useState<string[]>([]);
 
@@ -173,13 +174,14 @@ export default function CareerProfilePage() {
         if (cycle?.id) setCycleId(cycle.id);
         const { data: p } = await supabase
           .from("user_profiles")
-          .select("full_name,phone,linkedin_url,summary,skills,work_experience,education,certifications,portfolio_items")
+          .select("full_name,phone,linkedin_url,contact_email,summary,skills,work_experience,education,certifications,portfolio_items")
           .eq("user_id", u.id)
           .maybeSingle();
         if (p) {
           setFullName(p.full_name ?? "");
           setPhone(p.phone ?? "");
           setLinkedinUrl(p.linkedin_url ?? "");
+          setContactEmail(p.contact_email ?? "");
           setSummary(p.summary ?? "");
           setSkills(p.skills ?? []);
           if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
@@ -215,6 +217,7 @@ export default function CareerProfilePage() {
           full_name:       fullName.trim() || null,
           phone:           phone.trim() || null,
           linkedin_url:    linkedinUrl.trim() || null,
+          contact_email:   contactEmail.trim() || null,
           summary:         summary.trim() || null,
           skills,
           work_experience: workExp,
@@ -270,6 +273,7 @@ export default function CareerProfilePage() {
         if (!fullName.trim() && p.contact.name)       setFullName(p.contact.name);
         if (!phone.trim() && p.contact.phone)         setPhone(p.contact.phone);
         if (!linkedinUrl.trim() && p.contact.linkedin) setLinkedinUrl(p.contact.linkedin);
+        if (!contactEmail.trim() && p.contact.email)   setContactEmail(p.contact.email);
         if (!summary.trim() && p.summary)             setSummary(p.summary);
 
         if (p.skills.length > 0) {
@@ -334,6 +338,7 @@ export default function CareerProfilePage() {
           full_name:       null,
           phone:           null,
           linkedin_url:    null,
+          contact_email:   null,
           summary:         null,
           skills:          [],
           work_experience: [],
@@ -345,7 +350,7 @@ export default function CareerProfilePage() {
         { onConflict: "user_id" },
       );
       // Reset local state
-      setFullName(""); setPhone(""); setLinkedinUrl(""); setSummary("");
+      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
       setProfileMsg({ type: "success", text: "Profile cleared." });
@@ -480,10 +485,8 @@ export default function CareerProfilePage() {
                 <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Doe" className={inputCls} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-                <input type="email" value={userEmail} readOnly
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
-                  title="Email cannot be changed here. Contact support if needed." />
+                <label className="mb-1 block text-sm font-medium text-gray-700">Email <span className="text-xs font-normal text-gray-400">(from resume)</span></label>
+                <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>

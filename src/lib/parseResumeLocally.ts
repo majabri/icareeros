@@ -55,7 +55,12 @@ const LINKEDIN_RE = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[\w\-%.]+\/?/i
 const YEAR_RE     = /\b(19|20)\d{2}\b/;
 const URL_RE      = /https?:\/\//i;
 
-const DATE_RANGE = /((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?\d{4}\s*[-–—]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|[Pp]resent|[Cc]urrent)/;
+// Extended date range — regex literal covering all common resume date formats.
+// Start: 'Jan 2023' | 'January 2023' | 'Jan. 2023' | '01/2023' | '2023'
+// End:   same + Present | Current | Now | Today (case-insensitive)
+// Separator: hyphen, en-dash, em-dash with optional surrounding whitespace
+const DATE_RANGE =
+  /(?:(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*\.?\s*)?(?:19|20)\d{2}|(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2})\s*[-–—]\s*(?:(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*\.?\s*)?(?:19|20)\d{2}|(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2}|[Pp]resent|[Cc]urrent|[Nn]ow|[Tt]oday)/i;
 
 // Section header regexes — each alternative anchored with ^ and \s*:?\s*$ so a
 // keyword inside ordinary text never falsely switches the bucket.
