@@ -41,7 +41,7 @@ describe("resetUserPlan", () => {
   it("calls revalidatePath on success", async () => {
     const { revalidatePath } = await import("next/cache");
     await resetUserPlan("user-789");
-    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/users");
   });
 
   it("does not call revalidatePath on failure", async () => {

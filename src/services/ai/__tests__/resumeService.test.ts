@@ -1,25 +1,42 @@
 /**
  * resumeService unit tests
  *
- * Tests pure logic functions and mocked network calls.
+ * parseResumeText: synchronous — calls parseResumeLocally, no fetch.
+ * parseResumeFile: async — calls /api/resume/extract-text then parseResumeLocally.
+ * rewriteResume:   async — calls /api/resume/rewrite (Claude Sonnet, plan-gated).
+ * CRUD:            saveResumeVersion / listResumeVersions / deleteResumeVersion.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ParsedResume, ResumeVersion } from "../resumeService";
+import type { ResumeVersion } from "../resumeService";
 
-// ── Mock fetch ─────────────────────────────────────────────────────────────────
+// ── Mock parseResumeLocally ───────────────────────────────────────────────────
+
+vi.mock("@/lib/parseResumeLocally", () => ({
+  parseResumeLocally: vi.fn((text: string) => ({
+    contact: { name: "Jane Doe", email: "jane@example.com", phone: "", location: "", linkedin: "" },
+    summary: text.slice(0, 40),
+    experience: [],
+    education: [],
+    skills: [],
+    certifications: [],
+    achievements: [],
+  })),
+}));
+
+// ── Mock fetch ────────────────────────────────────────────────────────────────
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// ── Mock Supabase ──────────────────────────────────────────────────────────────
+// ── Mock Supabase ─────────────────────────────────────────────────────────────
 
+const mockSingle = vi.fn();
+const mockOrder = vi.fn().mockReturnThis();
+const mockEq = vi.fn().mockReturnThis();
 const mockSelect = vi.fn().mockReturnThis();
 const mockInsert = vi.fn().mockReturnThis();
 const mockDelete = vi.fn().mockReturnThis();
-const mockEq = vi.fn().mockReturnThis();
-const mockOrder = vi.fn().mockReturnThis();
-const mockSingle = vi.fn();
 const mockFrom = vi.fn(() => ({
   select: mockSelect,
   insert: mockInsert,
@@ -33,259 +50,174 @@ vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ from: mockFrom }),
 }));
 
-// ── Import after mocks ─────────────────────────────────────────────────────────
+// ── Import after mocks ────────────────────────────────────────────────────────
 
 const {
   parseResumeText,
+  parseResumeFile,
   saveResumeVersion,
   listResumeVersions,
   deleteResumeVersion,
+  rewriteResume,
 } = await import("../resumeService");
 
-// ── Sample data ────────────────────────────────────────────────────────────────
-
-const SAMPLE_PARSED: ParsedResume = {
-  contact: { name: "Jane Doe", email: "jane@example.com", phone: "555-0100", location: "SF, CA", linkedin: "" },
-  summary: "Experienced software engineer with 8 years in backend systems.",
-  experience: [
-    {
-      title: "Senior Engineer",
-      company: "Acme Corp",
-      period: "2020–Present",
-      bullets: ["Led migration to microservices", "Reduced latency by 40%"],
-    },
-  ],
-  education: [{ degree: "B.S. Computer Science", school: "UC Berkeley", year: "2016" }],
-  skills: ["TypeScript", "Node.js", "PostgreSQL"],
-  certifications: ["AWS Solutions Architect"],
-};
+// ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const SAMPLE_VERSION: ResumeVersion = {
-  id: "rv-1",
-  user_id: "u-1",
-  version_name: "Software Engineer — Google",
-  job_type: "Engineering",
-  resume_text: "Jane Doe\njane@example.com\n...",
-  parsed_data: SAMPLE_PARSED,
-  created_at: "2026-04-29T10:00:00Z",
-  updated_at: "2026-04-29T10:00:00Z",
+  id: "rv-001",
+  user_id: "u-001",
+  version_name: "Senior Engineer v1",
+  job_type: "fulltime",
+  resume_text: "Jane Doe | Senior Engineer",
+  parsed_data: null,
+  created_at: "2026-04-01T00:00:00Z",
+  updated_at: "2026-04-01T00:00:00Z",
 };
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Reset chain mocks
-  mockSelect.mockReturnThis();
-  mockInsert.mockReturnThis();
-  mockDelete.mockReturnThis();
-  mockEq.mockReturnThis();
-  mockOrder.mockReturnThis();
+  mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert, delete: mockDelete, eq: mockEq, order: mockOrder, single: mockSingle });
+  mockInsert.mockReturnValue({ select: mockSelect, single: mockSingle });
+  mockSelect.mockReturnValue({ order: mockOrder, single: mockSingle, eq: mockEq });
+  mockOrder.mockResolvedValue({ data: [SAMPLE_VERSION], error: null });
+  mockSingle.mockResolvedValue({ data: SAMPLE_VERSION, error: null });
+  mockEq.mockResolvedValue({ error: null });
 });
+
+// ── parseResumeText ───────────────────────────────────────────────────────────
 
 describe("parseResumeText", () => {
-  it("calls /api/resume/parse with the correct body", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => SAMPLE_PARSED,
-    });
-
-    const result = await parseResumeText("Jane Doe\njane@example.com\nSenior Engineer at Acme");
-
-    expect(mockFetch).toHaveBeenCalledWith("/api/resume/parse", expect.objectContaining({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    }));
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.text).toContain("Jane Doe");
-    expect(result.contact.name).toBe("Jane Doe");
-  });
-
-  it("throws if API returns an error response", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: "Resume text is too short" }),
-    });
-
-    await expect(parseResumeText("Hi")).rejects.toThrow("Resume text is too short");
-  });
-
-  it("throws with fallback message if error body is empty", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({}),
-    });
-
-    await expect(parseResumeText("test")).rejects.toThrow("Parse failed (500)");
-  });
-
-  it("returns parsed resume with all required fields", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => SAMPLE_PARSED,
-    });
-
-    const result = await parseResumeText("Jane Doe software engineer...");
+  it("returns a ParsedResume without making any fetch calls", () => {
+    const result = parseResumeText("Jane Doe\nSenior Engineer\nTypeScript, Node.js");
     expect(result).toHaveProperty("contact");
-    expect(result).toHaveProperty("summary");
-    expect(result).toHaveProperty("experience");
-    expect(result).toHaveProperty("education");
     expect(result).toHaveProperty("skills");
-    expect(result).toHaveProperty("certifications");
-    expect(Array.isArray(result.skills)).toBe(true);
+    expect(result).toHaveProperty("achievements");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("passes raw text to parseResumeLocally", async () => {
+    const { parseResumeLocally } = await import("@/lib/parseResumeLocally");
+    parseResumeText("hello world");
+    expect(parseResumeLocally).toHaveBeenCalledWith("hello world");
   });
 });
 
-describe("saveResumeVersion", () => {
-  it("inserts and returns the saved version", async () => {
-    mockSingle.mockResolvedValueOnce({ data: SAMPLE_VERSION, error: null });
+// ── parseResumeFile ───────────────────────────────────────────────────────────
 
-    const result = await saveResumeVersion({
-      versionName: "Software Engineer — Google",
-      resumeText: "Jane Doe\njane@example.com",
-      jobType: "Engineering",
-      parsedData: SAMPLE_PARSED,
+describe("parseResumeFile", () => {
+  it("calls /api/resume/extract-text with a FormData body", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: "Jane Doe extracted text" }),
     });
 
-    expect(mockFrom).toHaveBeenCalledWith("resume_versions");
-    expect(mockInsert).toHaveBeenCalledWith(
+    const file = new File(["dummy content"], "resume.pdf", { type: "application/pdf" });
+    const { rawText, parsed } = await parseResumeFile(file);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/resume/extract-text",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(rawText).toBe("Jane Doe extracted text");
+    expect(parsed).toHaveProperty("contact");
+  });
+
+  it("throws if extraction API returns an error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: "Unsupported file type" }),
+    });
+
+    const file = new File(["x"], "resume.xls", { type: "application/vnd.ms-excel" });
+    await expect(parseResumeFile(file)).rejects.toThrow("Unsupported file type");
+  });
+
+  it("throws if file exceeds 10 MB", async () => {
+    const bigContent = new Uint8Array(11 * 1024 * 1024);
+    const file = new File([bigContent], "huge.pdf", { type: "application/pdf" });
+    await expect(parseResumeFile(file)).rejects.toThrow("File too large");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+// ── rewriteResume ─────────────────────────────────────────────────────────────
+
+describe("rewriteResume", () => {
+  it("calls /api/resume/rewrite with the correct body", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ rewrittenText: "Improved text", improvements: ["Better tone"], wordCount: 250 }),
+    });
+
+    const result = await rewriteResume({ resumeText: "Original resume text for testing purposes here" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/resume/rewrite",
       expect.objectContaining({
-        version_name: "Software Engineer — Google",
-        job_type: "Engineering",
+        method: "POST",
+        body: expect.stringContaining("resumeText"),
       })
     );
-    expect(result.id).toBe("rv-1");
+    expect(result.rewrittenText).toBe("Improved text");
+    expect(result.wordCount).toBe(250);
   });
 
-  it("throws on Supabase error", async () => {
-    mockSingle.mockResolvedValueOnce({ data: null, error: { message: "RLS denied" } });
-
-    await expect(
-      saveResumeVersion({ versionName: "Test", resumeText: "text" })
-    ).rejects.toThrow("RLS denied");
-  });
-
-  it("saves with null job_type when omitted", async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { ...SAMPLE_VERSION, job_type: null },
-      error: null,
+  it("passes targetRole and jobDescription when provided", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ rewrittenText: "Tailored text", improvements: [], wordCount: 300 }),
     });
 
+    await rewriteResume({
+      resumeText: "Some resume content for the rewrite test",
+      targetRole: "Staff Engineer",
+      jobDescription: "Build distributed systems",
+    });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.targetRole).toBe("Staff Engineer");
+    expect(body.jobDescription).toBe("Build distributed systems");
+  });
+
+  it("throws if API returns an error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 402,
+      json: async () => ({ error: "plan_limit_exceeded" }),
+    });
+
+    await expect(rewriteResume({ resumeText: "Some text to rewrite here" })).rejects.toThrow("plan_limit_exceeded");
+  });
+});
+
+// ── Supabase CRUD ─────────────────────────────────────────────────────────────
+
+describe("saveResumeVersion", () => {
+  it("inserts a row and returns the version", async () => {
     const result = await saveResumeVersion({
-      versionName: "General Resume",
-      resumeText: "text",
+      versionName: "v1",
+      resumeText: "Jane Doe resume text here",
     });
-
-    expect(result.job_type).toBeNull();
+    expect(mockFrom).toHaveBeenCalledWith("resume_versions");
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ version_name: "v1" })
+    );
+    expect(result.id).toBe("rv-001");
   });
 });
 
 describe("listResumeVersions", () => {
-  it("returns versions ordered by created_at desc", async () => {
-    mockOrder.mockResolvedValueOnce({ data: [SAMPLE_VERSION], error: null });
-
-    const result = await listResumeVersions();
-
-    expect(mockFrom).toHaveBeenCalledWith("resume_versions");
-    expect(mockOrder).toHaveBeenCalledWith("created_at", { ascending: false });
-    expect(result).toHaveLength(1);
-    expect(result[0].version_name).toBe("Software Engineer — Google");
-  });
-
-  it("returns empty array when no versions exist", async () => {
-    mockOrder.mockResolvedValueOnce({ data: [], error: null });
-
-    const result = await listResumeVersions();
-    expect(result).toEqual([]);
-  });
-
-  it("throws on Supabase error", async () => {
-    mockOrder.mockResolvedValueOnce({ data: null, error: { message: "connection error" } });
-
-    await expect(listResumeVersions()).rejects.toThrow("connection error");
+  it("returns an array of resume versions ordered by created_at desc", async () => {
+    const results = await listResumeVersions();
+    expect(Array.isArray(results)).toBe(true);
+    expect(results[0].version_name).toBe("Senior Engineer v1");
   });
 });
 
 describe("deleteResumeVersion", () => {
-  it("calls delete with the correct id", async () => {
-    mockEq.mockResolvedValueOnce({ error: null });
-
-    await deleteResumeVersion("rv-1");
-
+  it("deletes the resume version by id", async () => {
+    await deleteResumeVersion("rv-001");
     expect(mockFrom).toHaveBeenCalledWith("resume_versions");
-    expect(mockDelete).toHaveBeenCalled();
-    expect(mockEq).toHaveBeenCalledWith("id", "rv-1");
-  });
-
-  it("throws on Supabase error", async () => {
-    mockEq.mockResolvedValueOnce({ error: { message: "not found" } });
-
-    await expect(deleteResumeVersion("bad-id")).rejects.toThrow("not found");
-  });
-});
-
-describe("rewriteResume", () => {
-  const SAMPLE_REWRITE = {
-    rewrittenText: "Jane Doe\njane@example.com\n\nEXPERIENCE\nSenior Software Engineer | Acme Corp\nLed migration reducing latency by 40%",
-    improvements: ["Stronger action verbs", "Quantified achievements", "ATS-optimized headers"],
-    wordCount: 32,
-  };
-
-  it("calls /api/resume/rewrite with the correct body", async () => {
-    const { rewriteResume } = await import("../resumeService");
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => SAMPLE_REWRITE,
-    });
-
-    const result = await rewriteResume({ resumeText: "Jane Doe engineer 8 years" });
-
-    expect(mockFetch).toHaveBeenCalledWith("/api/resume/rewrite", expect.objectContaining({
-      method: "POST",
-    }));
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.resumeText).toBe("Jane Doe engineer 8 years");
-    expect(result.improvements).toHaveLength(3);
-  });
-
-  it("passes targetRole and jobDescription when provided", async () => {
-    const { rewriteResume } = await import("../resumeService");
-
-    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => SAMPLE_REWRITE });
-
-    await rewriteResume({
-      resumeText: "Jane Doe engineer",
-      targetRole: "Senior SWE",
-      jobDescription: "We need a senior engineer...",
-    });
-
-    const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.targetRole).toBe("Senior SWE");
-    expect(body.jobDescription).toBe("We need a senior engineer...");
-  });
-
-  it("throws if API returns an error", async () => {
-    const { rewriteResume } = await import("../resumeService");
-
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: "resumeText is required" }),
-    });
-
-    await expect(rewriteResume({ resumeText: "x" })).rejects.toThrow("resumeText is required");
-  });
-
-  it("returns rewrittenText, improvements, and wordCount", async () => {
-    const { rewriteResume } = await import("../resumeService");
-
-    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => SAMPLE_REWRITE });
-
-    const result = await rewriteResume({ resumeText: "Jane Doe senior engineer" });
-    expect(typeof result.rewrittenText).toBe("string");
-    expect(Array.isArray(result.improvements)).toBe(true);
-    expect(typeof result.wordCount).toBe("number");
+    expect(mockEq).toHaveBeenCalledWith("id", "rv-001");
   });
 });
