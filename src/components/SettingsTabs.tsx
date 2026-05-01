@@ -2,7 +2,8 @@
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/settings/account",  label: "Account & Security" },
+  { href: "/settings/account",  label: "Account" },
+  { href: "/settings/security", label: "Security & Compliance" },
   { href: "/settings/email",    label: "Notifications" },
   { href: "/settings/billing",  label: "Billing" },
 ];
@@ -10,7 +11,7 @@ const TABS = [
 export function SettingsTabs() {
   const pathname = usePathname();
   return (
-    <nav className="mt-4 flex gap-0 border-b border-gray-200 text-sm overflow-x-auto">
+    <nav className="mb-8 flex gap-0 border-b border-gray-200 text-sm overflow-x-auto">
       {TABS.map(({ href, label }) => {
         const active = pathname === href || pathname.startsWith(href + "/");
         return (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SettingsTabs } from "@/components/SettingsTabs";
 
 export const metadata: Metadata = {
-  title: "My Career — iCareerOS",
+  title: "Settings — iCareerOS",
 };
 
 export default function SettingsLayout({
@@ -12,7 +12,6 @@ export default function SettingsLayout({
 }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold text-gray-900">My Career</h1>
       <SettingsTabs />
       {children}
     </div>
