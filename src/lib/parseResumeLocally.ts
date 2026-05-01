@@ -5,15 +5,18 @@
  * Works on plain text extracted from PDF / Word / text files.
  * Produces the same ParsedResume shape consumed by the profile page.
  *
- * v3 — improvements over v2:
- *   • Name: handles "Name | email | phone" single-line format; handles titles on
- *     same line as name; more aggressive first-line detection
- *   • Summary: detects implicit summary (text in header before first section
- *     that isn't contact info) — covers resumes with no "Summary:" heading
- *   • Experience: description paragraphs (non-bullet) are now stored in a
- *     dedicated `description` field as well as included in bullets[]
- *   • Education: handles "GPA" lines without mistaking them for degree lines
- *   • Certifications: strips trailing punctuation, dedupes
+ * v5 — ground-truth tested against real DOCX (mammoth output):
+ *   • Section regexes: "SUMMARY AND PROFILE", "CERTIFICATIONS & AWARDS",
+ *     "EDUCATION AND OTHERS", "Highlighted Accomplishment" all recognised
+ *   • Skills: line-by-line deduplication handles one-per-line AND
+ *     comma-separated formats
+ *   • Experience backward scan: blank lines skipped (not break); uses push
+ *     order so priorLines[0] is always closest to date; blanksInScan flag
+ *     determines title/company assignment order (DOCX vs compact PDF)
+ *   • Experience bodyEnd: blank lines skipped so next job's header lines are
+ *     properly excluded from current job's bullets
+ *   • Education: school-first detection (SCHOOL_RE) handles
+ *     "University of X → blank → Master of Science" format correctly
  */
 
 export interface ParsedContact {
@@ -54,22 +57,31 @@ const URL_RE      = /https?:\/\//i;
 
 const DATE_RANGE = /((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?\d{4}\s*[-–—]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|[Pp]resent|[Cc]urrent)/;
 
-// IMPORTANT: every alternative is inside one capturing group with ^ before and
-// \s*:?\s*$ after, so a keyword inside ordinary text never falsely switches bucket.
+// Section header regexes — each alternative anchored with ^ and \s*:?\s*$ so a
+// keyword inside ordinary text never falsely switches the bucket.
 const SECTION: Record<string, RegExp> = {
   summary:
-    /^(summary|objective|profile|about\s+me|professional\s+summary|career\s+objective|career\s+profile|career\s+summary|executive\s+summary|personal\s+statement|about)\s*:?\s*$/i,
+    /^(summary(\s+and\s+profile)?|profile(\s+summary)?|objective|about\s+me|professional\s+(summary|profile)|career\s+(objective|profile|summary)|executive\s+summary|personal\s+statement|about)\s*:?\s*$/i,
   experience:
     /^(work\s+experience|experience|relevant\s+(work\s+)?experience|employment(\s+history)?|work\s+history|job\s+history|professional\s+(experience|background|history)|career(\s+(experience|history))?|positions?\s+held)\s*:?\s*$/i,
   education:
-    /^(education(al\s+(background|history))?|academic(\s+(background|history))?|qualifications?|schooling)\s*:?\s*$/i,
+    /^(education(\s+and\s+(others|additional))?|educational\s+(background|history)|academic(\s+(background|history))?|qualifications?|schooling)\s*:?\s*$/i,
   skills:
     /^(technical\s+skills|skills(\s+summary)?|skill\s+set|core\s+competencies|key\s+(skills|competencies)|competencies|areas\s+of\s+expertise|technologies(\s+&\s+tools)?|tools(\s+&\s+technologies)?|technical\s+expertise|expertise|relevant\s+skills|languages\s+&\s+tools)\s*:?\s*$/i,
   certifications:
-    /^(certifications?(\s+&\s+licenses?)?|licen[cs]es?(\s+&\s+certifications?)?|credentials?|awards?(\s+&\s+certifications?)?|professional\s+(certifications?|development|credentials?)|training(\s+&\s+certifications?)?|accreditations?|continuing\s+education)\s*:?\s*$/i,
+    /^(certifications?(\s+(&|and)\s+(licenses?|awards?))?|licen[cs]es?(\s+&\s+certifications?)?|credentials?|awards?(\s+&\s+certifications?)?|professional\s+(certifications?|development|credentials?)|training(\s+&\s+certifications?)?|accreditations?|continuing\s+education)\s*:?\s*$/i,
+  // "other" catches unrecognised section headers so their content doesn't pollute
+  // skills or other buckets (e.g. "Highlighted Accomplishment")
+  other:
+    /^(highlighted\s+accomplishments?|additional\s+information|publications?|presentations?|volunteer(\s+experience)?|projects?|interests?|hobbies|references?|languages?)\s*:?\s*$/i,
 };
 
 const DEGREE_KEYWORDS = /\b(b\.?s\.?|b\.?a\.?|b\.?eng\.?|b\.?sc\.?|b\.?comm?\.?|m\.?s\.?|m\.?a\.?|m\.?b\.?a\.?|m\.?eng\.?|m\.?sc\.?|ph\.?d\.?|d\.?ba\.?|j\.?d\.?|l\.?l\.?[bm]\.?|bachelor|master(?:s)?|doctor(?:ate)?|associate|diploma|certificate|a\.?s\.?|a\.?a\.?)\b/i;
+
+// School-name indicators (for education section)
+const SCHOOL_RE = /\b(university|college|institute|school|academy|polytechnic|seminary|conservatory|lyceum)\b/i;
+// "City, STATE" pattern (e.g. "Detroit, MI")
+const CITY_STATE_RE = /,\s*[A-Z]{2}\s*$/;
 
 // Words/patterns that indicate a line is NOT a person's name
 const NOT_NAME_RE = /\d{4}|@|gpa\s*:|grade\s*:|score\s*:|portfolio|github\.com|twitter\.com/i;
@@ -99,9 +111,7 @@ function looksLikeName(s: string): boolean {
   if (EMAIL_RE.test(s) || PHONE_RE.test(s) || LINKEDIN_RE.test(s)) return false;
   if (URL_RE.test(s)) return false;
   if (detectSection(s)) return false;
-  // Must have at least two alphabetic characters and no disqualifying chars
   if (!/[A-Za-z]{2}/.test(s)) return false;
-  // Allow letters, spaces, hyphens, apostrophes, periods, commas (for suffixes like Jr., III)
   return /^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-,''']+$/.test(s);
 }
 
@@ -124,18 +134,17 @@ function splitTitleCompany(text: string): [string, string] {
 export function parseResumeLocally(rawText: string): ParsedResume {
   // ── 0. Pre-process: normalize common DOCX artifacts ─────────────────────
   // mammoth outputs table cells tab-separated — treat tabs like pipe separators
-  // so "Name\tEmail\tPhone" is handled the same as "Name | Email | Phone"
   const normalized = rawText
-    .replace(/\t+/g, " | ")              // tabs → pipe separator
-    .replace(/[ \t]{3,}/g, "  ")         // 3+ spaces/tabs → 2 spaces (preserve indent)
-    .replace(/\r\n/g, "\n")             // CRLF → LF
-    .replace(/\n{4,}/g, "\n\n\n");     // 4+ blank lines → max 2 blank lines
+    .replace(/\t+/g, " | ")
+    .replace(/[ \t]{3,}/g, "  ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    // Split words fused without whitespace in DOCX (e.g. "yahoo.comLinkedIn:" → "yahoo.com LinkedIn:")
+    .replace(/(\.([a-z]{2,6}))([A-Z][a-z])/g, "$1 $3");
 
   const lines = normalized.split(/\n/).map(l => l.trimEnd());
 
   // ── 1. Contact (scan header — first ~35 lines) ────────────────────────────
-  // NOTE: multiple fields can appear on the same line (e.g. "Jane Doe | jane@x.com | linkedin.com/in/jane")
-  // so we never use `continue` after finding a field — we always keep scanning the same line.
   let name = "", email = "", phone = "", location = "", linkedin = "";
 
   for (let i = 0; i < Math.min(35, lines.length); i++) {
@@ -143,7 +152,6 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     if (!line) continue;
     if (detectSection(line)) break;
 
-    // Extract every contact field present on this line (no continue — multiple can coexist)
     if (!linkedin) {
       const m = line.match(LINKEDIN_RE);
       if (m) linkedin = m[0].startsWith("http") ? m[0] : "https://" + m[0];
@@ -161,19 +169,16 @@ export function parseResumeLocally(rawText: string): ParsedResume {
       location = line;
     }
 
-    // Name: split on | or • separators and check each segment
     if (!name) {
       const segments = (line.includes("|") || line.includes("•"))
         ? line.split(/\s*[|•]\s*/).map(s => s.trim()).filter(Boolean)
         : [line];
       for (const seg of segments) {
-        // Must look like a name and have at least 2 words (first + last)
         if (looksLikeName(seg) && seg.trim().split(/\s+/).length >= 2) {
           name = seg;
           break;
         }
       }
-      // Fallback: whole line as name if it qualifies (single-word names are rare but possible)
       if (!name && looksLikeName(line)) {
         name = line;
       }
@@ -183,9 +188,9 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 2. Bucket lines into sections ─────────────────────────────────────────
-  type SectionKey = "header" | "summary" | "experience" | "education" | "skills" | "certifications";
+  type SectionKey = "header" | "summary" | "experience" | "education" | "skills" | "certifications" | "other";
   const buckets: Record<SectionKey, string[]> = {
-    header: [], summary: [], experience: [], education: [], skills: [], certifications: [],
+    header: [], summary: [], experience: [], education: [], skills: [], certifications: [], other: [],
   };
   let current: SectionKey = "header";
 
@@ -196,34 +201,23 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 3. Summary ────────────────────────────────────────────────────────────
-  // Prefer explicit summary bucket; fall back to implicit text in header bucket
   let summary = buckets.summary.map(l => l.trim()).filter(Boolean).join(" ").slice(0, 800);
 
   if (!summary) {
-    // Extract implicit summary: lines in header bucket that aren't contact info or the name
     let pastContact = false;
     const implicitLines: string[] = [];
 
     for (const rawLine of buckets.header) {
       const t = rawLine.trim();
       if (!t) {
-        // A blank line after we've started collecting = end of summary block
         if (implicitLines.length > 0) break;
         continue;
       }
       if (detectSection(t)) break;
-
-      // Skip contact info lines
       if (looksLikeContactLine(t)) { pastContact = true; continue; }
-      // Skip lines that look like the name (short all-word line near top)
       if (!pastContact && looksLikeName(t) && t.split(/\s+/).length <= 5) continue;
-      // Skip location-like lines
       if (/^[A-Z][a-zA-Z\s]+,\s*[A-Z]{2,}/.test(t) && t.length < 60) { pastContact = true; continue; }
-
-      // Lines with separators near top are likely a title/tagline combo
       if (!pastContact && t.includes("|") && t.length < 80) { pastContact = true; continue; }
-
-      // Substantive line — candidate for summary
       if (t.length > 25) {
         pastContact = true;
         implicitLines.push(t);
@@ -233,11 +227,27 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 4. Skills ─────────────────────────────────────────────────────────────
-  const skillsRaw = buckets.skills.join(" ");
-  const skills = skillsRaw
-    .split(/[,|•\n•]+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 1 && s.length < 60 && !DEGREE_KEYWORDS.test(s));
+  // Process line-by-line to handle both one-per-line AND comma/pipe-separated
+  // formats. Dedup case-insensitively.
+  const skillSet = new Set<string>();
+  const skills: string[] = [];
+  for (const rawLine of buckets.skills) {
+    const t = rawLine.trim();
+    if (!t) continue;
+    // Split on comma, pipe, or bullet chars; each segment may be one skill
+    const items = t.split(/[,|•●◦▪]+/).map(s => s.trim()).filter(Boolean);
+    for (const item of items) {
+      if (
+        item.length > 1 &&
+        item.length < 60 &&
+        !DEGREE_KEYWORDS.test(item) &&
+        !skillSet.has(item.toLowerCase())
+      ) {
+        skillSet.add(item.toLowerCase());
+        skills.push(item);
+      }
+    }
+  }
 
   // ── 5. Certifications ─────────────────────────────────────────────────────
   const certSet = new Set<string>();
@@ -260,8 +270,6 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 6. Experience ─────────────────────────────────────────────────────────
-  // Two-pass: find date-range anchors, then look backward for title/company
-  // and forward for description/bullets.
   const experience: ParsedExperience[] = [];
   const expLines = buckets.experience.map((l: string) => l.trim());
 
@@ -277,46 +285,85 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     const inlineText = dateLine.replace(period, "").replace(/^[\s\-–—|,]+|[\s\-–—|,]+$/g, "").trim();
 
     // ── Title / company: look backward from the date line ────────────────
+    // Key insight for DOCX (mammoth output): every paragraph is separated by a
+    // blank line, so the layout is:
+    //   Company
+    //   [blank]
+    //   Title
+    //   [blank]
+    //   Date  ← di0
+    //
+    // We push lines in "closest-to-date-first" order, then use blanksInScan to
+    // decide assignment:
+    //   blanksInScan=true  → DOCX: priorLines[0]=Title, priorLines[1]=Company
+    //   blanksInScan=false → compact PDF: priorLines[0]=Company, priorLines[1]=Title
+
     let title = "", company = "";
     const priorLines: string[] = [];
-    for (let k = di0 - 1; k >= 0 && priorLines.length < 3; k--) {
+    let blanksInScan = false;
+    let nonBlankCount = 0;
+
+    for (let k = di0 - 1; k >= 0 && nonBlankCount < 2; k--) {
       const l = expLines[k];
       if (l === undefined || l === null) break;
-      if (!l) break;                                    // blank line → stop
-      if (isBullet(l) || !!l.match(DATE_RANGE)) break; // bullet/date → stop
-      if (l.length < 120) priorLines.unshift(l);
+      if (!l) {
+        // Blank line — skip but note it (DOCX artifact)
+        blanksInScan = true;
+        continue;
+      }
+      if (isBullet(l) || l.match(DATE_RANGE)) break;
+      if (l.length < 120) {
+        priorLines.push(l);   // push = closest-to-date first
+        nonBlankCount++;
+      } else {
+        break; // description paragraph — stop here
+      }
     }
 
     if (inlineText && priorLines.length > 0) {
-      title   = priorLines[0];
-      company = priorLines.length >= 2
-        ? priorLines[1]
-        : (inlineText.split(/\s*[\|,]\s*/).filter(Boolean)[0] ?? inlineText);
+      // Something on the date line AND prior lines — use blanksInScan for order
+      if (blanksInScan) {
+        title   = priorLines[0];
+        company = priorLines[1] ?? inlineText;
+      } else {
+        title   = priorLines[1] ?? priorLines[0] ?? "";
+        company = priorLines.length >= 2 ? priorLines[0] : inlineText;
+      }
     } else if (inlineText) {
       [title, company] = splitTitleCompany(inlineText);
     } else if (priorLines.length >= 2) {
-      title = priorLines[0]; company = priorLines[1];
+      if (blanksInScan) {
+        // DOCX: closest-to-date = title (e.g. "VP, T&I"), next = company
+        title   = priorLines[0];
+        company = priorLines[1];
+      } else {
+        // Compact PDF: closest-to-date = company, next = title
+        title   = priorLines[1];
+        company = priorLines[0];
+      }
     } else if (priorLines.length === 1) {
       [title, company] = splitTitleCompany(priorLines[0]);
       if (!company) title = priorLines[0];
     }
 
-    // ── Description / bullets: forward scan ──────────────────────────────
+    // ── Body end: scan backward from next date anchor ─────────────────────
     const nextDi = di < dateIndices.length - 1 ? dateIndices[di + 1] : expLines.length;
-
-    // Exclude header lines of next job (non-bullet, short, before next date)
     let bodyEnd = nextDi;
+
     if (di < dateIndices.length - 1) {
       let k = nextDi - 1;
       while (k > di0) {
         const l = expLines[k];
-        if (!l) break;
+        if (l === undefined) break;
+        if (!l) { k--; continue; }          // blank — skip, don't break
         if (isBullet(l)) break;
+        if (l.match(DATE_RANGE)) break;
         if (l.length < 100) { bodyEnd = k; k--; }
         else break;
       }
     }
 
+    // ── Description / bullets: forward scan ──────────────────────────────
     const bullets: string[] = [];
     const descriptionLines: string[] = [];
     for (let j = di0 + 1; j < bodyEnd; j++) {
@@ -325,9 +372,8 @@ export function parseResumeLocally(rawText: string): ParsedResume {
       if (isBullet(l)) {
         bullets.push(stripBullet(l));
       } else {
-        // Non-bullet, non-blank line after the date = description paragraph
         descriptionLines.push(l);
-        bullets.push(l); // also include in bullets[] for backwards compat
+        bullets.push(l);
       }
     }
 
@@ -336,48 +382,80 @@ export function parseResumeLocally(rawText: string): ParsedResume {
   }
 
   // ── 7. Education ──────────────────────────────────────────────────────────
+  // Handles two layouts:
+  //   Compact:  "Master of Science in X, University of Y, 2006"  (degree first)
+  //   DOCX:     "University of Detroit Mercy, Detroit, MI"        (school first)
+  //             [blank]
+  //             "Master of Science in Information Assurance"      (degree)
+  //             [blank]
+  //             "2006"
+  //
+  // SCHOOL_RE detects school lines so we don't misclassify them as degrees.
   const education: ParsedEducation[] = [];
   let currentEdu: ParsedEducation | null = null;
 
   for (const rawLine of buckets.education) {
     const t = rawLine.trim();
     if (!t) continue;
-
-    // Skip GPA/grade lines — they're not degrees
     if (/^gpa\s*:/i.test(t) || /^grade\s*:/i.test(t)) continue;
 
     const yearMatch = t.match(YEAR_RE);
     const hasDegree = DEGREE_KEYWORDS.test(t);
+    const hasSchool = SCHOOL_RE.test(t) || (!hasDegree && CITY_STATE_RE.test(t));
 
-    if (hasDegree && !yearMatch) {
-      if (currentEdu) education.push(currentEdu);
-      const parts = t.split(/\s*[\|,]\s*/).map(p => p.trim()).filter(Boolean);
-      currentEdu = parts.length >= 2
-        ? { degree: parts[0], school: parts[1], year: "" }
-        : { degree: t, school: "", year: "" };
-    } else if (hasDegree && yearMatch) {
-      if (currentEdu) education.push(currentEdu);
-      const year = yearMatch[0];
-      const withoutYear = t.replace(year, "").replace(/[|\-–—,]+/g, " ").trim();
-      const parts = withoutYear.split(/\s{2,}|\s*[|,]\s*/).map(p => p.trim()).filter(Boolean);
-      currentEdu = { degree: parts[0] ?? withoutYear, school: parts[1] ?? "", year };
-    } else if (yearMatch && currentEdu) {
-      currentEdu.year = yearMatch[0];
-      const withoutYear = t.replace(yearMatch[0], "").replace(/[|\-–—,]+/g, " ").trim();
-      if (withoutYear && !currentEdu.school) currentEdu.school = withoutYear;
-    } else if (yearMatch && !currentEdu) {
-      const year = yearMatch[0];
-      const rest = t.replace(year, "").replace(/[|\-–—,]+/g, " ").trim();
-      const parts = rest.split(/\s{2,}|\s*[|,]\s*/).map(p => p.trim()).filter(Boolean);
-      currentEdu = { degree: parts[0] ?? "", school: parts[1] ?? "", year };
+    if (hasSchool && !hasDegree) {
+      // Pure school line (e.g. "University of Detroit Mercy, Detroit, MI")
+      if (!currentEdu) {
+        currentEdu = { degree: "", school: t, year: yearMatch ? yearMatch[0] : "" };
+      } else if (!currentEdu.school) {
+        currentEdu.school = t;
+        if (yearMatch && !currentEdu.year) currentEdu.year = yearMatch[0];
+      } else {
+        // Starting a new institution — commit current
+        if (currentEdu.degree || currentEdu.school) education.push(currentEdu);
+        currentEdu = { degree: "", school: t, year: yearMatch ? yearMatch[0] : "" };
+      }
+    } else if (hasDegree) {
+      const year = yearMatch ? yearMatch[0] : "";
+      if (!currentEdu) {
+        // No prior school line — start fresh
+        const parts = t.split(/\s*[\|,]\s*/).map(p => p.trim()).filter(Boolean);
+        currentEdu = hasSchool
+          ? { degree: parts[0] ?? t, school: parts[1] ?? "", year }
+          : { degree: t, school: "", year };
+      } else if (!currentEdu.degree) {
+        // Fill in degree for existing school entry
+        currentEdu.degree = t;
+        if (year && !currentEdu.year) currentEdu.year = year;
+      } else {
+        // Already have a degree — push and start new
+        if (currentEdu.degree || currentEdu.school) education.push(currentEdu);
+        const parts = t.split(/\s*[\|,]\s*/).map(p => p.trim()).filter(Boolean);
+        currentEdu = {
+          degree: parts[0] ?? t,
+          school: hasSchool ? (parts[1] ?? "") : "",
+          year,
+        };
+      }
+    } else if (yearMatch) {
+      // Year-only or year+school line
+      if (currentEdu) {
+        if (!currentEdu.year) currentEdu.year = yearMatch[0];
+        const rest = t.replace(yearMatch[0], "").replace(/[|\-–—,]+/g, " ").trim();
+        if (rest && !currentEdu.school && rest.length < 100) currentEdu.school = rest;
+      } else {
+        currentEdu = { degree: "", school: "", year: yearMatch[0] };
+      }
     } else if (currentEdu) {
+      // Misc line — fill in gaps
       if (!currentEdu.school && t.length < 100) currentEdu.school = t;
       else if (!currentEdu.degree && t.length < 100) currentEdu.degree = t;
     } else {
+      // Unclassified line at start
       currentEdu = { degree: t, school: "", year: "" };
     }
   }
-  if (currentEdu) education.push(currentEdu);
+  if (currentEdu && (currentEdu.degree || currentEdu.school)) education.push(currentEdu);
 
   return {
     contact: { name, email, phone, location, linkedin },
