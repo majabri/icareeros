@@ -20,9 +20,9 @@ const PLAN_CONFIG: Record<
   },
   premium: {
     label: "Premium",
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    ring: "ring-blue-200",
+    bg: "bg-brand-50",
+    text: "text-brand-700",
+    ring: "ring-brand-200",
   },
   professional: {
     label: "Professional",

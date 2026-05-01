@@ -16,7 +16,7 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<OfferStatus, { label: string; color: string }> = {
-  received:    { label: "Received",    color: "bg-blue-100 text-blue-700" },
+  received:    { label: "Received",    color: "bg-brand-100 text-brand-700" },
   negotiating: { label: "Negotiating", color: "bg-amber-100 text-amber-700" },
   accepted:    { label: "Accepted",    color: "bg-emerald-100 text-emerald-700" },
   declined:    { label: "Declined",    color: "bg-red-100 text-red-700" },
@@ -54,61 +54,61 @@ function AddOfferForm({ onAdd, onCancel }: { onAdd: (input: CreateOfferInput) =>
   };
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5">
+    <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-5">
       <h3 className="mb-4 font-semibold text-gray-900">Add New Offer</h3>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Company *</label>
           <input type="text" value={form.company} onChange={(e) => set("company", e.target.value)}
-            placeholder="e.g. Google" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="e.g. Google" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Role Title *</label>
           <input type="text" value={form.role_title} onChange={(e) => set("role_title", e.target.value)}
-            placeholder="e.g. Senior Software Engineer" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="e.g. Senior Software Engineer" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Base Salary ($)</label>
           <input type="number" value={form.base_salary ?? ""} onChange={(e) => set("base_salary", e.target.value ? Number(e.target.value) : undefined)}
-            placeholder="150000" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="150000" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Total Comp ($)</label>
           <input type="number" value={form.total_comp ?? ""} onChange={(e) => set("total_comp", e.target.value ? Number(e.target.value) : undefined)}
-            placeholder="200000" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="200000" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Equity</label>
           <input type="text" value={form.equity ?? ""} onChange={(e) => set("equity", e.target.value || undefined)}
-            placeholder="e.g. 10,000 RSUs over 4 years" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="e.g. 10,000 RSUs over 4 years" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Bonus</label>
           <input type="text" value={form.bonus ?? ""} onChange={(e) => set("bonus", e.target.value || undefined)}
-            placeholder="e.g. 15% annual target" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="e.g. 15% annual target" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Deadline</label>
           <input type="date" value={form.deadline ?? ""} onChange={(e) => set("deadline", e.target.value || undefined)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">Benefits</label>
           <input type="text" value={form.benefits ?? ""} onChange={(e) => set("benefits", e.target.value || undefined)}
-            placeholder="e.g. Full medical, 401k 6%, remote" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            placeholder="e.g. Full medical, 401k 6%, remote" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
         </div>
       </div>
       <div className="mt-3">
         <label className="mb-1 block text-xs font-medium text-gray-600">Notes</label>
         <textarea value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value || undefined)}
           rows={2} placeholder="Any context about the offer, your leverage, or priorities…"
-          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none" />
       </div>
       {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
       <div className="mt-4 flex gap-3">
         <button onClick={onCancel} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
         <button onClick={() => void handleSubmit()} disabled={saving}
-          className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+          className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
           {saving ? "Saving…" : "Add Offer"}
         </button>
       </div>
@@ -160,7 +160,7 @@ function NegotiationPanel({ result, offer }: { result: NegotiationResult; offer:
             <div className="flex-1 text-center text-gray-300">—</div>
             <div className="text-center">
               <p className="text-xs text-gray-400">Aggressive</p>
-              <p className="text-lg font-bold text-blue-600">${result.counterOfferRange.high.toLocaleString()}</p>
+              <p className="text-lg font-bold text-brand-600">${result.counterOfferRange.high.toLocaleString()}</p>
             </div>
           </div>
           {offer.base_salary && (
@@ -187,7 +187,7 @@ function NegotiationPanel({ result, offer }: { result: NegotiationResult; offer:
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email Template</p>
-          <button onClick={() => void copyEmail()} className="text-xs text-blue-600 hover:text-blue-800">
+          <button onClick={() => void copyEmail()} className="text-xs text-brand-600 hover:text-brand-800">
             {copyMsg ?? "Copy"}
           </button>
         </div>
@@ -323,7 +323,7 @@ function NegotiateModal({
           value={targetSalary}
           onChange={(e) => setTargetSalary(e.target.value)}
           placeholder={offer.base_salary ? `Current: $${Number(offer.base_salary).toLocaleString()}` : "e.g. 175000"}
-          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
         />
 
         <p className="mb-2 text-sm font-medium text-gray-700">Priorities</p>
@@ -332,7 +332,7 @@ function NegotiateModal({
             <button
               key={p}
               onClick={() => toggle(p)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${selected.includes(p) ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${selected.includes(p) ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
             >
               {p}
             </button>
@@ -438,12 +438,12 @@ export default function OffersPage() {
             <h1 className="text-2xl font-bold text-gray-900">🤝 Offer Desk</h1>
             <p className="mt-1 text-sm text-gray-500">
               Track offers and get AI-powered negotiation strategies.
-              {activeCount > 0 && <span className="ml-2 font-medium text-blue-600">{activeCount} active</span>}
+              {activeCount > 0 && <span className="ml-2 font-medium text-brand-600">{activeCount} active</span>}
             </p>
           </div>
           <button
             onClick={() => setShowAddForm((v) => !v)}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             + Add Offer
           </button>
@@ -471,7 +471,7 @@ export default function OffersPage() {
                 <p className="text-3xl mb-3">🤝</p>
                 <p className="font-medium text-gray-700">No offers yet</p>
                 <p className="mt-1 text-sm text-gray-400">Add your first job offer to get started.</p>
-                <button onClick={() => setShowAddForm(true)} className="mt-4 rounded-xl bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                <button onClick={() => setShowAddForm(true)} className="mt-4 rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                   Add First Offer
                 </button>
               </div>

@@ -42,7 +42,7 @@ function PrepContent({ content }: { content: string }) {
         if (line.startsWith("# "))
           return <h2 key={i} className="font-bold text-gray-900 text-lg mt-6 mb-2">{line.slice(2)}</h2>;
         if (line.match(/^[-*•]\s/))
-          return <p key={i} className="pl-4 relative before:content-['•'] before:absolute before:left-1 before:text-blue-500 text-sm mb-1">{line.slice(2)}</p>;
+          return <p key={i} className="pl-4 relative before:content-['•'] before:absolute before:left-1 before:text-brand-500 text-sm mb-1">{line.slice(2)}</p>;
         if (line.trim() === "") return <div key={i} className="h-2" />;
         return <p key={i} className="text-sm mb-1">{renderMarkdown(line)}</p>;
       })}
@@ -58,7 +58,7 @@ function MessageBubble({ msg }: { msg: InterviewMessage }) {
         className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words
           ${isAI
             ? "bg-white border border-gray-200 shadow-sm text-gray-800"
-            : "bg-blue-600 text-white"
+            : "bg-brand-600 text-white"
           }`}
       >
         {isAI ? renderMarkdown(msg.content) : msg.content}
@@ -97,7 +97,7 @@ function SessionHistoryItem({
       className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group"
     >
       <div>
-        <p className="text-sm font-medium text-gray-800 group-hover:text-blue-700 transition-colors">
+        <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors">
           {session.job_title}
         </p>
         <p className="text-xs text-gray-400">{date}</p>
@@ -342,7 +342,7 @@ export default function InterviewPage() {
                   onChange={(e) => setJobTitle(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void startInterview()}
                   placeholder="e.g. Senior Product Manager"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   autoFocus
                 />
               </div>
@@ -357,7 +357,7 @@ export default function InterviewPage() {
                   onChange={(e) => setJobDescription(e.target.value)}
                   placeholder="Paste the job description for more tailored questions…"
                   rows={4}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                 />
               </div>
 
@@ -366,7 +366,7 @@ export default function InterviewPage() {
                 <button
                   type="button"
                   onClick={() => setShowResumeField((v) => !v)}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-xs text-brand-600 hover:text-brand-800 font-medium"
                 >
                   {showResumeField ? "▼ Hide resume" : "▶ Add resume for prep guide (optional)"}
                 </button>
@@ -376,7 +376,7 @@ export default function InterviewPage() {
                     onChange={(e) => setResume(e.target.value)}
                     placeholder="Paste your resume text to get personalised interview prep questions…"
                     rows={5}
-                    className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                   />
                 )}
               </div>
@@ -389,14 +389,14 @@ export default function InterviewPage() {
                 <button
                   onClick={() => void runPrepGuide()}
                   disabled={!jobTitle.trim() || loading}
-                  className="flex-1 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? "Generating…" : "📋 Prep Guide"}
                 </button>
                 <button
                   onClick={() => void startInterview()}
                   disabled={!jobTitle.trim() || loading}
-                  className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? "Starting…" : "Start Interview →"}
                 </button>
@@ -451,7 +451,7 @@ export default function InterviewPage() {
             <button
               onClick={() => void startInterview()}
               disabled={loading}
-              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               {loading ? "Starting…" : "Start Interview →"}
             </button>
@@ -470,7 +470,7 @@ export default function InterviewPage() {
             <button
               onClick={() => void startInterview()}
               disabled={loading}
-              className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-brand-600 px-8 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               {loading ? "Starting…" : "✅ Ready — Start Interview →"}
             </button>
@@ -494,7 +494,7 @@ export default function InterviewPage() {
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 onClick={resetInterview}
-                className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
               >
                 Practice Another Role
               </button>
@@ -613,12 +613,12 @@ export default function InterviewPage() {
             placeholder="Type your answer… (Enter to send, Shift+Enter for newline)"
             rows={3}
             disabled={loading}
-            className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-gray-50"
+            className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50"
           />
           <button
             onClick={() => void sendAnswer()}
             disabled={!userInput.trim() || loading}
-            className="rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-stretch"
+            className="rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-stretch"
           >
             Send
           </button>

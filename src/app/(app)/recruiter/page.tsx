@@ -49,7 +49,7 @@ export default function RecruiterPage() {
             value={companyName}
             onChange={e => setCompanyName(e.target.value)}
             placeholder="Acme Corp"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div className="mb-4">
@@ -61,14 +61,14 @@ export default function RecruiterPage() {
             onChange={e => setJobDescription(e.target.value)}
             rows={10}
             placeholder="Paste the full job description here…"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
           />
           <p className="mt-1 text-xs text-gray-400">{jobDescription.length} chars (min 50)</p>
         </div>
         <button
           onClick={handleAnalyse}
           disabled={loading || jobDescription.trim().length < 50}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "Analysing…" : "Analyse Job Description"}
         </button>
@@ -97,11 +97,11 @@ export default function RecruiterPage() {
                 ))}
               </ul>
             </section>
-            <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-blue-800">💡 Nice-to-Have Skills</h2>
+            <section className="rounded-2xl border border-brand-100 bg-brand-50 p-6 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-brand-800">💡 Nice-to-Have Skills</h2>
               <ul className="space-y-1">
                 {result.nice_to_have_skills.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-blue-700">
+                  <li key={i} className="flex items-start gap-2 text-sm text-brand-700">
                     <span className="mt-0.5 flex-shrink-0">•</span>
                     <span>{s}</span>
                   </li>

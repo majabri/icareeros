@@ -248,13 +248,13 @@ export default function JobsPage() {
               placeholder="Search job titles or companies…"
               className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm
                          text-gray-900 placeholder-gray-400 shadow-sm
-                         focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                         focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             <button
               type="submit"
               disabled={loadingFirst}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white
-                         shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white
+                         shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               {loadingFirst ? "Searching…" : "Search"}
             </button>
@@ -265,7 +265,7 @@ export default function JobsPage() {
               value={draft.jobType}
               onChange={(e) => setDraft((d) => ({ ...d, jobType: e.target.value }))}
               className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm
-                         text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                         text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-400"
             >
               <option value="">All types</option>
               {JOB_TYPES.map((t) => (
@@ -278,7 +278,7 @@ export default function JobsPage() {
                 type="checkbox"
                 checked={draft.remote}
                 onChange={(e) => setDraft((d) => ({ ...d, remote: e.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               Remote only
             </label>
@@ -309,9 +309,9 @@ export default function JobsPage() {
                 : `Showing ${results.length} of ${total.toLocaleString()} opportunit${total === 1 ? "y" : "ies"}`}
             </p>
             {scoringFit && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5
-                               text-xs font-medium text-blue-600">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-blue-400" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5
+                               text-xs font-medium text-brand-600">
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-brand-400" />
                 Scoring fit…
               </span>
             )}
@@ -359,8 +359,8 @@ export default function JobsPage() {
                 </p>
                 <button
                   onClick={handleReset}
-                  className="mt-6 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold
-                             text-white hover:bg-blue-700 transition-colors"
+                  className="mt-6 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold
+                             text-white hover:bg-brand-700 transition-colors"
                 >
                   Clear filters
                 </button>

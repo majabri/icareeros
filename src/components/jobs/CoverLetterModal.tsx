@@ -122,8 +122,8 @@ export function CoverLetterModal({
               </p>
               <button
                 onClick={generate}
-                className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold
-                           text-white hover:bg-blue-700 transition-colors"
+                className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold
+                           text-white hover:bg-brand-700 transition-colors"
               >
                 Generate Cover Letter
               </button>
@@ -228,8 +228,8 @@ export function CoverLetterModal({
               </button>
               <button
                 onClick={copyToClipboard}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5
-                           text-xs font-semibold text-blue-700 hover:bg-blue-100
+                className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5
+                           text-xs font-semibold text-brand-700 hover:bg-brand-100
                            transition-colors"
                 aria-label="Copy cover letter to clipboard"
               >

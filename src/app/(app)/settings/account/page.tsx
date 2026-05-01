@@ -187,7 +187,7 @@ export default function AccountSecurityPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
       </div>
     );
   }
@@ -205,7 +205,7 @@ export default function AccountSecurityPage() {
 
           {/* Avatar */}
           <div className="flex items-center gap-5">
-            <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full bg-blue-600 flex items-center justify-center">
+            <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full bg-brand-600 flex items-center justify-center">
               {displayAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={displayAvatar} alt="Profile" className="h-full w-full object-cover" />
@@ -241,7 +241,7 @@ export default function AccountSecurityPage() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Your name"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -252,7 +252,7 @@ export default function AccountSecurityPage() {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+1 (555) 000-0000"
                 autoComplete="tel"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function AccountSecurityPage() {
           <button
             type="submit"
             disabled={profileSaving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
             {profileSaving ? "Saving…" : "Save changes"}
           </button>
@@ -301,7 +301,7 @@ export default function AccountSecurityPage() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -312,7 +312,7 @@ export default function AccountSecurityPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat new password"
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
@@ -320,7 +320,7 @@ export default function AccountSecurityPage() {
           <button
             type="submit"
             disabled={pwSaving || !newPassword || !confirmPassword}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
             {pwSaving ? "Updating…" : "Update password"}
           </button>

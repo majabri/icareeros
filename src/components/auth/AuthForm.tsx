@@ -100,7 +100,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           onChange={(e) => setIdentifier(e.target.value)}
           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
                      text-gray-900 placeholder-gray-400 shadow-sm
-                     focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                     focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           placeholder={mode === "login" ? "you@example.com" : "you@example.com"}
         />
       </div>
@@ -119,7 +119,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
                      text-gray-900 placeholder-gray-400 shadow-sm
-                     focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                     focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           placeholder={mode === "signup" ? "At least 8 characters" : "••••••••"}
         />
       </div>
@@ -127,9 +127,9 @@ export function AuthForm({ mode }: AuthFormProps) {
       <button
         type="submit"
         disabled={loading || !!success}
-        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold
-                   text-white shadow-sm hover:bg-blue-700 focus-visible:outline
-                   focus-visible:outline-2 focus-visible:outline-blue-600
+        className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold
+                   text-white shadow-sm hover:bg-brand-700 focus-visible:outline
+                   focus-visible:outline-2 focus-visible:outline-brand-600
                    disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
       >
         {loading
@@ -141,14 +141,14 @@ export function AuthForm({ mode }: AuthFormProps) {
         {mode === "login" ? (
           <>
             Don&apos;t have an account?{" "}
-            <a href="/auth/signup" className="font-medium text-blue-600 hover:text-blue-700">
+            <a href="/auth/signup" className="font-medium text-brand-600 hover:text-brand-700">
               Sign up free
             </a>
           </>
         ) : (
           <>
             Already have an account?{" "}
-            <a href="/auth/login" className="font-medium text-blue-600 hover:text-blue-700">
+            <a href="/auth/login" className="font-medium text-brand-600 hover:text-brand-700">
               Sign in
             </a>
           </>

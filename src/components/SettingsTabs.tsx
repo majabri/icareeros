@@ -19,7 +19,7 @@ export function SettingsTabs() {
             href={href}
             className={`whitespace-nowrap border-b-2 px-4 pb-3 font-medium transition-colors
               ${active
-                ? "border-blue-600 text-blue-600"
+                ? "border-brand-600 text-brand-600"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
               }`}
           >

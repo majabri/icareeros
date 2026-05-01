@@ -34,7 +34,7 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-        ${checked ? "bg-blue-600" : "bg-gray-200"}
+        ${checked ? "bg-brand-600" : "bg-gray-200"}
         ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
     >
       <span
@@ -103,7 +103,7 @@ export default function EmailSettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
       </div>
     );
   }
@@ -128,7 +128,7 @@ export default function EmailSettingsPage() {
         </div>
       )}
       {saved && (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        <div className="mb-6 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700">
           ✓ Preferences saved
         </div>
       )}

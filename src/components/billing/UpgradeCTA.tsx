@@ -46,7 +46,7 @@ export function UpgradeCTA({ targetPlan, currentPlan, className = "", disabled =
   }
 
   return (
-    <div className={`rounded-xl border-2 border-blue-200 bg-blue-50 p-5 ${className}`}>
+    <div className={`rounded-xl border-2 border-brand-200 bg-brand-50 p-5 ${className}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -74,7 +74,7 @@ export function UpgradeCTA({ targetPlan, currentPlan, className = "", disabled =
             className={`mt-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50
               ${targetPlan === "professional"
                 ? "bg-amber-500 hover:bg-amber-600"
-                : "bg-blue-600 hover:bg-blue-700"}`}
+                : "bg-brand-600 hover:bg-brand-700"}`}
           >
             {disabled ? "Coming soon" : loading ? "Redirecting…" : `Upgrade to ${planName}`}
           </button>

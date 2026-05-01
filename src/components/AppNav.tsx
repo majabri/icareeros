@@ -35,7 +35,7 @@ export function AppNav() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo */}
           <a href="/dashboard" className="flex items-center gap-2 font-bold text-gray-900 shrink-0">
-            <span className="text-blue-600">iCareerOS</span>
+            <span className="text-brand-600">iCareerOS</span>
           </a>
 
           {/* Nav links */}
@@ -46,7 +46,7 @@ export function AppNav() {
                 href={href}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap
                   ${isActive(href)
-                    ? "bg-blue-50 text-blue-700"
+                    ? "bg-brand-50 text-brand-700"
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }`}
               >
@@ -73,7 +73,7 @@ export function AppNav() {
 
       {/* ── Mobile top bar (below sm) — logo + sign out only ─────────── */}
       <nav className="flex sm:hidden items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <a href="/dashboard" className="font-bold text-blue-600 text-lg">
+        <a href="/dashboard" className="font-bold text-brand-600 text-lg">
           iCareerOS
         </a>
         <button
@@ -98,11 +98,11 @@ export function AppNav() {
                 key={href}
                 href={href}
                 className={`flex min-w-[56px] flex-1 flex-col items-center gap-0.5 px-1 py-2 transition-colors
-                  ${active ? "text-blue-600" : "text-gray-400 hover:text-gray-600"}`}
+                  ${active ? "text-brand-600" : "text-gray-400 hover:text-gray-600"}`}
               >
                 <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
                 <span className={`text-[9px] font-medium truncate max-w-[52px] text-center leading-tight
-                  ${active ? "text-blue-600" : "text-gray-400"}`}>
+                  ${active ? "text-brand-600" : "text-gray-400"}`}>
                   {shortLabel}
                 </span>
               </a>

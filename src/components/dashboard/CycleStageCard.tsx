@@ -95,7 +95,7 @@ export function CycleStageCard({
 
   const statusBadge: Record<StageStatus, { label: string; class: string }> = {
     pending:     { label: "Pending",     class: "bg-gray-100 text-gray-500" },
-    in_progress: { label: "In Progress", class: "bg-blue-100 text-blue-700" },
+    in_progress: { label: "In Progress", class: "bg-brand-100 text-brand-700" },
     completed:   { label: "Done",        class: "bg-green-100 text-green-700" },
     skipped:     { label: "Skipped",     class: "bg-gray-100 text-gray-400" },
   };
@@ -172,7 +172,7 @@ export function CycleStageCard({
       className={
         "relative rounded-xl border p-5 transition-shadow " +
         config.bg + " " +
-        (isCurrentStage ? "shadow-md ring-2 ring-blue-400 ring-offset-2" : "shadow-sm")
+        (isCurrentStage ? "shadow-md ring-2 ring-brand-400 ring-offset-2" : "shadow-sm")
       }
     >
       <div className="flex items-start justify-between">
@@ -540,8 +540,8 @@ export function CycleStageCard({
         <button
           onClick={onRun}
           disabled={running}
-          className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold
-                     text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+          className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold
+                     text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed
                      transition-colors"
         >
           {running ? (

@@ -247,20 +247,20 @@ export function CareerOsDashboard() {
       {newCycleStarted && (
         <div
           data-testid="profile-hint-banner"
-          className="flex items-start justify-between gap-4 rounded-xl border border-blue-200
-                     bg-blue-50 px-4 py-3"
+          className="flex items-start justify-between gap-4 rounded-xl border border-brand-200
+                     bg-brand-50 px-4 py-3"
         >
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-blue-500 text-lg" aria-hidden="true">💡</span>
-            <p className="text-sm text-blue-800">
+            <span className="mt-0.5 text-brand-500 text-lg" aria-hidden="true">💡</span>
+            <p className="text-sm text-brand-800">
               <span className="font-semibold">New cycle started.</span>{" "}
               Update your profile to give the Evaluate stage the freshest picture of where you are.
             </p>
           </div>
           <button
             onClick={() => router.push("/profile")}
-            className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold
-                       text-white hover:bg-blue-700 transition-colors"
+            className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold
+                       text-white hover:bg-brand-700 transition-colors"
           >
             Update profile →
           </button>
@@ -284,7 +284,7 @@ export function CareerOsDashboard() {
                 onChange={(e) => setGoal(e.target.value)}
                 placeholder="e.g. Land a Senior Product Manager role at a Series B startup"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
-                           focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 onKeyDown={(e) => e.key === "Enter" && handleStartCycle()}
                 autoFocus
               />
@@ -292,8 +292,8 @@ export function CareerOsDashboard() {
                 <button
                   onClick={handleStartCycle}
                   disabled={running}
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold
-                             text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold
+                             text-white hover:bg-brand-700 disabled:opacity-50"
                 >
                   {running ? "Starting..." : "Start cycle"}
                 </button>
@@ -308,8 +308,8 @@ export function CareerOsDashboard() {
           ) : (
             <button
               onClick={() => setShowGoalInput(true)}
-              className="mt-6 inline-flex items-center rounded-lg bg-blue-600 px-6 py-2.5
-                         text-sm font-semibold text-white hover:bg-blue-700"
+              className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-6 py-2.5
+                         text-sm font-semibold text-white hover:bg-brand-700"
             >
               + New cycle
             </button>
@@ -328,7 +328,7 @@ export function CareerOsDashboard() {
                   <span className="ml-2 text-gray-500">— {cycle.goal}</span>
                 )}
               </div>
-              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
+              <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
                 Active
               </span>
             </div>
@@ -336,7 +336,7 @@ export function CareerOsDashboard() {
             <div className="mt-3">
               <div className="h-1.5 w-full rounded-full bg-gray-100">
                 <div
-                  className="h-1.5 rounded-full bg-blue-500 transition-all"
+                  className="h-1.5 rounded-full bg-brand-500 transition-all"
                   style={{
                     width: Math.round(
                       ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /

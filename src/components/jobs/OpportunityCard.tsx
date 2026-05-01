@@ -56,7 +56,7 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
               href={opp.url || "#"}
               target="_blank"
               rel="noopener noreferrer"
-              className="block truncate font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+              className="block truncate font-semibold text-gray-900 hover:text-brand-600 transition-colors"
             >
               {opp.title}
             </a>
@@ -91,7 +91,7 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
 
         {/* Match summary */}
         {opp.match_summary && (
-          <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 italic">
+          <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700 italic">
             {opp.match_summary}
           </p>
         )}
@@ -121,8 +121,8 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             {opp.id && (
               <button
                 onClick={() => setShowOutreach(true)}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs
-                           font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs
+                           font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                 aria-label={`Generate outreach message for ${opp.title} at ${opp.company}`}
               >
                 ✉ Outreach
@@ -133,8 +133,8 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
                 href={opp.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white
-                           hover:bg-blue-700 transition-colors"
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white
+                           hover:bg-brand-700 transition-colors"
               >
                 Apply →
               </a>

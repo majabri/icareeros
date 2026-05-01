@@ -68,15 +68,15 @@ function TagInput({ id, label, placeholder, tags, onAdd, onRemove }: TagInputPro
           {tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-0.5
-                         text-sm font-medium text-blue-700 border border-blue-200"
+              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-0.5
+                         text-sm font-medium text-brand-700 border border-brand-200"
             >
               {tag}
               <button
                 type="button"
                 onClick={() => onRemove(tag)}
                 aria-label={"Remove " + tag}
-                className="ml-0.5 text-blue-400 hover:text-blue-600 transition-colors"
+                className="ml-0.5 text-brand-400 hover:text-brand-600 transition-colors"
               >
                 &times;
               </button>
@@ -94,8 +94,8 @@ function TagInput({ id, label, placeholder, tags, onAdd, onRemove }: TagInputPro
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
           className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900
-                     placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none
-                     focus:ring-1 focus:ring-blue-500"
+                     placeholder-gray-400 shadow-sm focus:border-brand-500 focus:outline-none
+                     focus:ring-1 focus:ring-brand-500"
         />
         <button
           type="button"
@@ -124,11 +124,11 @@ function EvalResultPanel({ result }: EvalResultPanelProps) {
     : "text-red-700 bg-red-50 border-red-200";
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 space-y-4">
+    <div className="rounded-xl border border-brand-200 bg-brand-50 p-5 space-y-4">
       <div className="flex items-center gap-3">
         <span className="text-xl" aria-hidden="true">🔍</span>
-        <h3 className="font-semibold text-blue-900">Evaluate — AI results</h3>
-        <span className="ml-auto text-xs text-blue-500">Stage 1 complete</span>
+        <h3 className="font-semibold text-brand-900">Evaluate — AI results</h3>
+        <span className="ml-auto text-xs text-brand-500">Stage 1 complete</span>
       </div>
 
       {/* Market fit score */}
@@ -186,8 +186,8 @@ function EvalResultPanel({ result }: EvalResultPanelProps) {
 
       <a
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2
-                   text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2
+                   text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
       >
         View full Career OS dashboard
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -314,8 +314,8 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
             onChange={(e) => field("full_name", e.target.value)}
             placeholder="Your full name"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900
-                       placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none
-                       focus:ring-1 focus:ring-blue-500"
+                       placeholder-gray-400 shadow-sm focus:border-brand-500 focus:outline-none
+                       focus:ring-1 focus:ring-brand-500"
           />
         </div>
       </section>
@@ -335,8 +335,8 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
               onChange={(e) => field("current_position", e.target.value)}
               placeholder="e.g. Senior Engineer at Acme Corp"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900
-                         placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none
-                         focus:ring-1 focus:ring-blue-500"
+                         placeholder-gray-400 shadow-sm focus:border-brand-500 focus:outline-none
+                         focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <div>
@@ -348,8 +348,8 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
               value={form.experience_level}
               onChange={(e) => field("experience_level", e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm
-                         text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none
-                         focus:ring-1 focus:ring-blue-500"
+                         text-gray-900 shadow-sm focus:border-brand-500 focus:outline-none
+                         focus:ring-1 focus:ring-brand-500"
             >
               <option value="">Select level...</option>
               {EXPERIENCE_LEVELS.map(({ value, label }) => (
@@ -405,8 +405,8 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
               onChange={(e) => field("location", e.target.value)}
               placeholder="e.g. San Francisco, CA or Remote"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900
-                         placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none
-                         focus:ring-1 focus:ring-blue-500"
+                         placeholder-gray-400 shadow-sm focus:border-brand-500 focus:outline-none
+                         focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <label className="flex cursor-pointer items-center gap-3 text-sm text-gray-700 select-none">
@@ -415,7 +415,7 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
               type="checkbox"
               checked={form.open_to_remote}
               onChange={(e) => field("open_to_remote", e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
             />
             <span>Open to remote opportunities</span>
           </label>
@@ -427,8 +427,8 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
         <button
           type="submit"
           disabled={saving || evaluating}
-          className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white
-                     shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white
+                     shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors"
         >
           {saving ? "Saving..." : evaluating ? "Analyzing..." : "Save profile"}
         </button>
@@ -438,7 +438,7 @@ export function ProfileForm({ initial, userId, cycleId }: ProfileFormProps) {
         )}
 
         {evaluating && (
-          <span className="flex items-center gap-2 text-sm text-blue-600">
+          <span className="flex items-center gap-2 text-sm text-brand-600">
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>

@@ -215,7 +215,7 @@ export function BillingSettings() {
               {(["free", "premium", "professional"] as SubscriptionPlan[]).map((p) => (
                 <tr key={p} className={p === plan ? "font-semibold text-gray-900" : "text-gray-600"}>
                   <td className="py-2 pr-4 capitalize">
-                    {p} {p === plan && <span className="ml-1 text-xs text-blue-600">(current)</span>}
+                    {p} {p === plan && <span className="ml-1 text-xs text-brand-600">(current)</span>}
                   </td>
                   <td className="py-2 pr-4">
                     {PLAN_PRICES[p].monthly === 0 ? "Free" : `$${PLAN_PRICES[p].monthly}/mo`}

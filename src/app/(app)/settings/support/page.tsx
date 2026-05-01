@@ -96,7 +96,7 @@ export default function SettingsSupportPage() {
               minLength={5}
               maxLength={200}
               required
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
@@ -113,7 +113,7 @@ export default function SettingsSupportPage() {
               maxLength={5000}
               required
               rows={5}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
             />
             <p className="mt-1 text-right text-xs text-gray-400">{body.length}/5000</p>
           </div>
@@ -128,7 +128,7 @@ export default function SettingsSupportPage() {
                   onClick={() => setPriority(value)}
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors
                     ${priority === value
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
                       : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
                     }`}
                 >
@@ -152,7 +152,7 @@ export default function SettingsSupportPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
             {submitting ? "Submitting…" : "Submit ticket"}
           </button>

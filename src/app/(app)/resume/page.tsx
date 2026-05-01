@@ -29,12 +29,12 @@ interface FitCheckResult {
 function ScoreRing({ score }: { score: number }) {
   const color =
     score >= 80 ? "text-emerald-600" :
-    score >= 60 ? "text-blue-600" :
+    score >= 60 ? "text-brand-600" :
     score >= 40 ? "text-amber-500" :
                   "text-red-500";
   const bg =
     score >= 80 ? "bg-emerald-50 border-emerald-200" :
-    score >= 60 ? "bg-blue-50 border-blue-200" :
+    score >= 60 ? "bg-brand-50 border-brand-200" :
     score >= 40 ? "bg-amber-50 border-amber-200" :
                   "bg-red-50 border-red-200";
   const label =
@@ -57,7 +57,7 @@ function Pill({ text, color }: { text: string; color: "green" | "red" | "amber" 
     green: "bg-emerald-50 text-emerald-700",
     red:   "bg-red-50 text-red-700",
     amber: "bg-amber-50 text-amber-700",
-    blue:  "bg-blue-50 text-blue-700",
+    blue:  "bg-brand-50 text-brand-700",
   }[color];
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>{text}</span>;
 }
@@ -243,9 +243,9 @@ export default function FitCheckPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors ${
-                  dragOver ? "border-blue-400 bg-blue-50" :
+                  dragOver ? "border-brand-400 bg-brand-50" :
                   uploadedFile ? "border-emerald-300 bg-emerald-50" :
-                  "border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40"
+                  "border-gray-300 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/40"
                 }`}
               >
                 <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
@@ -272,13 +272,13 @@ export default function FitCheckPage() {
               <div>
                 {!versionsLoaded ? (
                   <div className="flex items-center justify-center py-6">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                   </div>
                 ) : versions.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
                     <p className="text-sm text-gray-500">No saved versions yet.</p>
                     <p className="mt-1 text-xs text-gray-400">
-                      Go to <a href="/profile" className="text-blue-500 underline">My Career</a> to upload and save a resume version.
+                      Go to <a href="/profile" className="text-brand-500 underline">My Career</a> to upload and save a resume version.
                     </p>
                   </div>
                 ) : (
@@ -289,18 +289,18 @@ export default function FitCheckPage() {
                         onClick={() => { setSelectedVersion(v); setResult(null); }}
                         className={`w-full rounded-lg border px-4 py-3 text-left transition-colors ${
                           selectedVersion?.id === v.id
-                            ? "border-blue-400 bg-blue-50"
-                            : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/30"
+                            ? "border-brand-400 bg-brand-50"
+                            : "border-gray-200 bg-white hover:border-brand-200 hover:bg-brand-50/30"
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <p className="font-medium text-gray-900">{v.version_name}</p>
                           {selectedVersion?.id === v.id && (
-                            <span className="text-xs font-semibold text-blue-600">Selected ✓</span>
+                            <span className="text-xs font-semibold text-brand-600">Selected ✓</span>
                           )}
                         </div>
                         <p className="mt-0.5 text-xs text-gray-400">
-                          {v.job_type && <span className="mr-2 text-blue-500">{v.job_type}</span>}
+                          {v.job_type && <span className="mr-2 text-brand-500">{v.job_type}</span>}
                           {new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </p>
                       </button>
@@ -338,7 +338,7 @@ export default function FitCheckPage() {
                 onChange={(e) => { setJobDescription(e.target.value); setResult(null); }}
                 placeholder="Paste the full job description here…"
                 rows={8}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             ) : (
               <input
@@ -346,7 +346,7 @@ export default function FitCheckPage() {
                 value={jobUrl}
                 onChange={(e) => { setJobUrl(e.target.value); setResult(null); }}
                 placeholder="https://www.linkedin.com/jobs/view/..."
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             )}
           </section>
@@ -355,7 +355,7 @@ export default function FitCheckPage() {
           <button
             onClick={() => void handleCheck()}
             disabled={!canCheck}
-            className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+            className="w-full rounded-xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
           >
             {checking ? (
               <span className="flex items-center justify-center gap-2">
@@ -437,14 +437,14 @@ export default function FitCheckPage() {
 
               {/* Recommendations */}
               {result.recommendations.length > 0 && (
-                <section className="rounded-xl border border-blue-100 bg-white p-6 shadow-sm">
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-blue-600">
+                <section className="rounded-xl border border-brand-100 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-600">
                     💡 Recommendations
                   </h2>
                   <ol className="space-y-2">
                     {result.recommendations.map((r, i) => (
                       <li key={i} className="flex gap-3 text-sm text-gray-700">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
                           {i + 1}
                         </span>
                         <span>{r}</span>

@@ -74,7 +74,7 @@ export function AppSidebar() {
       {/* ── Logo ── */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
         {(!collapsed || isMobile) && (
-          <a href="/dashboard" className="flex items-center gap-2 font-bold text-blue-600 text-base tracking-tight">
+          <a href="/dashboard" className="flex items-center gap-2 font-bold text-brand-600 text-base tracking-tight">
             iCareerOS
           </a>
         )}
@@ -105,12 +105,12 @@ export function AppSidebar() {
               title={collapsed && !isMobile ? label : undefined}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium transition-colors
                 ${active
-                  ? "bg-blue-50 text-blue-700"
+                  ? "bg-brand-50 text-brand-700"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }
                 ${collapsed && !isMobile ? "justify-center px-2" : ""}`}
             >
-              <span className={active ? "text-blue-600" : "text-gray-400"}>
+              <span className={active ? "text-brand-600" : "text-gray-400"}>
                 <Ic d={ICONS[icon as keyof typeof ICONS]} />
               </span>
               {(!collapsed || isMobile) && <span>{label}</span>}
@@ -154,7 +154,7 @@ export function AppSidebar() {
           >
             <Ic d={ICONS.menu} size={20} />
           </button>
-          <a href="/dashboard" className="font-bold text-blue-600 text-base">iCareerOS</a>
+          <a href="/dashboard" className="font-bold text-brand-600 text-base">iCareerOS</a>
           <div className="w-8" />
         </div>
         {mobileOpen && (

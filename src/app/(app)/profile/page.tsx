@@ -96,13 +96,13 @@ function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (
   }
   return (
     <div
-      className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 cursor-text"
+      className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 cursor-text"
       onClick={() => ref.current?.focus()}
     >
       {tags.map(tag => (
-        <span key={tag} className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+        <span key={tag} className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
           {tag}
-          <button type="button" onClick={e => { e.stopPropagation(); onChange(tags.filter(t => t !== tag)); }} className="ml-0.5 text-blue-400 hover:text-blue-600">×</button>
+          <button type="button" onClick={e => { e.stopPropagation(); onChange(tags.filter(t => t !== tag)); }} className="ml-0.5 text-brand-400 hover:text-brand-600">×</button>
         </span>
       ))}
       <input ref={ref} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
@@ -130,7 +130,7 @@ function CheckboxGroup({ options, selected, onChange }: {
             type="checkbox"
             checked={selected.includes(opt.value)}
             onChange={() => toggle(opt.value)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
           />
           <span className="text-sm text-gray-700">{opt.label}</span>
         </label>
@@ -149,16 +149,16 @@ function SaveModal({ onSave, onClose, saving }: { onSave: (name: string, jobType
         <h3 className="mb-4 text-lg font-bold text-gray-900">Save Resume Version</h3>
         <label className="mb-1 block text-sm font-medium text-gray-700">Version name</label>
         <input type="text" value={name} onChange={e => setName(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           placeholder="e.g. Software Engineer — Google" />
         <label className="mb-1 block text-sm font-medium text-gray-700">Job type <span className="text-gray-400">(optional)</span></label>
         <input type="text" value={jobType} onChange={e => setJobType(e.target.value)}
-          className="mb-6 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="mb-6 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           placeholder="e.g. Engineering, Product, Finance" />
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
           <button onClick={() => onSave(name.trim() || "My Resume", jobType.trim())} disabled={saving}
-            className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
@@ -431,10 +431,10 @@ export default function CareerProfilePage() {
   function removeEdu(i: number) { setEducation(prev => prev.filter((_, idx) => idx !== i)); }
 
   if (profileLoading) {
-    return <div className="flex min-h-[40vh] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    return <div className="flex min-h-[40vh] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" /></div>;
   }
 
-  const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 
   return (
     <>
@@ -444,18 +444,18 @@ export default function CareerProfilePage() {
           <div className="flex-1">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Profile Completeness</span>
-              <span className="text-sm font-semibold text-blue-600">{completeness}%</span>
+              <span className="text-sm font-semibold text-brand-600">{completeness}%</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
               <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                className="h-full rounded-full bg-brand-600 transition-all duration-500"
                 style={{ width: `${completeness}%` }}
               />
             </div>
           </div>
           <div className="flex items-center gap-3 sm:ml-6">
             <button type="submit" disabled={saving}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors">
               {saving ? "Saving…" : "Save Profile"}
             </button>
             {profileMsg && (
@@ -476,9 +476,9 @@ export default function CareerProfilePage() {
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
-                dragOver ? "border-blue-400 bg-blue-50" :
+                dragOver ? "border-brand-400 bg-brand-50" :
                 uploadedFile ? "border-emerald-300 bg-emerald-50" :
-                "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40"
+                "border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/40"
               }`}
             >
               <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
@@ -494,7 +494,7 @@ export default function CareerProfilePage() {
 
             {uploadedFile && (
               <button type="button" onClick={() => void handleUploadAndSave()} disabled={parsing}
-                className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors">
                 {parsing ? "Parsing…" : "Upload Resume"}
               </button>
             )}
@@ -519,13 +519,13 @@ export default function CareerProfilePage() {
                           <div>
                             <p className="text-sm font-medium text-gray-900">{v.version_name}</p>
                             <p className="text-xs text-gray-400">
-                              {v.job_type && <span className="mr-2 text-blue-500">{v.job_type}</span>}
+                              {v.job_type && <span className="mr-2 text-brand-500">{v.job_type}</span>}
                               {new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                             </p>
                           </div>
                           <div className="flex gap-2">
                             <button type="button" onClick={() => setViewingVersion(v)}
-                              className="rounded px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">View</button>
+                              className="rounded px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50">View</button>
                             <button type="button" onClick={() => void handleDelete(v.id)}
                               className="rounded px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50">Delete</button>
                           </div>
@@ -603,7 +603,7 @@ export default function CareerProfilePage() {
                 <div>
                   <label className="mb-1 block text-xs text-gray-500">Country</label>
                   <select value={locationCountry} onChange={e => setLocationCountry(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                     <option value="">Select country</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -651,10 +651,10 @@ export default function CareerProfilePage() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <label className="text-sm font-medium text-gray-700">Minimum Fit Score</label>
-                <span className="text-sm font-semibold text-blue-600">{minFitScore}%</span>
+                <span className="text-sm font-semibold text-brand-600">{minFitScore}%</span>
               </div>
               <input type="range" min={0} max={100} step={5} value={minFitScore} onChange={e => setMinFitScore(Number(e.target.value))}
-                className="w-full accent-blue-600" />
+                className="w-full accent-brand-600" />
               <div className="mt-1 flex justify-between text-xs text-gray-400">
                 <span>More Jobs (0%)</span>
                 <span>Higher Quality (100%)</span>
@@ -673,8 +673,8 @@ export default function CareerProfilePage() {
                   <button key={m.value} type="button" onClick={() => setSearchMode(m.value)}
                     className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
                       searchMode === m.value
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600"
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-gray-300 bg-white text-gray-600 hover:border-brand-400 hover:text-brand-600"
                     }`}>
                     {m.label}
                   </button>
@@ -717,7 +717,7 @@ export default function CareerProfilePage() {
                 </div>
               ))}
               <button type="button" onClick={() => setWorkExp(prev => [...prev, EMPTY_EXP()])}
-                className="w-full rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                className="w-full rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
                 + Add Experience
               </button>
             </div>
@@ -747,7 +747,7 @@ export default function CareerProfilePage() {
                 </div>
               ))}
               <button type="button" onClick={() => setEducation(prev => [...prev, EMPTY_EDU()])}
-                className="w-full rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                className="w-full rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
                 + Add Education
               </button>
             </div>
@@ -778,13 +778,13 @@ export default function CareerProfilePage() {
               </div>
             ))}
             <button type="button" onClick={() => setPortfolioItems(p => [...p, {title:"",url:"",desc:""}])}
-              className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium">+ Add Item</button>
+              className="mt-1 text-sm text-brand-600 hover:text-brand-700 font-medium">+ Add Item</button>
           </Section>
 
           {/* ── Save (bottom) ─────────────────────────────────────────── */}
           <div className="flex items-center gap-4 pb-8">
             <button type="submit" disabled={saving}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors">
               {saving ? "Saving…" : "Save Profile"}
             </button>
             {profileMsg && (

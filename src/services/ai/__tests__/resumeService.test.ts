@@ -45,7 +45,7 @@ const {
 // ── Sample data ────────────────────────────────────────────────────────────────
 
 const SAMPLE_PARSED: ParsedResume = {
-  contact: { name: "Jane Doe", email: "jane@example.com", phone: "555-0100", location: "SF, CA" },
+  contact: { name: "Jane Doe", email: "jane@example.com", phone: "555-0100", location: "SF, CA", linkedin: "" },
   summary: "Experienced software engineer with 8 years in backend systems.",
   experience: [
     {

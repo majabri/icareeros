@@ -105,8 +105,8 @@ export function OutreachCard({
           {/* Not yet generated */}
           {!result && !loading && !error && (
             <div className="text-center py-6">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
-                <svg className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50">
+                <svg className="h-6 w-6 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                 </svg>
               </div>
@@ -115,8 +115,8 @@ export function OutreachCard({
               </p>
               <button
                 onClick={generate}
-                className="mt-4 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white
-                           shadow-sm hover:bg-blue-700 transition-colors"
+                className="mt-4 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white
+                           shadow-sm hover:bg-brand-700 transition-colors"
               >
                 Generate message
               </button>
@@ -126,7 +126,7 @@ export function OutreachCard({
           {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
               <p className="text-sm text-gray-500">Writing your outreach…</p>
             </div>
           )}
@@ -156,7 +156,7 @@ export function OutreachCard({
                     onClick={() => setPlatform(p)}
                     className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors
                       ${platform === p
-                        ? "bg-blue-600 text-white shadow-sm"
+                        ? "bg-brand-600 text-white shadow-sm"
                         : "text-gray-500 hover:text-gray-700"
                       }`}
                   >
@@ -196,7 +196,7 @@ export function OutreachCard({
                   {result.tips.map((tip, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
                       <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center
-                                       rounded-full bg-blue-100 text-blue-600 font-semibold">
+                                       rounded-full bg-brand-100 text-brand-600 font-semibold">
                         {i + 1}
                       </span>
                       {tip}
@@ -211,7 +211,7 @@ export function OutreachCard({
                 className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-colors
                   ${copied
                     ? "bg-green-600 text-white"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-brand-600 text-white hover:bg-brand-700"
                   }`}
               >
                 {copied ? "✓ Copied!" : "Copy message"}

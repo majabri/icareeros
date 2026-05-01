@@ -82,9 +82,9 @@ export function CycleSummaryPanel({
 
       {/* Next cycle recommendation */}
       {topNextFocus && (
-        <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
-          <p className="text-xs font-semibold text-blue-600 mb-1">Recommended next focus</p>
-          <p className="text-sm text-blue-800 leading-relaxed">{topNextFocus}</p>
+        <div className="mt-4 rounded-xl bg-brand-50 border border-brand-200 px-4 py-3">
+          <p className="text-xs font-semibold text-brand-600 mb-1">Recommended next focus</p>
+          <p className="text-sm text-brand-800 leading-relaxed">{topNextFocus}</p>
         </div>
       )}
 
@@ -94,8 +94,8 @@ export function CycleSummaryPanel({
           onClick={() => onStartNextCycle(topNextFocus)}
           disabled={running}
           data-testid="start-next-cycle-btn"
-          className="flex-1 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold
-                     text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+          className="flex-1 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold
+                     text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed
                      transition-colors"
         >
           {running ? "Starting next cycle..." : "Start next cycle →"}
