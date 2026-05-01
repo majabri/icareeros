@@ -51,7 +51,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen text-gray-900 antialiased" style={{ background: "linear-gradient(135deg, #f5f7ff 0%, #e8f5ff 50%, #fff5e8 100%)", backgroundAttachment: "fixed" }}>
         {/* Skip navigation for keyboard / screen-reader users */}
         <a
           href="#main-content"
