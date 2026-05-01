@@ -28,19 +28,17 @@ export function AppTopBar({ onMenuClick }: Props) {
 
   useEffect(() => {
     const supabase = createClient();
-    (async () => {
+
+    async function loadProfile() {
       const { data: authData } = await supabase.auth.getUser();
       const user = authData.user;
       if (!user) return;
 
-      // Avatar — only available for OAuth providers (Google, GitHub, etc.)
-      const metaAvatar: string | undefined = user.user_metadata?.avatar_url;
-      if (metaAvatar) setAvatarUrl(metaAvatar);
-
-      // Name — prefer user_profiles (resume-sourced), fall back to auth metadata
+      // Name + avatar from user_profiles (resume-sourced, most accurate)
+      // Fall back to OAuth user_metadata for avatar, email prefix for name
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("full_name")
+        .select("full_name, avatar_url")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -50,16 +48,32 @@ export function AppTopBar({ onMenuClick }: Props) {
         user.email?.split("@")[0] ||
         "";
 
-      setDisplayName(name);
+      const avatar: string | null =
+        profile?.avatar_url ||
+        user.user_metadata?.avatar_url ||
+        null;
 
-      // Initials for fallback avatar
+      setDisplayName(name);
+      setAvatarUrl(avatar);
+
+      // Initials for fallback circle
       const parts = name.split(/\s+/).filter(Boolean);
       setInitials(
         parts.length >= 2
           ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
           : name.slice(0, 2).toUpperCase()
       );
-    })();
+    }
+
+    void loadProfile();
+
+    // Live-update when user uploads a new photo on the profile page
+    function onAvatarUpdated(e: Event) {
+      const url = (e as CustomEvent<{ url: string }>).detail.url;
+      setAvatarUrl(url);
+    }
+    window.addEventListener("icareeros:avatar-updated", onAvatarUpdated);
+    return () => window.removeEventListener("icareeros:avatar-updated", onAvatarUpdated);
   }, []);
 
   async function signOut() {
