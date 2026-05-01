@@ -14,7 +14,7 @@ const USERNAME_MAP: Record<string, string> = {
 };
 
 // Emails that land on /admin after login
-const ADMIN_EMAILS = ["majabri714@gmail.com", "azadmin@icareeros.com"];
+const ADMIN_EMAILS = ["azadmin@icareeros.com"];
 
 export function AuthForm({ mode }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import type { CookieOptions } from "@supabase/ssr";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
-const ADMIN_EMAILS = ["majabri714@gmail.com", "azadmin@icareeros.com"];
+const ADMIN_EMAILS = ["azadmin@icareeros.com"];
 
 async function getUser() {
   const cookieStore = await cookies();
