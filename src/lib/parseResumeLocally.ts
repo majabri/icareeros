@@ -57,11 +57,16 @@ const DATE_RANGE = /((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\
 // IMPORTANT: every alternative is inside one capturing group with ^ before and
 // \s*:?\s*$ after, so a keyword inside ordinary text never falsely switches bucket.
 const SECTION: Record<string, RegExp> = {
-  summary:        /^(summary|objective|profile|about\s+me|professional\s+summary|career\s+objective|career\s+profile|about)\s*:?\s*$/i,
-  experience:     /^(work\s+experience|experience|employment(\s+history)?|work\s+history|professional\s+experience|career(\s+history)?|positions?\s+held)\s*:?\s*$/i,
-  education:      /^(education(al\s+(background|history))?|academic(\s+background)?|qualifications?)\s*:?\s*$/i,
-  skills:         /^(technical\s+skills|skills|core\s+competencies|key\s+competencies|areas\s+of\s+expertise|technologies|tools\s+&\s+technologies|technical\s+expertise|expertise|languages\s+&\s+tools)\s*:?\s*$/i,
-  certifications: /^(certifications?(\s+&\s+licenses?)?|licen[cs]es?(\s+&\s+certifications?)?|credentials?|awards?(\s+&\s+certifications?)?|professional\s+(certifications?|development|credentials?)|training(\s+&\s+certifications?)?|accreditations?)\s*:?\s*$/i,
+  summary:
+    /^(summary|objective|profile|about\s+me|professional\s+summary|career\s+objective|career\s+profile|career\s+summary|executive\s+summary|personal\s+statement|about)\s*:?\s*$/i,
+  experience:
+    /^(work\s+experience|experience|relevant\s+(work\s+)?experience|employment(\s+history)?|work\s+history|job\s+history|professional\s+(experience|background|history)|career(\s+(experience|history))?|positions?\s+held)\s*:?\s*$/i,
+  education:
+    /^(education(al\s+(background|history))?|academic(\s+(background|history))?|qualifications?|schooling)\s*:?\s*$/i,
+  skills:
+    /^(technical\s+skills|skills(\s+summary)?|skill\s+set|core\s+competencies|key\s+(skills|competencies)|competencies|areas\s+of\s+expertise|technologies(\s+&\s+tools)?|tools(\s+&\s+technologies)?|technical\s+expertise|expertise|relevant\s+skills|languages\s+&\s+tools)\s*:?\s*$/i,
+  certifications:
+    /^(certifications?(\s+&\s+licenses?)?|licen[cs]es?(\s+&\s+certifications?)?|credentials?|awards?(\s+&\s+certifications?)?|professional\s+(certifications?|development|credentials?)|training(\s+&\s+certifications?)?|accreditations?|continuing\s+education)\s*:?\s*$/i,
 };
 
 const DEGREE_KEYWORDS = /\b(b\.?s\.?|b\.?a\.?|b\.?eng\.?|b\.?sc\.?|b\.?comm?\.?|m\.?s\.?|m\.?a\.?|m\.?b\.?a\.?|m\.?eng\.?|m\.?sc\.?|ph\.?d\.?|d\.?ba\.?|j\.?d\.?|l\.?l\.?[bm]\.?|bachelor|master(?:s)?|doctor(?:ate)?|associate|diploma|certificate|a\.?s\.?|a\.?a\.?)\b/i;
@@ -117,7 +122,16 @@ function splitTitleCompany(text: string): [string, string] {
 // ── Main parser ───────────────────────────────────────────────────────────────
 
 export function parseResumeLocally(rawText: string): ParsedResume {
-  const lines = rawText.split(/\r?\n/).map(l => l.trimEnd());
+  // ── 0. Pre-process: normalize common DOCX artifacts ─────────────────────
+  // mammoth outputs table cells tab-separated — treat tabs like pipe separators
+  // so "Name\tEmail\tPhone" is handled the same as "Name | Email | Phone"
+  const normalized = rawText
+    .replace(/\t+/g, " | ")              // tabs → pipe separator
+    .replace(/[ \t]{3,}/g, "  ")         // 3+ spaces/tabs → 2 spaces (preserve indent)
+    .replace(/\r\n/g, "\n")             // CRLF → LF
+    .replace(/\n{4,}/g, "\n\n\n");     // 4+ blank lines → max 2 blank lines
+
+  const lines = normalized.split(/\n/).map(l => l.trimEnd());
 
   // ── 1. Contact (scan header — first ~35 lines) ────────────────────────────
   // NOTE: multiple fields can appear on the same line (e.g. "Jane Doe | jane@x.com | linkedin.com/in/jane")
