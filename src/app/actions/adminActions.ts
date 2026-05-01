@@ -10,25 +10,52 @@ function makeSvc() {
   );
 }
 
+export type UserRole = "user" | "moderator" | "admin";
+export type SubscriptionPlan = "free" | "pro" | "premium";
+
 /**
- * Reset a user's subscription plan back to 'free'.
- * Admin-only — caller should verify admin identity before invoking.
+ * Set a user's subscription plan (upgrade or downgrade).
  */
-export async function resetUserPlan(userId: string): Promise<{ error?: string }> {
+export async function setUserPlan(
+  userId: string,
+  plan: SubscriptionPlan
+): Promise<{ error?: string }> {
   const svc = makeSvc();
   const { error } = await svc
     .from("user_subscriptions")
-    .update({ plan: "free", status: "active", updated_at: new Date().toISOString() })
+    .update({ plan, status: "active", updated_at: new Date().toISOString() })
     .eq("user_id", userId);
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  return {};
+}
+
+/**
+ * @deprecated Use setUserPlan instead.
+ */
+export async function resetUserPlan(userId: string): Promise<{ error?: string }> {
+  return setUserPlan(userId, "free");
+}
+
+/**
+ * Set a user's role (user | moderator | admin).
+ */
+export async function setUserRole(
+  userId: string,
+  role: UserRole
+): Promise<{ error?: string }> {
+  const svc = makeSvc();
+  const { error } = await svc
+    .from("profiles")
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/users");
   return {};
 }
 
 /**
  * Confirm a user's email address via the Supabase Admin API.
- * Equivalent to checking "Email confirmed" in the Supabase dashboard.
- * Idempotent — safe to call on already-confirmed users.
  */
 export async function confirmUserEmail(userId: string): Promise<{ error?: string }> {
   const svc = makeSvc();
@@ -36,13 +63,12 @@ export async function confirmUserEmail(userId: string): Promise<{ error?: string
     email_confirm: true,
   });
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/users");
   return {};
 }
 
 /**
  * Update a support ticket's status.
- * Admin-only — uses service-role to bypass RLS.
  */
 export async function updateTicketStatus(
   ticketId: string,
