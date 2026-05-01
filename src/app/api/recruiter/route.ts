@@ -8,12 +8,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createTracedClient } from "@/lib/observability/langfuse";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 const SYSTEM_PROMPT = `You are an expert technical recruiter and talent strategist. Your job is to help hiring managers and recruiters efficiently screen and evaluate candidates.
 
@@ -49,6 +48,7 @@ export async function POST(req: NextRequest) {
   );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const anthropic = createTracedClient(user.id, "recruiter");
 
   const body = await req.json().catch(() => ({}));
   const jobDescription = (body.job_description as string | undefined)?.trim();

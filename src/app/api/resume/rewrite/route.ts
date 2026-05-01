@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ Original resume:
 ${resumeText}`;
 
     // 4. Call Claude Sonnet
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const anthropic = createTracedClient(user.id, "resume/rewrite");
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",

@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import type { LearnResult } from "@/services/ai/learnService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
@@ -156,9 +156,7 @@ export async function POST(req: Request) {
     ].join("\n");
 
     // 5. Call Claude Sonnet
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!,
-    });
+    const anthropic = createTracedClient(user.id, "career-os/learn");
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",

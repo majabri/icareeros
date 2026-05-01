@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,9 +112,7 @@ export async function POST(req: Request) {
     const userMessage = "Evaluate this career profile:\n\n" + profileText;
 
     // 5. Call Claude API
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!,
-    });
+    const anthropic = createTracedClient(user.id, "career-os/evaluate");
 
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",

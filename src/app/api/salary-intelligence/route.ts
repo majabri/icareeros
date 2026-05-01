@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 import { cache } from "@/lib/cache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ Example:
   const userMessage = `Estimate 2026 salary ranges for these opportunities:\n\n${opportunitiesText}\n\nReturn the JSON map now.`;
 
   // ── Call Claude Haiku ───────────────────────────────────────────────────────
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = createTracedClient(user.id, "salary-intelligence");
 
   let raw: string;
   try {
