@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BillingSettings } from "@/components/billing/BillingSettings";
+import { ReferralSection } from "@/components/billing/ReferralSection";
 
 export const metadata: Metadata = {
   title: "Billing — iCareerOS",
@@ -15,6 +16,7 @@ export default function BillingPage() {
         </p>
       </div>
       <BillingSettings />
+      <ReferralSection />
     </div>
   );
 }

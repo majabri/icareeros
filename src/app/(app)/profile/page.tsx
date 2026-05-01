@@ -22,6 +22,7 @@ import {
   type ResumeVersion,
 } from "@/services/ai/resumeService";
 import type { ParsedResume } from "@/lib/parseResumeLocally";
+import { getActiveCycle, advanceStage } from "@/orchestrator/careerOsOrchestrator";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -133,7 +134,7 @@ export default function CareerProfilePage() {
   const [certifications, setCertifications] = useState<string[]>([]);
 
   const [portfolioItems, setPortfolioItems]   = useState<{title:string;url:string;desc:string}[]>([]);
-  const [referralLink, setReferralLink]       = useState("");
+  const [cycleId, setCycleId]                 = useState<string | null>(null);
   const [userId, setUserId]                   = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving]                 = useState(false);
@@ -161,6 +162,8 @@ export default function CareerProfilePage() {
         const u = data.user;
         if (!u) return;
         setUserId(u.id);
+        const cycle = await getActiveCycle(u.id);
+        if (cycle?.id) setCycleId(cycle.id);
         const { data: p } = await supabase
           .from("user_profiles")
           .select("full_name, phone, linkedin_url, summary, current_position, experience_level, target_roles, skills, location, open_to_remote, work_experience, education, certifications, portfolio_items")
@@ -171,7 +174,6 @@ export default function CareerProfilePage() {
           setPhone(p.phone ?? "");
           setLinkedinUrl(p.linkedin_url ?? "");
           if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
-          setReferralLink(`https://icareeros.com/?ref=${u.id.slice(0,8)}`);
           setSummary(p.summary ?? "");
           setCurrentPosition(p.current_position ?? "");
           setExperienceLevel(p.experience_level ?? "");
@@ -225,6 +227,11 @@ export default function CareerProfilePage() {
       );
       if (error) throw new Error(error.message);
       setProfileMsg({ type: "success", text: "Profile saved." });
+
+      // Trigger Evaluate AI stage if an active cycle exists
+      if (userId && cycleId) {
+        void advanceStage(userId, cycleId, "evaluate").catch(() => {/* non-blocking */});
+      }
     } catch (err) {
       setProfileMsg({ type: "error", text: (err as Error).message });
     } finally {
@@ -571,20 +578,6 @@ export default function CareerProfilePage() {
             <button type="button" onClick={() => setPortfolioItems(p => [...p, {title:"",url:"",desc:""}])}
               className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium">+ Add Item</button>
           </Section>
-
-          {/* ── Referral ────────────────────────────────────────────── */}
-          {referralLink && (
-            <Section title="Referral Program" subtitle="Invite friends — unlock Premium when 3 sign up.">
-              <div className="flex gap-2 max-w-lg">
-                <input readOnly value={referralLink} className={`${inputCls} flex-1 bg-gray-50 cursor-default`} />
-                <button type="button" onClick={() => { navigator.clipboard.writeText(referralLink); }}
-                  className="shrink-0 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                  Copy
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-gray-400">Share your link. When 3 friends sign up you unlock Premium features.</p>
-            </Section>
-          )}
 
           {/* ── Save ────────────────────────────────────────────────── */}
           <div className="flex items-center gap-4 pb-8">

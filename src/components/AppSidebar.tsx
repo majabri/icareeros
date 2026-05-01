@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
-// ── Icons (inline SVG — no external dep) ──────────────────────────────────────
 const Ic = ({ d, size = 18 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
@@ -59,7 +58,6 @@ export function AppSidebar() {
     });
   }, []);
 
-  // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   async function signOut() {
@@ -71,25 +69,26 @@ export function AppSidebar() {
     pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
   const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
-    <div className={`flex h-full flex-col bg-slate-900 text-slate-100 ${isMobile ? "w-64" : collapsed ? "w-16" : "w-60"} transition-all duration-200`}>
+    <div className={`flex h-full flex-col bg-white border-r border-gray-200 ${isMobile ? "w-64" : collapsed ? "w-16" : "w-56"} transition-all duration-200`}>
+
       {/* ── Logo ── */}
-      <div className="flex h-14 items-center justify-between px-4 border-b border-slate-800">
+      <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
         {(!collapsed || isMobile) && (
-          <a href="/dashboard" className="flex items-center gap-2 font-bold text-white text-base tracking-tight">
-            <span className="text-blue-400">iCareerOS</span>
+          <a href="/dashboard" className="flex items-center gap-2 font-bold text-blue-600 text-base tracking-tight">
+            iCareerOS
           </a>
         )}
         {!isMobile && (
           <button
             onClick={() => setCollapsed(c => !c)}
-            className="ml-auto rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            className="ml-auto rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <Ic d={ICONS.menu} size={16} />
           </button>
         )}
         {isMobile && (
-          <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-md p-1.5 text-slate-400 hover:text-white">
+          <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-md p-1.5 text-gray-400 hover:text-gray-600">
             <Ic d={ICONS.close} size={16} />
           </button>
         )}
@@ -104,14 +103,16 @@ export function AppSidebar() {
               key={href}
               href={href}
               title={collapsed && !isMobile ? label : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium transition-colors
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium transition-colors
                 ${active
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }
                 ${collapsed && !isMobile ? "justify-center px-2" : ""}`}
             >
-              <Ic d={ICONS[icon as keyof typeof ICONS]} />
+              <span className={active ? "text-blue-600" : "text-gray-400"}>
+                <Ic d={ICONS[icon as keyof typeof ICONS]} />
+              </span>
               {(!collapsed || isMobile) && <span>{label}</span>}
             </a>
           );
@@ -119,17 +120,17 @@ export function AppSidebar() {
       </nav>
 
       {/* ── User + sign out ── */}
-      <div className="border-t border-slate-800 px-2 py-3">
+      <div className="border-t border-gray-100 px-2 py-3">
         {(!collapsed || isMobile) && userName && (
-          <div className="px-3 py-1.5 text-xs text-slate-500 truncate">{userName}</div>
+          <div className="px-3 py-1.5 text-xs text-gray-400 truncate">{userName}</div>
         )}
         <button
           onClick={signOut}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors
+          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors
             ${collapsed && !isMobile ? "justify-center px-2" : ""}`}
           title={collapsed && !isMobile ? "Sign out" : undefined}
         >
-          <Ic d={ICONS.signout} />
+          <span className="text-gray-400"><Ic d={ICONS.signout} /></span>
           {(!collapsed || isMobile) && <span>Sign out</span>}
         </button>
       </div>
@@ -139,17 +140,16 @@ export function AppSidebar() {
   return (
     <>
       {/* ── Desktop sidebar (md+) ─────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col h-screen sticky top-0 shrink-0">
+      <aside className="hidden md:flex flex-col h-screen sticky top-0 shrink-0 shadow-sm">
         <SidebarContent />
       </aside>
 
-      {/* ── Mobile: hamburger + overlay drawer (below md) ─────────── */}
+      {/* ── Mobile: hamburger + overlay drawer ────────────────────── */}
       <div className="md:hidden">
-        {/* Sticky header with hamburger */}
-        <div className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm">
+        <div className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
           <button
             onClick={() => setMobileOpen(true)}
-            className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100"
+            className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
             aria-label="Open navigation"
           >
             <Ic d={ICONS.menu} size={20} />
@@ -157,17 +157,12 @@ export function AppSidebar() {
           <a href="/dashboard" className="font-bold text-blue-600 text-base">iCareerOS</a>
           <div className="w-8" />
         </div>
-
-        {/* Overlay */}
         {mobileOpen && (
-          <div
-            className="fixed inset-0 z-50 flex"
-            onClick={() => setMobileOpen(false)}
-          >
+          <div className="fixed inset-0 z-50 flex" onClick={() => setMobileOpen(false)}>
             <div onClick={e => e.stopPropagation()}>
               <SidebarContent isMobile />
             </div>
-            <div className="flex-1 bg-black/40" />
+            <div className="flex-1 bg-black/30" />
           </div>
         )}
       </div>

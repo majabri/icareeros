@@ -12,10 +12,7 @@ export default function SettingsLayout({
 }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">My Career</h1>
-        <SettingsTabs />
-      </div>
+      <SettingsTabs />
       {children}
     </div>
   );
