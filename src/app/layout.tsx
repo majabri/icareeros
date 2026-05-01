@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   description:
     "Evaluate, advise, learn, act, coach, and achieve your career goals with AI-powered guidance.",
   metadataBase: new URL("https://icareeros.com"),
+  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
   openGraph: {
     title: "iCareerOS — Your AI Career Operating System",
     description:
