@@ -1,19 +1,22 @@
 /**
  * POST /api/resume/parse
  *
- * Accepts three input modes:
- *   1. JSON  { text: string }                           → raw text paste
- *   2. JSON  { fileBase64: string, mimeType: string }   → PDF (legacy, kept for compat)
- *   3. FormData { file: File }                          → PDF | DOCX | DOC | TXT
+ * Structured resume extraction via Anthropic tool_use.
  *
- * Word (.docx / .doc) is extracted server-side via mammoth.
- * PDF is sent directly to Claude as a native document block.
- * All other files are read as UTF-8 text.
+ * The model is given an `extract_resume` tool whose input_schema declares
+ * exactly the shape we want, including which fields are required. Forcing
+ * `tool_choice: { type: "tool", name: "extract_resume" }` makes Claude
+ * populate the schema completely instead of free-form prose, which closes
+ * the 'parser not pulling all relevant data' gap the previous string-prompt
+ * approach hit.
  *
- * Uses Claude Sonnet for higher-accuracy structured extraction (vs Haiku),
- * and an expanded schema that captures linkedin/github/portfolio, project
- * work, languages with proficiency, awards, publications, volunteer, and
- * separate honors/GPA/field-of-study on education.
+ * Inputs (any one of):
+ *   1. JSON  { text: string }
+ *   2. JSON  { fileBase64: string, mimeType: "application/pdf" }
+ *   3. FormData { file: File }   (PDF | DOCX | DOC | TXT)
+ *
+ * Word docs are flattened to text via mammoth. PDFs are sent natively to
+ * Claude as a document block. All other files are read as UTF-8.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,7 +27,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import mammoth from "mammoth";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Output types (shape the route returns to the client) ──────────────────────
 
 export interface ParsedContact {
   name: string;
@@ -76,7 +79,7 @@ export interface ParsedResume {
   experience: ParsedExperience[];
   education: ParsedEducation[];
   skills: string[];
-  certifications: string[];   // formatted as "Name — Issuer (Year)" for back-compat with the profile page consumer + DB schema
+  certifications: string[];
   projects: ParsedProject[];
   languages: ParsedLanguage[];
   awards: string[];
@@ -85,7 +88,7 @@ export interface ParsedResume {
   professional_memberships: string[];
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -116,74 +119,252 @@ function isPdfFile(mimeType: string, fileName: string): boolean {
   return mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 }
 
-const SYSTEM_PROMPT = `You are an expert resume parser. Extract ALL structured data from the resume into the exact JSON schema below. Be exhaustive — do NOT drop information that exists in the resume.
-
-SCHEMA:
-{
-  "contact": {
-    "name": string,
-    "email": string,
-    "phone": string,
-    "location": string,             // city, state/country
-    "linkedin": string,             // full URL if present, e.g. "https://linkedin.com/in/jane-doe"
-    "github": string,               // full URL
-    "portfolio": string,            // personal site / portfolio URL
-    "headline": string              // role title or personal tagline shown at top of resume
-  },
-  "summary": string,                // professional summary / objective paragraph
-  "experience": [{
-    "title": string,
-    "company": string,
-    "location": string,             // job location
-    "period": string,               // human-readable, e.g. "Jan 2022 – Present"
-    "start_date": string,           // YYYY-MM if known, else YYYY, else ""
-    "end_date": string,             // YYYY-MM, YYYY, or "Present"
-    "bullets": string[],            // ALL bullets from the role — do not truncate; preserve quantified outcomes verbatim
-    "technologies": string[]        // tech / tools mentioned in this role's bullets, deduplicated
-  }],
-  "education": [{
-    "degree": string,               // e.g. "Bachelor of Science"
-    "field_of_study": string,       // e.g. "Computer Science"
-    "school": string,
-    "location": string,
-    "year": string,                 // graduation year
-    "gpa": string,                  // empty if not listed
-    "honors": string                // e.g. "Magna Cum Laude", "Dean's List"
-  }],
-  "skills": string[],               // ALL skills as individual items, deduplicated. Include hard skills, tools, frameworks, methodologies. Do NOT include sentences.
-  "certifications": string[],       // each as "Name — Issuer (Year)" if all known, else as much as available. Examples: "AWS Solutions Architect — Amazon (2023)", "PMP — PMI (2021)", "CKA — CNCF". Capture credential ID inline if present: "AWS SAA-C03 — Amazon (2023, ID: ABC123)".
-  "projects": [{
-    "title": string,
-    "description": string,
-    "technologies": string[],
-    "url": string
-  }],
-  "languages": [{
-    "name": string,                 // e.g. "Spanish"
-    "proficiency": string           // e.g. "Native", "Fluent", "Conversational", "Basic"
-  }],
-  "awards": string[],               // honors, awards, recognitions, scholarships
-  "publications": string[],         // papers, articles, books — full citation
-  "volunteer": [/* same shape as experience entries */],
-  "professional_memberships": string[]  // associations, societies, professional bodies
+/** Strip AI placeholder tokens like <UNKNOWN>, <NAME>, etc. */
+const PLACEHOLDER_RE = /^<[A-Z_]+>$/;
+function cleanString(v: unknown): string {
+  if (typeof v !== "string") return "";
+  const trimmed = v.trim();
+  return PLACEHOLDER_RE.test(trimmed) ? "" : trimmed;
 }
 
-EXTRACTION RULES:
-1. Be COMPREHENSIVE — extract every distinct piece of information. Resumes pack a lot into small space; do not skim.
-2. For experience bullets: extract EVERY bullet point or sentence describing accomplishments/responsibilities. Preserve numbers and percentages exactly. Do not summarize — copy the original text closely.
-3. Skills section: extract every skill listed. Also extract tools/tech/frameworks mentioned in experience bullets and add them to BOTH skills (top level) AND the role's technologies array.
-4. If a section doesn't exist in the resume, return an empty array [] or empty string "".
-5. Dates: prefer ISO-ish format (YYYY-MM or YYYY). If only year is given, use that. "Present" / "Current" → "Present" in end_date.
-6. URLs: include the full URL with https:// when present.
-7. Certifications must include the issuer and year if mentioned. Common issuers: AWS, Google, Microsoft, PMI, Scrum.org, Cisco, Coursera, etc.
-8. Languages: include proficiency level if specified ("native", "fluent", "intermediate", "basic"). If no level given, use "Stated".
-9. Volunteer experience uses the SAME schema as paid experience entries (title/company/location/period/bullets/etc).
-10. If unsure whether something is a project or job, prefer "experience" if it had a company/employer, else "projects".
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => (typeof x === "string" ? x.trim() : String(x ?? "").trim())).filter(Boolean);
+}
 
-OUTPUT:
-Return ONLY the JSON object — no markdown fences, no commentary, no preamble. The first character must be { and the last must be }.`;
+// ── Extraction tool ───────────────────────────────────────────────────────────
 
-// ── Handler ────────────────────────────────────────────────────────────────────
+const EXTRACT_TOOL: Anthropic.Messages.Tool = {
+  name: "extract_resume",
+  description:
+    "Extract structured resume data. Populate every field that exists in the resume. Be exhaustive — preserve numbers, do not summarize bullets, do not drop content. Use empty string \"\" for missing strings and empty array [] for missing arrays.",
+  input_schema: {
+    type: "object",
+    properties: {
+      contact: {
+        type: "object",
+        description: "Header / personal contact block",
+        properties: {
+          name:      { type: "string", description: "Full name" },
+          email:     { type: "string", description: "Email address" },
+          phone:     { type: "string", description: "Phone with formatting, e.g. '(415) 555-1234'" },
+          location:  { type: "string", description: "City, state/country" },
+          linkedin:  { type: "string", description: "Full LinkedIn URL if present" },
+          github:    { type: "string", description: "Full GitHub URL if present" },
+          portfolio: { type: "string", description: "Personal site / portfolio URL" },
+          headline:  { type: "string", description: "Tagline or role title at top of resume" },
+        },
+        required: ["name", "email", "phone", "location", "linkedin", "github", "portfolio", "headline"],
+      },
+      summary: {
+        type: "string",
+        description: "Professional summary / objective paragraph ONLY. Do not include other sections.",
+      },
+      experience: {
+        type: "array",
+        description: "EVERY work experience entry. Do not skip jobs. Do not summarize bullets — preserve quantified outcomes verbatim.",
+        items: {
+          type: "object",
+          properties: {
+            title:        { type: "string", description: "Job title" },
+            company:      { type: "string", description: "Company / organization name" },
+            location:     { type: "string", description: "Job location, empty if not listed" },
+            period:       { type: "string", description: "Human-readable date range, e.g. 'Jan 2022 – Present'" },
+            start_date:   { type: "string", description: "Start date in YYYY-MM or YYYY format" },
+            end_date:     { type: "string", description: "End date in YYYY-MM, YYYY, or 'Present'" },
+            bullets:      {
+              type: "array",
+              items: { type: "string" },
+              description: "EVERY bullet point or sentence describing accomplishments/responsibilities. Preserve numbers and percentages exactly.",
+            },
+            technologies: {
+              type: "array",
+              items: { type: "string" },
+              description: "Tools / tech / frameworks mentioned in this role's bullets",
+            },
+          },
+          required: ["title", "company", "location", "period", "start_date", "end_date", "bullets", "technologies"],
+        },
+      },
+      education: {
+        type: "array",
+        description: "EVERY education entry",
+        items: {
+          type: "object",
+          properties: {
+            degree:         { type: "string", description: "Degree type, e.g. 'Bachelor of Science'" },
+            field_of_study: { type: "string", description: "Field, e.g. 'Computer Science'" },
+            school:         { type: "string", description: "Institution name" },
+            location:       { type: "string", description: "School location" },
+            year:           { type: "string", description: "Graduation year" },
+            gpa:            { type: "string", description: "GPA if listed, else empty string" },
+            honors:         { type: "string", description: "Honors / awards / cum laude designations" },
+          },
+          required: ["degree", "field_of_study", "school", "location", "year", "gpa", "honors"],
+        },
+      },
+      skills: {
+        type: "array",
+        items: { type: "string" },
+        description: "ALL skills as individual items. Include hard skills, tools, frameworks, methodologies. Also pull in technologies mentioned in experience bullets. Deduplicate. Do NOT include sentences.",
+      },
+      certifications: {
+        type: "array",
+        items: { type: "string" },
+        description: "ALL certifications, formatted as 'Name — Issuer (Year)' when known. Examples: 'AWS Solutions Architect — Amazon (2023)', 'PMP — PMI (2021)'. If only the name is known, just use the name.",
+      },
+      projects: {
+        type: "array",
+        description: "Personal / portfolio projects (not paid jobs)",
+        items: {
+          type: "object",
+          properties: {
+            title:        { type: "string" },
+            description:  { type: "string" },
+            technologies: { type: "array", items: { type: "string" } },
+            url:          { type: "string", description: "Project URL if listed, else empty" },
+          },
+          required: ["title", "description", "technologies", "url"],
+        },
+      },
+      languages: {
+        type: "array",
+        description: "Spoken languages with proficiency",
+        items: {
+          type: "object",
+          properties: {
+            name:        { type: "string", description: "Language name, e.g. 'Spanish'" },
+            proficiency: { type: "string", description: "Native, Fluent, Conversational, Basic, or Stated if no level given" },
+          },
+          required: ["name", "proficiency"],
+        },
+      },
+      awards:                   { type: "array", items: { type: "string" }, description: "Honors, awards, recognitions, scholarships" },
+      publications:             { type: "array", items: { type: "string" }, description: "Papers, articles, books — full citation" },
+      volunteer:                {
+        type: "array",
+        description: "Volunteer experience using the same shape as paid experience",
+        items: {
+          type: "object",
+          properties: {
+            title:        { type: "string" },
+            company:      { type: "string", description: "Organization name" },
+            location:     { type: "string" },
+            period:       { type: "string" },
+            start_date:   { type: "string" },
+            end_date:     { type: "string" },
+            bullets:      { type: "array", items: { type: "string" } },
+            technologies: { type: "array", items: { type: "string" } },
+          },
+          required: ["title", "company", "location", "period", "start_date", "end_date", "bullets", "technologies"],
+        },
+      },
+      professional_memberships: { type: "array", items: { type: "string" }, description: "Associations, societies, professional bodies" },
+    },
+    required: [
+      "contact", "summary", "experience", "education",
+      "skills", "certifications", "projects", "languages",
+      "awards", "publications", "volunteer", "professional_memberships",
+    ],
+  },
+};
+
+const SYSTEM_PROMPT =
+  "You are an expert resume parser. Use the extract_resume tool to return ALL structured data from the resume. " +
+  "Be EXHAUSTIVE — extract every distinct piece of information. Preserve numbers and percentages verbatim. " +
+  "Do not summarize bullet points — copy them closely. " +
+  "If a section doesn't exist in the resume, return an empty string \"\" or empty array []. " +
+  "Pull every skill, framework, and technology listed — include the ones mentioned inside experience bullets too. " +
+  "You MUST call the extract_resume tool. Do not respond with prose.";
+
+// ── Normalization ─────────────────────────────────────────────────────────────
+
+function normalizeExperience(arr: unknown): ParsedExperience[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    return {
+      title:        cleanString(o.title),
+      company:      cleanString(o.company),
+      location:     cleanString(o.location),
+      period:       cleanString(o.period),
+      start_date:   cleanString(o.start_date),
+      end_date:     cleanString(o.end_date),
+      bullets:      asStringArray(o.bullets),
+      technologies: asStringArray(o.technologies),
+    };
+  });
+}
+
+function normalizeEducation(arr: unknown): ParsedEducation[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    return {
+      degree:         cleanString(o.degree),
+      field_of_study: cleanString(o.field_of_study),
+      school:         cleanString(o.school),
+      location:       cleanString(o.location),
+      year:           cleanString(o.year),
+      gpa:            cleanString(o.gpa),
+      honors:         cleanString(o.honors),
+    };
+  });
+}
+
+function normalizeProjects(arr: unknown): ParsedProject[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    return {
+      title:        cleanString(o.title),
+      description:  cleanString(o.description),
+      technologies: asStringArray(o.technologies),
+      url:          cleanString(o.url),
+    };
+  });
+}
+
+function normalizeLanguages(arr: unknown): ParsedLanguage[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    return {
+      name:        cleanString(o.name),
+      proficiency: cleanString(o.proficiency) || "Stated",
+    };
+  });
+}
+
+function normalize(raw: unknown): ParsedResume {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const contact = (o.contact ?? {}) as Record<string, unknown>;
+  return {
+    contact: {
+      name:      cleanString(contact.name),
+      email:     cleanString(contact.email),
+      phone:     cleanString(contact.phone),
+      location:  cleanString(contact.location),
+      linkedin:  cleanString(contact.linkedin),
+      github:    cleanString(contact.github),
+      portfolio: cleanString(contact.portfolio),
+      headline:  cleanString(contact.headline),
+    },
+    summary:                  cleanString(o.summary),
+    experience:               normalizeExperience(o.experience),
+    education:                normalizeEducation(o.education),
+    skills:                   asStringArray(o.skills),
+    certifications:           asStringArray(o.certifications),
+    projects:                 normalizeProjects(o.projects),
+    languages:                normalizeLanguages(o.languages),
+    awards:                   asStringArray(o.awards),
+    publications:             asStringArray(o.publications),
+    volunteer:                normalizeExperience(o.volunteer),
+    professional_memberships: asStringArray(o.professional_memberships),
+  };
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -202,7 +383,6 @@ export async function POST(req: NextRequest) {
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
-
       if (!file) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
       }
@@ -218,7 +398,7 @@ export async function POST(req: NextRequest) {
           type: "document",
           source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") },
         } as Anthropic.Messages.DocumentBlockParam);
-        userContent.push({ type: "text", text: "Parse this resume into the required JSON structure. Be comprehensive — extract every detail." });
+        userContent.push({ type: "text", text: "Parse this resume by calling the extract_resume tool. Be exhaustive." });
       } else if (isWordFile(file.type, file.name)) {
         const { value: extractedText, messages: warnings } = await mammoth.extractRawText({ buffer });
         if (warnings.length > 0) {
@@ -227,13 +407,13 @@ export async function POST(req: NextRequest) {
         if (!extractedText.trim()) {
           return NextResponse.json({ error: "Could not extract text from Word document. Try saving as PDF or pasting the text." }, { status: 422 });
         }
-        userContent.push({ type: "text", text: `Parse this resume:\n\n${extractedText}` });
+        userContent.push({ type: "text", text: `Parse this resume by calling the extract_resume tool. Be exhaustive.\n\nRESUME TEXT:\n${extractedText}` });
       } else {
         const text = buffer.toString("utf-8");
         if (text.trim().length < 20) {
           return NextResponse.json({ error: "File appears to be empty or too short to parse." }, { status: 400 });
         }
-        userContent.push({ type: "text", text: `Parse this resume:\n\n${text}` });
+        userContent.push({ type: "text", text: `Parse this resume by calling the extract_resume tool. Be exhaustive.\n\nRESUME TEXT:\n${text}` });
       }
     } else {
       const body = (await req.json().catch(() => ({}))) as {
@@ -241,68 +421,54 @@ export async function POST(req: NextRequest) {
         fileBase64?: string;
         mimeType?: string;
       };
-
       if (body.fileBase64 && body.mimeType === "application/pdf") {
         userContent.push({
           type: "document",
           source: { type: "base64", media_type: "application/pdf", data: body.fileBase64 },
         } as Anthropic.Messages.DocumentBlockParam);
-        userContent.push({ type: "text", text: "Parse this resume into the required JSON structure. Be comprehensive — extract every detail." });
+        userContent.push({ type: "text", text: "Parse this resume by calling the extract_resume tool. Be exhaustive." });
       } else if (body.text) {
         if (body.text.trim().length < 20) {
           return NextResponse.json({ error: "Resume text is too short to parse." }, { status: 400 });
         }
-        userContent.push({ type: "text", text: `Parse this resume:\n\n${body.text}` });
+        userContent.push({ type: "text", text: `Parse this resume by calling the extract_resume tool. Be exhaustive.\n\nRESUME TEXT:\n${body.text}` });
       } else {
         return NextResponse.json({ error: "Provide 'text', 'fileBase64', or upload a file." }, { status: 400 });
       }
     }
 
-    // Sonnet for accuracy on structured extraction (vs Haiku previously).
-    // 8192 max_tokens to avoid truncation on long resumes.
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: "tool", name: "extract_resume" },
       messages: [{ role: "user", content: userContent }],
     });
 
-    const raw = message.content[0];
-    if (raw.type !== "text") throw new Error("Unexpected response type from Claude");
+    // Extract the tool_use block — should always be present given tool_choice.
+    const toolUse = message.content.find(
+      (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use" && b.name === "extract_resume"
+    );
 
-    const jsonStr = raw.text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-
-    let parsed: ParsedResume;
-    try {
-      parsed = JSON.parse(jsonStr) as ParsedResume;
-    } catch {
-      throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
+    if (toolUse?.input) {
+      return NextResponse.json(normalize(toolUse.input));
     }
 
-    // Normalise shape — every consumer can rely on every field being present.
-    parsed.contact = {
-      name:      parsed.contact?.name      ?? "",
-      email:     parsed.contact?.email     ?? "",
-      phone:     parsed.contact?.phone     ?? "",
-      location:  parsed.contact?.location  ?? "",
-      linkedin:  parsed.contact?.linkedin  ?? "",
-      github:    parsed.contact?.github    ?? "",
-      portfolio: parsed.contact?.portfolio ?? "",
-      headline:  parsed.contact?.headline  ?? "",
-    };
-    parsed.summary                  = parsed.summary ?? "";
-    parsed.experience               = Array.isArray(parsed.experience)               ? parsed.experience               : [];
-    parsed.education                = Array.isArray(parsed.education)                ? parsed.education                : [];
-    parsed.skills                   = Array.isArray(parsed.skills)                   ? parsed.skills                   : [];
-    parsed.certifications           = Array.isArray(parsed.certifications)           ? parsed.certifications           : [];
-    parsed.projects                 = Array.isArray(parsed.projects)                 ? parsed.projects                 : [];
-    parsed.languages                = Array.isArray(parsed.languages)                ? parsed.languages                : [];
-    parsed.awards                   = Array.isArray(parsed.awards)                   ? parsed.awards                   : [];
-    parsed.publications             = Array.isArray(parsed.publications)             ? parsed.publications             : [];
-    parsed.volunteer                = Array.isArray(parsed.volunteer)                ? parsed.volunteer                : [];
-    parsed.professional_memberships = Array.isArray(parsed.professional_memberships) ? parsed.professional_memberships : [];
+    // Defensive fallback: model returned a text block instead. Try to JSON.parse it.
+    const textBlock = message.content.find(
+      (b): b is Anthropic.Messages.TextBlock => b.type === "text"
+    );
+    if (textBlock?.text) {
+      const jsonStr = textBlock.text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      try {
+        return NextResponse.json(normalize(JSON.parse(jsonStr)));
+      } catch {
+        // Fall through
+      }
+    }
 
-    return NextResponse.json(parsed);
+    throw new Error("No tool_use or parsable text in Claude response");
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Internal server error";
