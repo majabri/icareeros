@@ -1,0 +1,12 @@
+# CODEOWNERS — sole maintainer right now is Amir Jabri.
+# When the team grows, expand this with team handles per directory.
+# Per ADR 0002: every PR requires review approval from a CODEOWNER before merge.
+
+* @majabri
+
+# Higher-risk areas — these also catch on every change for an explicit second look.
+/src/middleware.ts                  @majabri
+/supabase/migrations/               @majabri
+/.github/                           @majabri
+/next.config.js                     @majabri
+/vercel.json                        @majabri
