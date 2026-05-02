@@ -7,7 +7,7 @@ const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
 // Accounts that belong to the admin panel only — never the career OS
-const ADMIN_EMAILS = ["azadmin@icareeros.com"];
+const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
 
 // AI-heavy routes get a stricter per-user rate limit
 const AI_ROUTES = [
