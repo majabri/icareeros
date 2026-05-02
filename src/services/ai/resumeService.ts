@@ -3,11 +3,19 @@
  *
  * Client-side service for Resume Builder / Career Profile.
  *
- * Resume PARSING uses the AI parser at /api/resume/parse (Claude Sonnet).
- * Falls back to the regex-based local parser ONLY when the AI call fails,
- * so the app stays usable even if Claude is down.
+ * Resume PARSING is FREE — runs entirely against the local regex parser
+ * at src/lib/parseResumeLocally.ts (no Anthropic API call, no per-upload
+ * cost). The AI endpoint at /api/resume/parse remains in the codebase
+ * but is intentionally not called from the client. Re-enable later as
+ * a Pro/Premium feature when monetization launches.
  *
- * Resume REWRITE calls /api/resume/rewrite (Claude Sonnet, plan-gated).
+ * Text extraction from the file (PDF / Word / TXT) still happens
+ * server-side via /api/resume/extract-text for fidelity, then the
+ * extracted text is fed to the local regex parser.
+ *
+ * Resume REWRITE still calls /api/resume/rewrite (Claude Sonnet,
+ * plan-gated) — that's a separate feature, only triggered when a user
+ * explicitly clicks the AI rewrite button.
  */
 
 import { createClient } from "@/lib/supabase";
@@ -31,78 +39,39 @@ export interface ResumeVersion {
 // ── Parse ─────────────────────────────────────────────────────────────────────
 
 /**
- * Parse raw resume text. Tries the AI parser first; falls back to the
- * local regex parser if the API call fails.
+ * Parse raw resume text. Local regex parser — no API call, no cost.
  */
-export async function parseResumeText(text: string): Promise<ParsedResume> {
-  try {
-    const res = await fetch("/api/resume/parse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) throw new Error(`AI parse failed (${res.status})`);
-    return (await res.json()) as ParsedResume;
-  } catch (err) {
-    console.warn("[parseResumeText] AI parse failed, falling back to local parser:", err);
-    return parseResumeLocally(text);
-  }
-}
-
-/**
- * Synchronous fallback for callers that cannot await — uses regex parser only.
- * Prefer parseResumeText() (async) for higher-fidelity extraction.
- */
-export function parseResumeTextSync(text: string): ParsedResume {
+export function parseResumeText(text: string): ParsedResume {
   return parseResumeLocally(text);
 }
 
 /**
- * Upload a file, parse it via the AI parser (/api/resume/parse) AND extract
- * the raw text (/api/resume/extract-text). Both calls run in parallel.
+ * Upload a file, extract its raw text server-side, then parse locally.
+ * Returns BOTH the raw extracted text and the structured parsed data so
+ * callers can store the full-fidelity original text while still having
+ * structured fields for profile auto-fill.
  *
- * On AI parse failure, falls back to the local regex parser using the
- * extracted raw text — the app keeps working but extraction is less rich.
- *
- * Returns BOTH the raw extracted text (for storage / display) AND the
- * structured parsed data (for the profile page auto-fill, etc.).
+ * No AI call — purely regex + heuristic extraction. Zero per-upload cost.
  */
 export async function parseResumeFile(
   file: File,
 ): Promise<{ parsed: ParsedResume; rawText: string }> {
   if (file.size > 10 * 1024 * 1024) throw new Error("File too large (max 10 MB)");
 
-  // Two parallel uploads — extract-text always succeeds quickly, AI parse is the
-  // higher-quality path. We need rawText regardless (it's stored on the resume
-  // version), so we always make the extract-text call.
-  const aiFormData = new FormData();
-  aiFormData.append("file", file);
-  const txtFormData = new FormData();
-  txtFormData.append("file", file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-  const [aiRes, txtRes] = await Promise.allSettled([
-    fetch("/api/resume/parse",         { method: "POST", body: aiFormData  }),
-    fetch("/api/resume/extract-text",  { method: "POST", body: txtFormData }),
-  ]);
+  const res = await fetch("/api/resume/extract-text", {
+    method: "POST",
+    body: formData,
+  });
 
-  // 1. Raw text — must succeed (it's the source of truth we store).
-  if (txtRes.status !== "fulfilled" || !txtRes.value.ok) {
-    const status = txtRes.status === "fulfilled" ? txtRes.value.status : "network";
-    throw new Error(`Text extraction failed (${status})`);
-  }
-  const { text: rawText } = (await txtRes.value.json()) as { text: string };
-
-  // 2. AI parse — try, fall back to local regex parse if it fails.
-  if (aiRes.status === "fulfilled" && aiRes.value.ok) {
-    const parsed = (await aiRes.value.json()) as ParsedResume;
-    return { parsed, rawText };
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Text extraction failed (${res.status})`);
   }
 
-  // Fallback: local regex parser on the raw text.
-  const fallbackError = aiRes.status === "fulfilled"
-    ? `AI parse responded ${aiRes.value.status}`
-    : `AI parse rejected: ${aiRes.reason}`;
-  console.warn("[parseResumeFile] AI parse failed, using local regex fallback:", fallbackError);
+  const { text: rawText } = (await res.json()) as { text: string };
   const parsed = parseResumeLocally(rawText);
   return { parsed, rawText };
 }

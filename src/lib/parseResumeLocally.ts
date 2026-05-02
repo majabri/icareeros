@@ -94,6 +94,116 @@ const CITY_STATE_RE = /,\s*[A-Z]{2}\s*$/;
 // Words/patterns that indicate a line is NOT a person's name
 const NOT_NAME_RE = /\d{4}|@|gpa\s*:|grade\s*:|score\s*:|portfolio|github\.com|twitter\.com/i;
 
+
+// ── Skill harvesting ──────────────────────────────────────────────────────────
+// Resumes often don't have a dedicated Skills section, but mention skills
+// inside experience bullets ("Built X with React and Node.js"). This list
+// is matched case-insensitively as whole-word against the entire resume so
+// we still pull skills from those resumes.
+//
+// Curated list — focused on common tech, tools, methodologies, and certs.
+// Multi-word entries use a hyphen-joined slug so the regex can match the
+// space-separated form too (handled in matchSkillKeyword).
+const SKILL_KEYWORDS: string[] = [
+  // Languages
+  "JavaScript", "TypeScript", "Python", "Java", "Kotlin", "Swift", "Go", "Golang",
+  "Rust", "C", "C++", "C#", "Ruby", "PHP", "Perl", "Scala", "Elixir", "Clojure",
+  "Haskell", "Erlang", "Dart", "R", "MATLAB", "Lua", "Bash", "Shell", "PowerShell",
+  "Objective-C", "F#", "Solidity",
+  // Web frontend
+  "React", "Next.js", "Vue", "Vue.js", "Nuxt", "Angular", "AngularJS", "Svelte",
+  "SolidJS", "Ember", "Backbone", "jQuery", "Redux", "MobX", "Zustand",
+  "TailwindCSS", "Tailwind", "Bootstrap", "Material UI", "Chakra UI", "shadcn/ui",
+  "HTML", "HTML5", "CSS", "CSS3", "Sass", "SCSS", "Less", "styled-components",
+  "WebGL", "Three.js", "D3.js", "Recharts",
+  // Web backend
+  "Node.js", "Node", "Express", "Fastify", "NestJS", "Hapi", "Koa",
+  "Django", "Flask", "FastAPI", "Tornado", "Pyramid", "Starlette",
+  "Rails", "Sinatra", "Laravel", "Symfony", "CakePHP",
+  "Spring", "Spring Boot", "Quarkus", "Micronaut",
+  "ASP.NET", ".NET", ".NET Core", "Entity Framework",
+  "Phoenix", "Gin", "Echo", "Actix",
+  // Mobile
+  "React Native", "Flutter", "Ionic", "Xamarin", "SwiftUI", "Jetpack Compose",
+  "iOS", "Android",
+  // Data / ML
+  "TensorFlow", "PyTorch", "Keras", "scikit-learn", "Pandas", "NumPy", "SciPy",
+  "Hugging Face", "Transformers", "OpenAI", "Anthropic", "LangChain", "LlamaIndex",
+  "Spark", "Hadoop", "Kafka", "Flink", "Airflow", "dbt", "Snowflake", "BigQuery",
+  "Databricks", "Redshift", "Athena",
+  // Databases
+  "PostgreSQL", "Postgres", "MySQL", "MariaDB", "SQLite", "Oracle", "SQL Server",
+  "MongoDB", "Redis", "Cassandra", "DynamoDB", "Elasticsearch", "OpenSearch",
+  "ClickHouse", "InfluxDB", "Neo4j", "Firestore", "CockroachDB", "Supabase",
+  "Firebase", "Prisma", "TypeORM", "Sequelize", "Drizzle",
+  // Cloud
+  "AWS", "Amazon Web Services", "EC2", "S3", "Lambda", "RDS", "DynamoDB",
+  "CloudFront", "Route53", "IAM", "VPC", "ECS", "EKS", "Fargate", "SQS", "SNS",
+  "GCP", "Google Cloud", "Azure", "Heroku", "Vercel", "Netlify", "Cloudflare",
+  "Cloudflare Workers", "DigitalOcean", "Linode",
+  // Containers / DevOps
+  "Docker", "Kubernetes", "K8s", "Helm", "Terraform", "Pulumi", "Ansible",
+  "Chef", "Puppet", "Jenkins", "GitHub Actions", "GitLab CI", "CircleCI",
+  "TravisCI", "ArgoCD", "Flux", "Istio", "Linkerd",
+  "Prometheus", "Grafana", "Datadog", "New Relic", "Sentry", "Splunk",
+  "ELK", "Logstash", "Kibana", "Fluentd", "OpenTelemetry",
+  // Version control / collaboration
+  "Git", "GitHub", "GitLab", "Bitbucket", "SVN", "Mercurial",
+  // APIs / protocols
+  "REST", "REST API", "GraphQL", "gRPC", "WebSockets", "SOAP", "OAuth",
+  "OAuth2", "OpenID", "OpenID Connect", "JWT", "SAML", "OIDC",
+  // Methodologies / process
+  "Agile", "Scrum", "Kanban", "Waterfall", "TDD", "BDD", "DDD", "CI/CD",
+  "DevOps", "MLOps", "GitOps", "SRE", "OKRs",
+  // Project management & business
+  "Jira", "Confluence", "Asana", "Trello", "Notion", "Linear", "Monday",
+  "Salesforce", "HubSpot", "Marketo", "Tableau", "Power BI", "Looker", "Mode",
+  "Excel", "Microsoft Excel", "Microsoft Office", "Google Sheets", "Google Docs",
+  "PowerPoint", "Word",
+  // Design tools
+  "Figma", "Sketch", "Adobe XD", "Photoshop", "Illustrator", "InDesign",
+  "Premiere", "After Effects", "Canva",
+  // Testing
+  "Jest", "Vitest", "Mocha", "Chai", "Cypress", "Playwright", "Selenium",
+  "Puppeteer", "JUnit", "TestNG", "PyTest", "RSpec", "Cucumber",
+  // Security
+  "OWASP", "Penetration Testing", "Pentest", "SOC 2", "GDPR", "HIPAA", "PCI",
+  "ISO 27001", "Vulnerability Assessment", "Threat Modeling", "SIEM",
+  // PM / leadership soft-skills (only the unambiguous ones)
+  "Stakeholder Management", "Cross-functional Leadership", "Mentoring",
+  "Code Review", "Technical Writing", "Public Speaking",
+];
+
+// Build a single regex that matches any keyword case-insensitively as a whole token.
+// Special-case the multi-token entries by escaping spaces / dots / dashes.
+const SKILL_KEYWORD_RE = new RegExp(
+  "\\b(?:" +
+  SKILL_KEYWORDS.map(k =>
+    k.replace(/[.+\\?^$()|[\\]/]/g, m => "\\" + m).replace(/ /g, "\\s+")
+  ).join("|") +
+  ")\\b",
+  "gi"
+);
+
+/**
+ * Find all SKILL_KEYWORDS that appear anywhere in the given text. Returned in
+ * canonical capitalization (matching SKILL_KEYWORDS spelling), de-duplicated.
+ */
+function harvestSkillsFromText(text: string): string[] {
+  const found = new Set<string>();
+  if (!text) return [];
+  // Build a case-folded lookup so we can normalize matches back to canonical case.
+  const canonicalByLower = new Map<string, string>();
+  for (const k of SKILL_KEYWORDS) canonicalByLower.set(k.toLowerCase(), k);
+  for (const m of text.matchAll(SKILL_KEYWORD_RE)) {
+    const matched = m[0].replace(/\s+/g, " ").toLowerCase();
+    const canonical = canonicalByLower.get(matched);
+    if (canonical) found.add(canonical);
+    else found.add(m[0]); // fallback — shouldn't happen if regex came from list
+  }
+  return Array.from(found);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function detectSection(line: string): string | null {
@@ -477,6 +587,22 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     }
   }
   if (currentEdu && (currentEdu.degree || currentEdu.school)) education.push(currentEdu);
+
+  // ── Skill harvesting fallback ───────────────────────────────────────────────
+  // Many resumes don't have a dedicated Skills section. Scan the entire
+  // resume text for known technologies / tools / methodologies and merge
+  // them into skills[]. This is the single biggest reliability win — it
+  // catches skills mentioned inside bullets like "Built X with React".
+  const harvested = harvestSkillsFromText(rawText);
+  if (harvested.length > 0) {
+    const seen = new Set(skills.map(s => s.toLowerCase()));
+    for (const k of harvested) {
+      if (!seen.has(k.toLowerCase())) {
+        skills.push(k);
+        seen.add(k.toLowerCase());
+      }
+    }
+  }
 
   return {
     contact: { name, email, phone, location, linkedin },
