@@ -1,8 +1,9 @@
 /**
  * resumeService unit tests
  *
- * parseResumeText: synchronous — calls parseResumeLocally, no fetch.
- * parseResumeFile: async — calls /api/resume/extract-text then parseResumeLocally.
+ * parseResumeText:     async — calls /api/resume/parse, falls back to local on AI failure.
+ * parseResumeTextSync: synchronous local-only fallback.
+ * parseResumeFile:     async — calls /api/resume/parse + /api/resume/extract-text in parallel.
  * rewriteResume:   async — calls /api/resume/rewrite (Claude Sonnet, plan-gated).
  * CRUD:            saveResumeVersion / listResumeVersions / deleteResumeVersion.
  */
@@ -54,6 +55,7 @@ vi.mock("@/lib/supabase", () => ({
 
 const {
   parseResumeText,
+  parseResumeTextSync,
   parseResumeFile,
   saveResumeVersion,
   listResumeVersions,
@@ -87,56 +89,120 @@ beforeEach(() => {
 // ── parseResumeText ───────────────────────────────────────────────────────────
 
 describe("parseResumeText", () => {
-  it("returns a ParsedResume without making any fetch calls", () => {
-    const result = parseResumeText("Jane Doe\nSenior Engineer\nTypeScript, Node.js");
-    expect(result).toHaveProperty("contact");
-    expect(result).toHaveProperty("skills");
-    expect(result).toHaveProperty("achievements");
-    expect(mockFetch).not.toHaveBeenCalled();
+  it("calls /api/resume/parse with the text payload and returns the AI parsed result", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        contact: { name: "AI Result", email: "", phone: "", location: "", linkedin: "", github: "", portfolio: "", headline: "" },
+        summary: "from-ai",
+        experience: [],
+        education: [],
+        skills: ["TypeScript"],
+        certifications: [],
+        projects: [],
+        languages: [],
+        awards: [],
+        publications: [],
+        volunteer: [],
+        professional_memberships: [],
+      }),
+    });
+
+    const result = await parseResumeText("Jane Doe\nSenior Engineer\nTypeScript, Node.js");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/resume/parse",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(result.summary).toBe("from-ai");
+    expect(result.skills).toContain("TypeScript");
   });
 
-  it("passes raw text to parseResumeLocally", async () => {
+  it("falls back to the local regex parser when the AI call fails", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
     const { parseResumeLocally } = await import("@/lib/parseResumeLocally");
-    parseResumeText("hello world");
+
+    const result = await parseResumeText("hello world");
+
     expect(parseResumeLocally).toHaveBeenCalledWith("hello world");
+    expect(result.contact.name).toBe("Jane Doe"); // mocked local parser response
+  });
+});
+
+describe("parseResumeTextSync", () => {
+  it("uses the local regex parser without any fetch", async () => {
+    const { parseResumeLocally } = await import("@/lib/parseResumeLocally");
+    parseResumeTextSync("regex-only");
+    expect(parseResumeLocally).toHaveBeenCalledWith("regex-only");
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
 // ── parseResumeFile ───────────────────────────────────────────────────────────
 
 describe("parseResumeFile", () => {
-  it("calls /api/resume/extract-text with a FormData body", async () => {
+  it("calls both /api/resume/parse and /api/resume/extract-text in parallel", async () => {
+    // First call (parse) — succeeds with AI result
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ text: "Jane Doe extracted text" }),
+      json: async () => ({
+        contact: { name: "From AI", email: "", phone: "", location: "", linkedin: "", github: "", portfolio: "", headline: "" },
+        summary: "ai-summary",
+        experience: [],
+        education: [],
+        skills: ["AI Skill"],
+        certifications: [],
+        projects: [],
+        languages: [],
+        awards: [],
+        publications: [],
+        volunteer: [],
+        professional_memberships: [],
+      }),
     });
-
-    const file = new File(["dummy content"], "resume.pdf", { type: "application/pdf" });
-    const { rawText, parsed } = await parseResumeFile(file);
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/resume/extract-text",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(rawText).toBe("Jane Doe extracted text");
-    expect(parsed).toHaveProperty("contact");
-  });
-
-  it("throws if extraction API returns an error", async () => {
+    // Second call (extract-text) — succeeds with raw text
     mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 422,
-      json: async () => ({ error: "Unsupported file type" }),
+      ok: true,
+      json: async () => ({ text: "raw-extracted-text" }),
     });
 
-    const file = new File(["x"], "resume.xls", { type: "application/vnd.ms-excel" });
-    await expect(parseResumeFile(file)).rejects.toThrow("Unsupported file type");
+    const file = new File(["fake content"], "resume.pdf", { type: "application/pdf" });
+    const { parsed, rawText } = await parseResumeFile(file);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const calledUrls = mockFetch.mock.calls.map(c => c[0]);
+    expect(calledUrls).toContain("/api/resume/parse");
+    expect(calledUrls).toContain("/api/resume/extract-text");
+    expect(rawText).toBe("raw-extracted-text");
+    expect(parsed.summary).toBe("ai-summary");
   });
 
-  it("throws if file exceeds 10 MB", async () => {
-    const bigContent = new Uint8Array(11 * 1024 * 1024);
-    const file = new File([bigContent], "huge.pdf", { type: "application/pdf" });
-    await expect(parseResumeFile(file)).rejects.toThrow("File too large");
+  it("falls back to local parser when AI parse fails but extract-text succeeds", async () => {
+    // AI parse — fails
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    // extract-text — succeeds
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ text: "fallback-text" }) });
+
+    const file = new File(["x"], "r.pdf", { type: "application/pdf" });
+    const { parsed, rawText } = await parseResumeFile(file);
+
+    const { parseResumeLocally } = await import("@/lib/parseResumeLocally");
+    expect(parseResumeLocally).toHaveBeenCalledWith("fallback-text");
+    expect(rawText).toBe("fallback-text");
+    expect(parsed.contact.name).toBe("Jane Doe"); // local-parser mock response
+  });
+
+  it("throws when extract-text itself fails (raw text is required)", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }); // parse
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: "boom" }) }); // extract-text
+
+    const file = new File(["x"], "r.pdf", { type: "application/pdf" });
+    await expect(parseResumeFile(file)).rejects.toThrow(/Text extraction failed/);
+  });
+
+  it("rejects files larger than 10 MB before any fetch", async () => {
+    const big = new File([new Uint8Array(11 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
+    await expect(parseResumeFile(big)).rejects.toThrow(/File too large/);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
