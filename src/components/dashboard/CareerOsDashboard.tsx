@@ -331,9 +331,24 @@ export function CareerOsDashboard() {
                   <span className="ml-2 text-gray-500">— {cycle.goal}</span>
                 )}
               </div>
-              <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                Active
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                  Active
+                </span>
+                <button
+                  onClick={() => {
+                    if (window.confirm(
+                      `Mark Cycle #${cycle.cycle_number} as complete and start a new one?`
+                    )) {
+                      void handleStartNextCycle();
+                    }
+                  }}
+                  disabled={running}
+                  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  + New cycle
+                </button>
+              </div>
             </div>
             {/* Progress bar */}
             <div className="mt-3">
