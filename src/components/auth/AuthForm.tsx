@@ -41,14 +41,12 @@ export function AuthForm({ mode }: AuthFormProps) {
           },
         });
         if (error) throw error;
-        sendEmail({
-          to: identifier,
-          subject: "Welcome to iCareerOS — your career OS is ready",
-          html: `<p>Hi ${identifier},</p><p>Welcome to iCareerOS! <a href="${window.location.origin}/dashboard">Go to your dashboard</a>.</p>`,
-          text: `Welcome to iCareerOS! Visit: ${window.location.origin}/dashboard`,
-        }).catch(() => {});
+        // Confirmation email is sent by Supabase Auth using the branded
+        // template configured in dashboard → Authentication → Emails.
+        // We do NOT send a separate welcome email here — that fires before
+        // the user has even confirmed and creates a confusing double-email.
         setSuccess(
-          "Check your email — we've sent you a confirmation link to activate your account."
+          "Check your inbox — we just sent you an email from iCareerOS with a link to confirm your account. Click it to finish signing up."
         );
       } else {
         // Resolve username alias → email
