@@ -4,9 +4,14 @@
     → Authentication → Emails → Confirm signup.
 
   Variables available in Supabase email templates:
-    {{ .ConfirmationURL }}   — primary verify link
-    {{ .Email }}             — recipient address
-    {{ .SiteURL }}           — Site URL set in Supabase URL Configuration
+    {{ .TokenHash }}   — token hash for OTP verification (token_hash flow)
+    {{ .Email }}       — recipient address
+    {{ .SiteURL }}     — Site URL set in Supabase URL Configuration
+
+  The verify link goes DIRECTLY to icareeros.com/auth/confirm — the user
+  never sees supabase.co. The /auth/confirm route handler calls
+  supabase.auth.verifyOtp() server-side to exchange the token_hash for
+  a session, then redirects to /auth/confirmed.
 
   Subject: "Confirm your email to activate iCareerOS"
 -->
@@ -50,25 +55,13 @@
             </td>
           </tr>
 
-          <!-- CTA button -->
+          <!-- CTA button — points directly to icareeros.com (no supabase.co exposure) -->
           <tr>
-            <td align="center" style="padding:0 32px 16px 32px;">
-              <a href="{{ .ConfirmationURL }}"
+            <td align="center" style="padding:0 32px 28px 32px;">
+              <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup"
                  style="display:inline-block;background:#00a8cc;background-image:linear-gradient(180deg,#00d9ff 0%,#00a8cc 100%);color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;line-height:1;padding:14px 28px;border-radius:10px;border:1px solid #007a99;">
                 Confirm my email
               </a>
-            </td>
-          </tr>
-
-          <!-- Fallback link -->
-          <tr>
-            <td style="padding:8px 32px 24px 32px;">
-              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">
-                Button not working? Paste this link into your browser:
-              </p>
-              <p style="margin:0;font-size:12px;color:#0369a1;word-break:break-all;line-height:1.5;">
-                <a href="{{ .ConfirmationURL }}" style="color:#0369a1;text-decoration:underline;">{{ .ConfirmationURL }}</a>
-              </p>
             </td>
           </tr>
 
