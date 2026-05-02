@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { sendEmail } from "@/services/emailService";
 
 interface AuthFormProps {
   mode: "login" | "signup";

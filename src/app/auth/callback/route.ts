@@ -40,7 +40,7 @@ export async function GET(req: Request) {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(toSet) {
+        setAll(toSet: Array<{ name: string; value: string; options?: import("@supabase/ssr").CookieOptions }>) {
           for (const c of toSet) {
             cookieStore.set(c.name, c.value, c.options);
           }
