@@ -80,7 +80,7 @@ export function LandingNav() {
             >Sign In</a>
           </li>
           <li>
-            <a href="#cta" style={{
+            <a href="/auth/signup" style={{
               background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
               color: "var(--neutral-100)", padding: "0.7rem 1.5rem", borderRadius: "50px",
               fontWeight: 600, textDecoration: "none", transition: "all 0.3s",
@@ -148,7 +148,7 @@ export function LandingNav() {
               </li>
             ))}
             <li style={{ marginTop: "1rem" }}>
-              <a href="#cta" onClick={() => setMenuOpen(false)} style={{
+              <a href="/auth/signup" onClick={() => setMenuOpen(false)} style={{
                 display: "block", textAlign: "center",
                 background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
                 color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
