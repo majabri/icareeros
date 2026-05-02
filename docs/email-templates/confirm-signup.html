@@ -1,0 +1,104 @@
+<!--
+  iCareerOS — "Confirm your email" template.
+  Source of truth for what's pasted into Supabase Dashboard
+    → Authentication → Emails → Confirm signup.
+
+  Variables available in Supabase email templates:
+    {{ .ConfirmationURL }}   — primary verify link
+    {{ .Email }}             — recipient address
+    {{ .SiteURL }}           — Site URL set in Supabase URL Configuration
+
+  Subject: "Confirm your email to activate iCareerOS"
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Confirm your iCareerOS email</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <!-- Preheader: shown in inbox preview, hidden in body -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
+    Welcome to iCareerOS. One click to confirm your email and start your career operating system.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f8fa;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <!-- Brand header -->
+          <tr>
+            <td style="padding:28px 32px 8px 32px;border-bottom:1px solid #f1f5f9;">
+              <span style="font-size:20px;font-weight:700;color:#007a99;letter-spacing:-0.01em;">iCareerOS</span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 32px 8px 32px;">
+              <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;">
+                Welcome — let's confirm your email
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#334155;">
+                Thanks for creating your iCareerOS account. Click the button below to verify your email address and unlock your dashboard.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:#334155;">
+                Once you're in, you'll start your first cycle:
+                <strong style="color:#0f172a;">Evaluate → Advise → Learn → Act → Coach → Achieve</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA button -->
+          <tr>
+            <td align="center" style="padding:0 32px 16px 32px;">
+              <a href="{{ .ConfirmationURL }}"
+                 style="display:inline-block;background:#00a8cc;background-image:linear-gradient(180deg,#00d9ff 0%,#00a8cc 100%);color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;line-height:1;padding:14px 28px;border-radius:10px;border:1px solid #007a99;">
+                Confirm my email
+              </a>
+            </td>
+          </tr>
+
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:8px 32px 24px 32px;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">
+                Button not working? Paste this link into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;color:#0369a1;word-break:break-all;line-height:1.5;">
+                <a href="{{ .ConfirmationURL }}" style="color:#0369a1;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Reassurance / not you -->
+          <tr>
+            <td style="padding:0 32px 28px 32px;border-top:1px solid #f1f5f9;">
+              <p style="margin:20px 0 0 0;font-size:12px;color:#64748b;line-height:1.55;">
+                If you didn't sign up for iCareerOS, you can safely ignore this email — no account will be created without confirmation.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#fafafa;padding:18px 32px;border-top:1px solid #f1f5f9;">
+              <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
+                iCareerOS — the career operating system that runs on outcomes, not advice.<br />
+                Need help?
+                <a href="mailto:bugs@icareeros.com" style="color:#64748b;text-decoration:underline;">bugs@icareeros.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Outside-card meta line -->
+        <p style="margin:14px 0 0 0;font-size:11px;color:#94a3b8;text-align:center;line-height:1.5;">
+          Sent to {{ .Email }} because someone signed up at <a href="{{ .SiteURL }}" style="color:#94a3b8;text-decoration:underline;">icareeros.com</a>.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
