@@ -87,23 +87,25 @@ export function AdminUserActions({ userId, currentPlan, currentRole, email, emai
   return (
     <span className="flex items-center gap-2 flex-wrap">
 
-      {/* Plan selector */}
-      <span className="relative inline-flex items-center">
-        <select
-          value={plan}
-          onChange={e => handlePlanChange(e.target.value as SubscriptionPlan)}
-          disabled={savingPlan}
-          className={`text-xs font-medium border border-gray-200 rounded px-1.5 py-0.5 bg-white
-                      cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-1
-                      focus:ring-blue-400 disabled:opacity-50 ${planColor}`}
-          title="Change subscription plan"
-        >
-          {PLAN_OPTIONS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        {savingPlan && <span className="ml-1 text-xs text-gray-400">…</span>}
-      </span>
+      {/* Plan selector — hidden for moderator/admin (they don't use the platform) */}
+      {role === "user" && (
+        <span className="relative inline-flex items-center">
+          <select
+            value={plan}
+            onChange={e => handlePlanChange(e.target.value as SubscriptionPlan)}
+            disabled={savingPlan}
+            className={`text-xs font-medium border border-gray-200 rounded px-1.5 py-0.5 bg-white
+                        cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-1
+                        focus:ring-blue-400 disabled:opacity-50 ${planColor}`}
+            title="Change subscription plan"
+          >
+            {PLAN_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {savingPlan && <span className="ml-1 text-xs text-gray-400">…</span>}
+        </span>
+      )}
 
       {/* Role selector */}
       <span className="relative inline-flex items-center">

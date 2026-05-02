@@ -233,7 +233,9 @@ export function UsersAdminPanel({ users }: Props) {
             Delete {visibleSelected.size}
           </button>
 
-          <PlanDropdown disabled={pending} onPick={handleBulkPlan} />
+          {tab === "users" && (
+            <PlanDropdown disabled={pending} onPick={handleBulkPlan} />
+          )}
 
           {tab === "users" ? (
             <>
@@ -301,22 +303,23 @@ export function UsersAdminPanel({ users }: Props) {
                   aria-label={"Select all " + tab}
                 />
               </th>
-              {["User", "Role", "Plan", "Cycles", "Joined", "Supabase", "Actions"].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
-                  >
-                    {h}
-                  </th>
-                )
-              )}
+              {(tab === "users"
+                ? ["User", "Role", "Plan", "Cycles", "Joined", "Supabase", "Actions"]
+                : ["User", "Role", "Cycles", "Joined", "Supabase", "Actions"]
+              ).map((h) => (
+                <th
+                  key={h}
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visibleList.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
+                <td colSpan={tab === "users" ? 8 : 7} className="px-4 py-8 text-center text-sm text-gray-400">
                   No {tab === "users" ? "users" : "admins"} yet.
                 </td>
               </tr>
@@ -363,19 +366,21 @@ export function UsersAdminPanel({ users }: Props) {
                       </span>
                     </td>
 
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium " +
-                          planBadgeClass(u.plan)
-                        }
-                      >
-                        {u.plan}
-                      </span>
-                      {u.plan_status !== "active" && (
-                        <span className="ml-1 text-xs text-red-400">{u.plan_status}</span>
-                      )}
-                    </td>
+                    {tab === "users" && (
+                      <td className="px-4 py-3">
+                        <span
+                          className={
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium " +
+                            planBadgeClass(u.plan)
+                          }
+                        >
+                          {u.plan}
+                        </span>
+                        {u.plan_status !== "active" && (
+                          <span className="ml-1 text-xs text-red-400">{u.plan_status}</span>
+                        )}
+                      </td>
+                    )}
 
                     <td className="px-4 py-3 tabular-nums text-gray-600">{u.cycle_count}</td>
 
