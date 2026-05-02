@@ -40,15 +40,6 @@ export default function EmailConfirmedPage() {
             Sign in to continue
           </Link>
 
-          <p className="mt-4 text-xs text-gray-400">
-            Need help?{" "}
-            <a
-              href="mailto:bugs@icareeros.com"
-              className="text-brand-600 hover:text-brand-700"
-            >
-              bugs@icareeros.com
-            </a>
-          </p>
         </div>
       </div>
     </div>
