@@ -83,3 +83,40 @@ export async function updateTicketStatus(
   revalidatePath("/admin/tickets");
   return {};
 }
+
+/**
+ * Permanently delete a user via Supabase Admin API.
+ * Cascades to user_subscriptions and any FK-referencing tables.
+ * Refuses if userId matches the calling admin (self-delete lockout protection).
+ *
+ * Cascade behavior verified 2026-05-02: auth.admin.deleteUser() removes the auth.users
+ * row, which CASCADEs to user_subscriptions. user_profiles, career_os_cycles,
+ * career_os_stages, email_preferences, and other FK tables follow ON DELETE CASCADE
+ * configured in their foreign-key constraints.
+ */
+export async function deleteUser(userId: string): Promise<{ error?: string }> {
+  // Self-delete guard — prevents admin lockout
+  const { cookies } = await import("next/headers");
+  const { createServerClient } = await import("@supabase/ssr");
+  const cookieStore = await cookies();
+  const ssr = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll() { /* readonly inside server action */ },
+      },
+    }
+  );
+  const { data: { user } } = await ssr.auth.getUser();
+  if (user?.id === userId) {
+    return { error: "Cannot delete your own admin account" };
+  }
+
+  const svc = makeSvc();
+  const { error } = await svc.auth.admin.deleteUser(userId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/users");
+  return {};
+}

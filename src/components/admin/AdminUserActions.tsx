@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { setUserPlan, setUserRole, confirmUserEmail } from "@/app/actions/adminActions";
+import { setUserPlan, setUserRole, confirmUserEmail, deleteUser } from "@/app/actions/adminActions";
 import type { UserRole, SubscriptionPlan } from "@/app/actions/adminActions";
 
 interface Props {
@@ -30,6 +30,7 @@ export function AdminUserActions({ userId, currentPlan, currentRole, email, emai
   const [savingPlan, setSavingPlan]   = useState(false);
   const [savingRole, setSavingRole]   = useState(false);
   const [confirmingEmail, setConfirmingEmail] = useState(false);
+  const [deleting, setDeleting]       = useState(false);
   const [emailDone, setEmailDone]     = useState(emailConfirmed);
   const [err, setErr]                 = useState<string | null>(null);
 
@@ -63,6 +64,21 @@ export function AdminUserActions({ userId, currentPlan, currentRole, email, emai
     setConfirmingEmail(false);
     if (res.error) setErr(res.error);
     else setEmailDone(true);
+  }
+
+  async function handleDelete() {
+    if (!confirm(
+      "⚠️  Permanently delete " + email + "?\n\n" +
+      "This removes the user account, subscription, profile, cycles, and all related data. " +
+      "It cannot be undone.\n\n" +
+      "Click OK to confirm."
+    )) return;
+    setDeleting(true);
+    setErr(null);
+    const res = await deleteUser(userId);
+    setDeleting(false);
+    if (res.error) setErr(res.error);
+    // On success the row disappears via revalidatePath in the server action.
   }
 
   const planColor = PLAN_OPTIONS.find(p => p.value === plan)?.color ?? "text-gray-600";
@@ -121,6 +137,16 @@ export function AdminUserActions({ userId, currentPlan, currentRole, email, emai
       )}
 
       {err && <span className="text-xs text-red-500">{err}</span>}
+
+      {/* Delete user (destructive — self-delete blocked at server) */}
+      <button
+        onClick={handleDelete}
+        disabled={deleting}
+        className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50 ml-1"
+        title="Permanently delete this user"
+      >
+        {deleting ? "Deleting…" : "Delete"}
+      </button>
     </span>
   );
 }
