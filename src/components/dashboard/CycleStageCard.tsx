@@ -196,11 +196,11 @@ export function CycleStageCard({
             <span>{evalResult.marketFitScore}/100</span>
           </div>
 
-          {evalResult.gaps.length > 0 && (
+          {(evalResult.gaps?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Key gaps</p>
               <div className="flex flex-wrap gap-1.5">
-                {evalResult.gaps.slice(0, 3).map((gap) => (
+                {(evalResult.gaps ?? []).slice(0, 3).map((gap) => (
                   <span
                     key={gap}
                     className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5
@@ -209,9 +209,9 @@ export function CycleStageCard({
                     {gap}
                   </span>
                 ))}
-                {evalResult.gaps.length > 3 && (
+                {(evalResult.gaps?.length ?? 0) > 3 && (
                   <span className="text-xs text-gray-400">
-                    +{evalResult.gaps.length - 3} more
+                    +{(evalResult.gaps?.length ?? 0) - 3} more
                   </span>
                 )}
               </div>
@@ -249,11 +249,11 @@ export function CycleStageCard({
             <span>~{adviceResult.timelineWeeks} weeks to role</span>
           </div>
 
-          {topPath.gapSkills.length > 0 && (
+          {(topPath.gapSkills?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Skills to build</p>
               <div className="flex flex-wrap gap-1.5">
-                {topPath.gapSkills.slice(0, 3).map((skill) => (
+                {(topPath.gapSkills ?? []).slice(0, 3).map((skill) => (
                   <span
                     key={skill}
                     className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5
@@ -305,11 +305,11 @@ export function CycleStageCard({
           </div>
 
           {/* Top skill gaps */}
-          {learnResult.topSkillGaps.length > 0 && (
+          {(learnResult.topSkillGaps?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Skills to close</p>
               <div className="flex flex-wrap gap-1.5">
-                {learnResult.topSkillGaps.slice(0, 4).map((gap) => (
+                {(learnResult.topSkillGaps ?? []).slice(0, 4).map((gap) => (
                   <span
                     key={gap}
                     className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5
@@ -457,11 +457,11 @@ export function CycleStageCard({
           )}
 
           {/* Action items (top 3) */}
-          {coachResult.actionItems.length > 0 && (
+          {(coachResult.actionItems?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Action items</p>
               <div className="space-y-1">
-                {coachResult.actionItems.slice(0, 3).map((item, i) => (
+                {(coachResult.actionItems ?? []).slice(0, 3).map((item, i) => (
                   <div key={i} className="flex items-start gap-1.5">
                     <span className="mt-0.5 shrink-0 text-orange-500 text-xs">•</span>
                     <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{item}</p>
@@ -492,11 +492,11 @@ export function CycleStageCard({
           </div>
 
           {/* Accomplishments */}
-          {achieveResult.accomplishments.length > 0 && (
+          {(achieveResult.accomplishments?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">What you achieved</p>
               <div className="space-y-1">
-                {achieveResult.accomplishments.slice(0, 3).map((a, i) => (
+                {(achieveResult.accomplishments ?? []).slice(0, 3).map((a, i) => (
                   <div key={i} className="flex items-start gap-1.5">
                     <span className="mt-0.5 shrink-0 text-rose-500 text-xs">✓</span>
                     <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{a}</p>
