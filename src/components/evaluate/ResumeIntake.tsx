@@ -41,9 +41,18 @@ const EMPTY_WORK: WorkExperience = {
 };
 const EMPTY_EDU: Education = { school: "", degree: "", field: "", start: "", end: "" };
 
-// Regex auto-fill (only the unambiguous ones)
-const EMAIL_RE = /[\w.+\-]+@[\w\-]+\.[\w.]+/;
-const PHONE_RE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}/;
+// ── Heuristic auto-fill patterns ─────────────────────────────────────────────
+// Applied to extracted text BEFORE the user opens the form. Only safe fields
+// are pre-populated — work_history + education are too messy without AI per
+// SPEC-002 §2.5, but the surrounding identity/contact fields are easy.
+const EMAIL_RE    = /[\w.+\-]+@[\w\-]+\.[\w.]+/;
+const PHONE_RE    = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}/;
+const LINKEDIN_RE = /(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|pub)\/[\w\-%./]+/i;
+const GITHUB_RE   = /(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9][\w\-]*\/?(?!\w)/i;
+const URL_HTTPS_RE = /https?:\/\/[^\s<>"]+/g;
+// "City, ST" or "City, Country" — ST = 2-letter US state, country = 1-3 capitalized words
+const CITY_STATE_RE = /\b([A-Z][a-zA-Z.\-]+(?:\s[A-Z][a-zA-Z.\-]+){0,2}),\s+([A-Z]{2}|[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)\b/;
+const NAME_LIKE_RE = /^\s*([A-Z][a-z\u00C0-\u017F.\-]+(?:\s+[A-Z][a-z\u00C0-\u017F.\-]+){1,3})\s*$/m;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -98,13 +107,8 @@ export function ResumeIntake() {
       form.setValue("raw_text", text);
       form.setValue("raw_text_format", format);
 
-      // Trivial regex auto-fill — only email + phone (unambiguous)
-      if (text) {
-        const em = text.match(EMAIL_RE);
-        const ph = text.match(PHONE_RE);
-        if (em?.[0] && !form.getValues("email"))  form.setValue("email", em[0].trim());
-        if (ph?.[0] && !form.getValues("phone"))  form.setValue("phone", ph[0].trim());
-      }
+      // Heuristic auto-fill — see autoFillFromText()
+      if (text) autoFillFromText(text, form);
 
       if (!text.trim()) {
         // Empty extraction → fallback message + manual entry
@@ -394,6 +398,183 @@ export function ResumeIntake() {
       )}
     </div>
   );
+}
+
+// ── Heuristic auto-fill ──────────────────────────────────────────────────────
+
+/**
+ * Pre-populate the safe fields on the form from the extracted resume text.
+ * Only fields where regex/heuristics are reliable. Work history + education
+ * stay manual (per SPEC-002 — pre-population from text without AI produces
+ * garbage that the user has to delete).
+ *
+ * Skips any field the user has already typed into.
+ */
+function autoFillFromText(
+  text: string,
+  form: ReturnType<typeof useForm<Profile>>,
+): void {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  // ── Email + phone — unambiguous ─────────────────────────────────────────
+  const em = text.match(EMAIL_RE)?.[0]?.trim();
+  if (em && !form.getValues("email")) form.setValue("email", em);
+
+  const ph = text.match(PHONE_RE)?.[0]?.trim();
+  if (ph && !form.getValues("phone")) form.setValue("phone", ph);
+
+  // ── Name — usually the first non-empty line, all-caps or title-cased ────
+  // Skip if the line contains @ or http (not a name).
+  if (!form.getValues("full_name")) {
+    for (const line of lines.slice(0, 3)) {
+      if (line.length > 60) continue;
+      if (/[@\d]|https?:\/\//.test(line)) continue;
+      const m = line.match(NAME_LIKE_RE);
+      if (m) {
+        form.setValue("full_name", m[1].trim());
+        break;
+      }
+      // All-caps name fallback ("AMIR JABRI") — title-case it
+      if (/^[A-Z\s]{4,40}$/.test(line) && line.split(/\s+/).length >= 2) {
+        const titleCased = line
+          .split(/\s+/)
+          .map(w => w[0] + w.slice(1).toLowerCase())
+          .join(" ");
+        form.setValue("full_name", titleCased);
+        break;
+      }
+    }
+  }
+
+  // ── Location: "City, ST" anywhere in the first ~10 lines ────────────────
+  if (!form.getValues("location")) {
+    const head = lines.slice(0, 10).join("\n");
+    const m = head.match(CITY_STATE_RE);
+    if (m?.[0]) form.setValue("location", m[0].trim());
+  }
+
+  // ── LinkedIn URL ────────────────────────────────────────────────────────
+  // (Stored on user_profiles.linkedin_url — we don't have a form field for
+  // it yet, but we set it on raw_text so the profile flow downstream picks
+  // it up; future PR can surface it on the form.)
+  // Skipped here — out of scope for the current schema.
+
+  // ── Headline: a line that looks like a job title in the first 5 lines ───
+  // Heuristic: a line of 3-50 chars containing a capitalized noun and not
+  // looking like a heading or a contact line.
+  if (!form.getValues("headline")) {
+    for (const line of lines.slice(0, 6)) {
+      if (line.length < 8 || line.length > 80) continue;
+      if (/[@]|https?:\/\//.test(line)) continue;
+      if (/^(SUMMARY|PROFILE|OBJECTIVE|EXPERIENCE|EDUCATION|SKILLS|CONTACT)/i.test(line)) continue;
+      // Looks like a headline if it has at least one capital letter and is not the name we already set
+      const hasCap = /[A-Z]/.test(line);
+      const lineWords = line.split(/\s+/).length;
+      if (hasCap && lineWords >= 2 && line !== form.getValues("full_name")) {
+        // Common headline indicators
+        if (/(engineer|developer|manager|designer|architect|director|lead|consultant|analyst|specialist|founder|advisor|officer|coordinator|administrator|executive|product)/i.test(line)) {
+          form.setValue("headline", line);
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Summary: text under a "Summary"/"Profile"/"Objective" heading ───────
+  if (!form.getValues("summary")) {
+    const summary = extractSection(text, /^(SUMMARY|PROFILE|OBJECTIVE|PROFESSIONAL\s+SUMMARY|ABOUT(\s+ME)?)\s*:?\s*$/im);
+    if (summary) {
+      // Keep at most 600 chars, drop section break
+      const trimmed = summary.replace(/\s+/g, " ").trim().slice(0, 600);
+      if (trimmed.length > 20) form.setValue("summary", trimmed);
+    }
+  }
+
+  // ── Skills: harvest known keywords + parse explicit Skills section ──────
+  if (form.getValues("skills").length === 0) {
+    const harvested = harvestSkills(text);
+    if (harvested.length > 0) form.setValue("skills", harvested);
+  }
+}
+
+/**
+ * Pull the body of a resume section by header line — everything between the
+ * matching header and the next ALL-CAPS header line (or end of text).
+ */
+function extractSection(text: string, headerRe: RegExp): string | null {
+  const lines = text.split(/\r?\n/);
+  let inSection = false;
+  const collected: string[] = [];
+  for (const line of lines) {
+    if (inSection) {
+      // Stop at next section header — heuristic: ALL CAPS line of 3-40 chars
+      if (/^[A-Z][A-Z\s&]{2,38}\s*:?\s*$/.test(line.trim())) break;
+      collected.push(line);
+    } else if (headerRe.test(line)) {
+      inSection = true;
+    }
+  }
+  return collected.join(" ").trim() || null;
+}
+
+/**
+ * Compact embedded skill list — same shape/idea as parseResumeLocally but
+ * inlined here so the intake component doesn't depend on the larger parser.
+ * Curated set of widely-cited tech, tools, methodologies.
+ */
+const SKILL_DICT: string[] = [
+  // Languages
+  "JavaScript","TypeScript","Python","Java","Kotlin","Swift","Go","Rust","C++","C#","Ruby","PHP","Scala","R","SQL","Bash","Shell","PowerShell",
+  // Web frontend
+  "React","Next.js","Vue","Vue.js","Angular","Svelte","Redux","Tailwind","Tailwind CSS","Bootstrap","HTML","CSS","Sass",
+  // Web backend
+  "Node.js","Express","NestJS","Django","Flask","FastAPI","Rails","Spring","Spring Boot","Laravel",".NET","ASP.NET",
+  // Mobile
+  "React Native","Flutter","SwiftUI","Jetpack Compose","iOS","Android",
+  // Data / ML / AI
+  "TensorFlow","PyTorch","Pandas","NumPy","scikit-learn","Hugging Face","LangChain","OpenAI","Anthropic","Spark","Hadoop","Kafka","Airflow","dbt","Snowflake","BigQuery","Databricks",
+  // Databases
+  "PostgreSQL","Postgres","MySQL","MongoDB","Redis","DynamoDB","Elasticsearch","Supabase","Firebase","Prisma",
+  // Cloud
+  "AWS","GCP","Google Cloud","Azure","Heroku","Vercel","Netlify","Cloudflare",
+  // DevOps / containers
+  "Docker","Kubernetes","Terraform","Ansible","Jenkins","GitHub Actions","GitLab CI","CircleCI","Prometheus","Grafana","Datadog","Sentry",
+  // Version control / collaboration
+  "Git","GitHub","GitLab","Bitbucket",
+  // APIs / protocols
+  "REST","REST API","GraphQL","gRPC","WebSockets","OAuth","OAuth2","JWT",
+  // Methodologies
+  "Agile","Scrum","Kanban","TDD","CI/CD","DevOps","SRE",
+  // Project mgmt / business
+  "Jira","Confluence","Asana","Trello","Notion","Linear","Salesforce","HubSpot","Tableau","Power BI","Looker","Excel","PowerPoint",
+  // Design
+  "Figma","Sketch","Adobe XD","Photoshop","Illustrator","Canva",
+  // Testing
+  "Jest","Vitest","Mocha","Cypress","Playwright","Selenium","JUnit","PyTest",
+  // Security
+  "OWASP","SOC 2","GDPR","HIPAA","Penetration Testing",
+];
+
+const SKILL_RE = (() => {
+  // Char-by-char escape; avoids fragile inline regex literals.
+  function esc(s: string): string {
+    const META = new Set(["\\","^","$",".","|","?","*","+","(",")","[","]","{","}","/"]);
+    let out = ""; for (const ch of s) out += META.has(ch) ? "\\" + ch : ch; return out;
+  }
+  const alts = SKILL_DICT.map(k => esc(k).replace(/ /g, "\\s+")).join("|");
+  return new RegExp("(?:^|[^\\w])(" + alts + ")(?=$|[^\\w])", "gi");
+})();
+
+function harvestSkills(text: string): string[] {
+  const found = new Set<string>();
+  const lower = new Map<string, string>();
+  for (const k of SKILL_DICT) lower.set(k.toLowerCase(), k);
+  for (const m of text.matchAll(SKILL_RE)) {
+    const matched = (m[1] ?? m[0]).replace(/\s+/g, " ").toLowerCase();
+    const canonical = lower.get(matched) ?? m[1] ?? m[0];
+    found.add(canonical);
+  }
+  return Array.from(found);
 }
 
 // ── Browser-side extraction ───────────────────────────────────────────────────
