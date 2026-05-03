@@ -194,7 +194,6 @@ export default function CareerProfilePage() {
         {
           user_id:         userId,
           full_name:       fullName.trim() || null,
-          phone:           phone.trim() || null,
           linkedin_url:    linkedinUrl.trim() || null,
           contact_email:   contactEmail.trim() || null,
           location:        location.trim() || null,
@@ -350,17 +349,17 @@ export default function CareerProfilePage() {
       for (const v of versions) {
         try { await deleteResumeVersion(v.id); } catch { /* best-effort */ }
       }
-      // Clear all profile fields managed by this page
+      // Clear ONLY career identity fields (this page's domain).
+      // Display-identity (full_name, phone, avatar_url) is owned by /settings/account
+      // and must be preserved — clearing the resume profile here MUST NOT wipe the
+      // user's name, phone, or photo.
       await supabase.from("user_profiles").upsert(
         {
           user_id:         userId,
-          full_name:       null,
-          phone:           null,
           linkedin_url:    null,
           contact_email:   null,
           location:        null,
           headline:        null,
-          avatar_url:      null,
           summary:         null,
           skills:          [],
           work_experience: [],
@@ -371,8 +370,8 @@ export default function CareerProfilePage() {
         },
         { onConflict: "user_id" },
       );
-      // Reset local state
-      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setAvatarUrl(null); setSummary("");
+      // Reset local state — but NOT full_name / phone / avatar_url (display identity)
+      setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
       setProfileMsg({ type: "success", text: "Profile cleared." });
@@ -530,10 +529,6 @@ export default function CareerProfilePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Email <span className="text-xs font-normal text-gray-400">(from resume)</span></label>
                 <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555-123-4567" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
