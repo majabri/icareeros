@@ -107,8 +107,11 @@ export function ResumeIntake() {
       form.setValue("raw_text", text);
       form.setValue("raw_text_format", format);
 
-      // Heuristic auto-fill — see autoFillFromText()
-      if (text) autoFillFromText(text, form);
+      // AI cascade (Lovable Gateway → Gemini Flash) → falls back to local heuristic.
+      if (text) {
+        const aiFilled = await tryAiFill(text, form);
+        if (!aiFilled) autoFillFromText(text, form);
+      }
 
       if (!text.trim()) {
         // Empty extraction → fallback message + manual entry
@@ -398,6 +401,86 @@ export function ResumeIntake() {
       )}
     </div>
   );
+}
+
+/**
+ * Try to populate the form from extracted text using the server-side AI cascade
+ * (Lovable Gateway → Gemini Flash). Returns true if either tier answered with
+ * structured data. Returns false if both unavailable / failed (caller then
+ * falls back to autoFillFromText).
+ *
+ * Even on AI success, we still skip any field the user has already typed into.
+ */
+async function tryAiFill(
+  text: string,
+  form: ReturnType<typeof useForm<Profile>>,
+): Promise<boolean> {
+  try {
+    const res = await fetch("/api/resume/parse-ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return false;
+    const ai = await res.json() as {
+      _source: "lovable" | "gemini" | "none";
+      contact?: { name?: string; email?: string; phone?: string; location?: string; headline?: string };
+      summary?: string;
+      experience?: Array<{ title: string; company: string; location: string; period: string; start_date: string; end_date: string; bullets: string[]; technologies: string[] }>;
+      education?: Array<{ degree: string; field_of_study: string; school: string; location: string; year: string; gpa: string; honors: string }>;
+      skills?: string[];
+    };
+    if (!ai || ai._source === "none") return false;
+
+    // ── Identity / contact (only if user hasn't typed) ────────────────────
+    const c = ai.contact ?? {};
+    if (c.name     && !form.getValues("full_name")) form.setValue("full_name", c.name);
+    if (c.email    && !form.getValues("email"))     form.setValue("email", c.email);
+    if (c.phone    && !form.getValues("phone"))     form.setValue("phone", c.phone);
+    if (c.location && !form.getValues("location"))  form.setValue("location", c.location);
+    if (c.headline && !form.getValues("headline"))  form.setValue("headline", c.headline);
+    if (ai.summary && !form.getValues("summary"))   form.setValue("summary", ai.summary);
+
+    // ── Work history — the big AI win, populates the field array ──────────
+    if (form.getValues("work_history").length === 0 && ai.experience?.length) {
+      form.setValue(
+        "work_history",
+        ai.experience.map(e => ({
+          title:    e.title,
+          company:  e.company,
+          location: e.location,
+          start:    e.start_date || "",
+          end:      e.end_date && e.end_date.toLowerCase() !== "present" ? e.end_date : "",
+          current:  /present|current|now/i.test(e.end_date ?? ""),
+          bullets:  Array.isArray(e.bullets) ? e.bullets : [],
+        })),
+      );
+    }
+
+    // ── Education ─────────────────────────────────────────────────────────
+    if (form.getValues("education").length === 0 && ai.education?.length) {
+      form.setValue(
+        "education",
+        ai.education.map(e => ({
+          school: e.school,
+          degree: e.degree,
+          field:  e.field_of_study,
+          start:  "",
+          end:    e.year || "",
+        })),
+      );
+    }
+
+    // ── Skills ────────────────────────────────────────────────────────────
+    if (form.getValues("skills").length === 0 && ai.skills?.length) {
+      form.setValue("skills", ai.skills);
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("[tryAiFill] failed, falling back to heuristic:", err);
+    return false;
+  }
 }
 
 // ── Heuristic auto-fill ──────────────────────────────────────────────────────
