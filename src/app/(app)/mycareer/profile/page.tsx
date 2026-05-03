@@ -628,7 +628,7 @@ export default function CareerProfilePage() {
                 <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://www.linkedin.com/in/your-profile" className={inputCls} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Current Location</label>
                 <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="City, State or Country" className={inputCls} />
               </div>
               <div className="sm:col-span-2">
