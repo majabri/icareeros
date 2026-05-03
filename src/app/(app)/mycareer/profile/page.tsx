@@ -107,7 +107,6 @@ export default function CareerProfilePage() {
   const [location, setLocation]               = useState("");
   const [headline, setHeadline]               = useState("");
   const [avatarUrl, setAvatarUrl]             = useState<string | null>(null);
-  const [avatarUploading, setAvatarUploading] = useState(false);
   const [summary, setSummary]                 = useState("");
   const [skills, setSkills]                   = useState<string[]>([]);
 
@@ -317,34 +316,6 @@ export default function CareerProfilePage() {
     }
   }
 
-  async function handleAvatarUpload(file: File) {
-    if (!userId) return;
-    setAvatarUploading(true);
-    try {
-      const ext  = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `${userId}/avatar.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("avatars")
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw new Error(upErr.message);
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-      // Bust cache by appending timestamp
-      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-      setAvatarUrl(publicUrl);
-      // Persist immediately so TopBar picks it up on next load
-      await supabase.from("user_profiles").upsert(
-        { user_id: userId, avatar_url: publicUrl, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" }
-      );
-      // Broadcast to TopBar in the same tab via a custom event
-      window.dispatchEvent(new CustomEvent("icareeros:avatar-updated", { detail: { url: publicUrl } }));
-    } catch (err) {
-      setProfileMsg({ type: "error", text: `Photo upload failed: ${(err as Error).message}` });
-    } finally {
-      setAvatarUploading(false);
-    }
-  }
-
   async function handleDelete(id: string) {
     try {
       await deleteResumeVersion(id);
@@ -550,65 +521,6 @@ export default function CareerProfilePage() {
 
           {/* ── Personal Information ──────────────────────────────────── */}
           <Section title="Personal Information" subtitle="Auto-filled from your resume — review and update as needed.">
-            {/* Avatar row */}
-            <div className="flex items-center gap-5 pb-2">
-              {/* Circle — shows photo or initials */}
-              <div className="relative shrink-0">
-                <div
-                  style={{
-                    width: 72, height: 72, borderRadius: "50%",
-                    overflow: "hidden",
-                    border: "2px solid var(--neutral-200)",
-                    background: avatarUrl
-                      ? "transparent"
-                      : "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <span style={{ color: "#fff", fontWeight: 700, fontSize: "1.3rem", userSelect: "none" }}>
-                      {(fullName || "?").split(/\s+/).filter(Boolean)
-                        .map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                {/* Overlay upload button */}
-                <label
-                  htmlFor="avatar-upload"
-                  className="absolute inset-0 flex items-center justify-center rounded-full cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
-                  style={{ background: "rgba(0,0,0,0.45)" }}
-                  title="Upload photo"
-                >
-                  {avatarUploading ? (
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                  )}
-                </label>
-                <input id="avatar-upload" type="file" accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleAvatarUpload(f); e.target.value = ""; }}
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-800">{fullName || "Your Name"}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Click the photo to upload · JPG, PNG, WebP · max 5 MB</p>
-                {avatarUrl && (
-                  <button type="button"
-                    onClick={() => { setAvatarUrl(null); }}
-                    className="mt-1 text-xs text-red-500 hover:text-red-600 font-medium">
-                    Remove photo
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Fields grid */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
