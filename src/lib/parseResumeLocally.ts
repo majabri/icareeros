@@ -175,12 +175,19 @@ const SKILL_KEYWORDS: string[] = [
 ];
 
 // Build a single regex that matches any keyword case-insensitively as a whole token.
-// Special-case the multi-token entries by escaping spaces / dots / dashes.
+// Multi-word keywords (e.g. "Spring Boot") become \s+ so any whitespace works.
+// Each keyword is escaped via escapeRegex() to keep regex meta-chars (+ . * ? ( ) [ ] etc.) literal.
+function escapeRegex(s: string): string {
+  // Char-by-char to avoid any regex-literal quoting confusion in this source file.
+  const META = new Set(["\\", "^", "$", ".", "|", "?", "*", "+", "(", ")", "[", "]", "{", "}", "/"]);
+  let out = "";
+  for (const ch of s) out += META.has(ch) ? "\\" + ch : ch;
+  return out;
+}
+
 const SKILL_KEYWORD_RE = new RegExp(
   "\\b(?:" +
-  SKILL_KEYWORDS.map(k =>
-    k.replace(/[.+\\?^$()|[\\]/]/g, m => "\\" + m).replace(/ /g, "\\s+")
-  ).join("|") +
+  SKILL_KEYWORDS.map(k => escapeRegex(k).replace(/ /g, "\\s+")).join("|") +
   ")\\b",
   "gi"
 );
