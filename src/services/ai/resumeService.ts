@@ -84,14 +84,16 @@ export async function parseResumeFile(
 
   const { text: rawText } = (await res.json()) as { text: string };
 
-  // Tier 1 — regex baseline.
+  // Tier 1 — regex baseline. Provides instant offline fallback even if AI fails.
   const baseline = parseResumeLocally(rawText);
 
-  // Tier 2 — AI cascade only if regex looks incomplete.
-  if (regexResultIncomplete(baseline)) {
-    const ai = await tryAiCascade(rawText).catch(() => null);
-    if (ai) return { parsed: mergeAiIntoBaseline(baseline, ai), rawText };
-  }
+  // Tier 2 — AI cascade ALWAYS runs when available. Real-world resumes use
+  // tab-separated layouts, no bullet markers, mixed orderings — regex alone
+  // mis-buckets fields (e.g. company name lands in title slot, dates land in
+  // company slot). Gemini Flash is free + fast, so we always prefer its
+  // structured output. AI failure → regex baseline is returned unchanged.
+  const ai = await tryAiCascade(rawText).catch(() => null);
+  if (ai) return { parsed: mergeAiIntoBaseline(baseline, ai), rawText };
 
   return { parsed: baseline, rawText };
 }
