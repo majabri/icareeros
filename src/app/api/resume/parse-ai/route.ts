@@ -1,18 +1,21 @@
 /**
  * POST /api/resume/parse-ai
  *
- * Three-tier cascade for structured resume extraction:
+ * Cascade for structured resume extraction (each tier returns null if its
+ * env var is missing or the upstream errors — falls through to the next):
  *
- *   1. Lovable Gateway   (preferred — paid via Lovable subscription, free for Lovable apps)
- *   2. Gemini 2.0 Flash  (fallback — Google AI Studio free tier, generous quota)
- *   3. (caller's regex/heuristic auto-fill stays as last-resort if both fail)
+ *   1. Anthropic Claude Haiku 4.5 (preferred — most reliable, ANTHROPIC_API_KEY)
+ *   2. Lovable Gateway            (paid via Lovable subscription)
+ *   3. Gemini 2.0 Flash           (Google AI Studio free tier)
+ *   4. (caller's regex/heuristic auto-fill stays as last-resort if all fail)
  *
- * Both upstreams are called with the SAME function-calling shape so the
+ * All three upstreams are called with the SAME tool-use schema so the
  * downstream consumer always receives an `extract_resume` tool result.
  *
  * Env vars (any subset OK — missing keys gracefully skip that tier):
- *   - LOVABLE_API_KEY  — from your Lovable dashboard
- *   - GEMINI_API_KEY   — from https://aistudio.google.com/app/apikey
+ *   - ANTHROPIC_API_KEY — from https://console.anthropic.com/
+ *   - LOVABLE_API_KEY   — from your Lovable dashboard (paid plan)
+ *   - GEMINI_API_KEY    — from https://aistudio.google.com/app/apikey
  *
  * Input: JSON { text: string }
  * Output: ParsedResume (same shape as the legacy /api/resume/parse) plus a
@@ -43,7 +46,7 @@ interface ParsedResume {
   }>;
   skills: string[];
   certifications: string[];
-  _source: "lovable" | "gemini" | "none";
+  _source: "anthropic" | "lovable" | "gemini" | "none";
 }
 
 // ── Tool schema (shared between Lovable and Gemini) ───────────────────────────
@@ -136,6 +139,57 @@ async function makeSupabaseServer() {
 }
 
 // ── Tier 1: Lovable Gateway (OpenAI Chat Completions shape) ───────────────────
+
+// ── Tier 0: Anthropic Claude (Haiku 4.5) — most reliable, paid via ANTHROPIC_API_KEY ─
+
+async function tryAnthropic(text: string): Promise<ParsedResume | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key":         key,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+      },
+      body: JSON.stringify({
+        model:      "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        system:     SYSTEM_PROMPT,
+        tools: [{
+          name:         EXTRACT_TOOL.name,
+          description:  EXTRACT_TOOL.description,
+          input_schema: EXTRACT_TOOL.parameters,
+        }],
+        tool_choice: { type: "tool", name: "extract_resume" },
+        messages: [
+          { role: "user", content: `Parse this resume:\n\n${text}` },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "<unreadable>");
+      console.warn(`[parse-ai] Anthropic returned ${res.status}: ${errBody.slice(0, 800)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const toolUse = (data.content as Array<{ type: string; name?: string; input?: unknown }> | undefined)
+      ?.find(c => c.type === "tool_use" && c.name === "extract_resume");
+    if (!toolUse?.input) {
+      console.warn("[parse-ai] Anthropic returned no tool_use block");
+      return null;
+    }
+    return { ...normalize(toolUse.input), _source: "anthropic" };
+  } catch (err) {
+    console.warn("[parse-ai] Anthropic threw:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
 
 async function tryLovable(text: string): Promise<ParsedResume | null> {
   const key = process.env.LOVABLE_API_KEY;
@@ -300,7 +354,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Resume text is too short to parse." }, { status: 400 });
     }
 
-    // Try cascade
+    // Try cascade — Anthropic first (we know the key works), then Lovable, then Gemini.
+    const anthropic = await tryAnthropic(text);
+    if (anthropic) return NextResponse.json(anthropic);
+
     const lovable = await tryLovable(text);
     if (lovable) return NextResponse.json(lovable);
 
