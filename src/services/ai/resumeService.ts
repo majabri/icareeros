@@ -107,7 +107,7 @@ function regexResultIncomplete(p: ParsedResume): boolean {
 }
 
 interface AiCascadeResult {
-  _source: "anthropic" | "lovable" | "gemini" | "none";
+  _source: "lovable" | "gemini" | "none";
   contact: {
     name: string; email: string; phone: string; location: string;
     linkedin: string; github: string; portfolio: string; headline: string;
