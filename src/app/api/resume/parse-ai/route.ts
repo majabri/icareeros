@@ -215,7 +215,8 @@ async function tryGemini(text: string): Promise<ParsedResume | null> {
     );
 
     if (!res.ok) {
-      console.warn(`[parse-ai] Gemini returned ${res.status}`);
+      const errBody = await res.text().catch(() => "<unreadable>");
+      console.warn(`[parse-ai] Gemini returned ${res.status}: ${errBody.slice(0, 800)}`);
       return null;
     }
 
