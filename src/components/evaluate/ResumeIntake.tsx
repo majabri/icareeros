@@ -107,10 +107,14 @@ export function ResumeIntake() {
       form.setValue("raw_text", text);
       form.setValue("raw_text_format", format);
 
-      // AI cascade (Lovable Gateway → Gemini Flash) → falls back to local heuristic.
       if (text) {
-        const aiFilled = await tryAiFill(text, form);
-        if (!aiFilled) autoFillFromText(text, form);
+        // Tier 1 — local heuristic (free, always runs, fills identity + skills).
+        autoFillFromText(text, form);
+        // Tiers 2 + 3 — AI cascade (Lovable → Gemini) fills remaining gaps,
+        // most importantly work_history and education which the heuristic
+        // intentionally does NOT touch (per SPEC-002 §2.5). Both helpers
+        // skip any field already populated, so this composes cleanly.
+        await tryAiFill(text, form);
       }
 
       if (!text.trim()) {
