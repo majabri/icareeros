@@ -26,6 +26,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import Anthropic from "@anthropic-ai/sdk";
+import { createTracedClient } from "@/lib/observability/langfuse";
 
 // ── Output shape (must stay compatible with the intake form's setValue path) ──
 
@@ -140,53 +142,39 @@ async function makeSupabaseServer() {
 
 // ── Tier 1: Lovable Gateway (OpenAI Chat Completions shape) ───────────────────
 
-// ── Tier 0: Anthropic Claude (Haiku 4.5) — most reliable, paid via ANTHROPIC_API_KEY ─
+// ── Tier 0: Anthropic Claude (Haiku 4.5) — uses the SDK + createTracedClient
+//          pattern that the other API routes use, so any breakage here would
+//          surface across the whole app.
 
-async function tryAnthropic(text: string): Promise<ParsedResume | null> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+async function tryAnthropic(text: string, userId: string): Promise<ParsedResume | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key":         key,
-        "anthropic-version": "2023-06-01",
-        "content-type":      "application/json",
-      },
-      body: JSON.stringify({
-        model:      "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        system:     SYSTEM_PROMPT,
-        tools: [{
-          name:         EXTRACT_TOOL.name,
-          description:  EXTRACT_TOOL.description,
-          input_schema: EXTRACT_TOOL.parameters,
-        }],
-        tool_choice: { type: "tool", name: "extract_resume" },
-        messages: [
-          { role: "user", content: `Parse this resume:\n\n${text}` },
-        ],
-      }),
-      signal: AbortSignal.timeout(30_000),
+    const anthropic = createTracedClient(userId, "resume/parse-ai");
+    const res = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system:     SYSTEM_PROMPT,
+      tools: [{
+        name:         EXTRACT_TOOL.name,
+        description:  EXTRACT_TOOL.description,
+        input_schema: EXTRACT_TOOL.parameters as Anthropic.Tool["input_schema"],
+      }],
+      tool_choice: { type: "tool", name: "extract_resume" },
+      messages: [{ role: "user", content: `Parse this resume:\n\n${text}` }],
     });
 
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "<unreadable>");
-      console.warn(`[parse-ai] Anthropic returned ${res.status}: ${errBody.slice(0, 800)}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const toolUse = (data.content as Array<{ type: string; name?: string; input?: unknown }> | undefined)
-      ?.find(c => c.type === "tool_use" && c.name === "extract_resume");
-    if (!toolUse?.input) {
+    const toolUse = res.content.find(
+      (c): c is Anthropic.ToolUseBlock => c.type === "tool_use" && c.name === "extract_resume",
+    );
+    if (!toolUse) {
       console.warn("[parse-ai] Anthropic returned no tool_use block");
       return null;
     }
     return { ...normalize(toolUse.input), _source: "anthropic" };
   } catch (err) {
-    console.warn("[parse-ai] Anthropic threw:", err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[parse-ai] Anthropic threw: ${msg}`);
     return null;
   }
 }
@@ -355,7 +343,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Try cascade — Anthropic first (we know the key works), then Lovable, then Gemini.
-    const anthropic = await tryAnthropic(text);
+    const anthropic = await tryAnthropic(text, user.id);
     if (anthropic) return NextResponse.json(anthropic);
 
     const lovable = await tryLovable(text);
