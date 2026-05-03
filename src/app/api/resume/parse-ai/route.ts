@@ -3,16 +3,16 @@
  *
  * Two-tier cascade for structured resume extraction:
  *
- *   1. Lovable Gateway   (preferred — paid via Lovable subscription, free for Lovable apps)
- *   2. Gemini 2.0 Flash  (fallback — Google AI Studio free tier, generous quota)
+ *   1. Gemini 2.5 Flash  (preferred — Google AI Studio free tier, generous quota)
+ *   2. Lovable Gateway   (fallback — only if LOVABLE_API_KEY is present)
  *   3. (caller's regex/heuristic auto-fill stays as last-resort if both fail)
  *
  * Both upstreams are called with the SAME function-calling shape so the
  * downstream consumer always receives an `extract_resume` tool result.
  *
  * Env vars (any subset OK — missing keys gracefully skip that tier):
- *   - LOVABLE_API_KEY  — from your Lovable dashboard
  *   - GEMINI_API_KEY   — from https://aistudio.google.com/app/apikey
+ *   - LOVABLE_API_KEY  — from your Lovable dashboard (optional)
  *
  * Input: JSON { text: string }
  * Output: ParsedResume (same shape as the legacy /api/resume/parse) plus a
@@ -135,7 +135,62 @@ async function makeSupabaseServer() {
   );
 }
 
-// ── Tier 1: Lovable Gateway (OpenAI Chat Completions shape) ───────────────────
+// ── Tier 1: Gemini 2.5 Flash (Google AI generateContent shape) ────────────────
+
+async function tryGemini(text: string): Promise<ParsedResume | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+
+  try {
+    // Gemini's function declaration syntax — slightly different from OpenAI
+    const geminiTool = {
+      function_declarations: [{
+        name:        EXTRACT_TOOL.name,
+        description: EXTRACT_TOOL.description,
+        parameters:  EXTRACT_TOOL.parameters,
+      }],
+    };
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [
+            { role: "user", parts: [{ text: `Parse this resume:\n\n${text}` }] },
+          ],
+          tools: [geminiTool],
+          tool_config: {
+            function_calling_config: { mode: "ANY" },
+          },
+          generationConfig: { maxOutputTokens: 8192 },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      }
+    );
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "<unreadable>");
+      console.warn(`[parse-ai] Gemini (gemini-2.5-flash) returned ${res.status}: ${errBody.slice(0, 800)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const fnCall = data.candidates?.[0]?.content?.parts?.find(
+      (p: unknown) => (p as { functionCall?: unknown }).functionCall
+    );
+    const args = (fnCall as { functionCall?: { args?: unknown } } | undefined)?.functionCall?.args;
+    if (!args) return null;
+    return { ...normalize(args), _source: "gemini" };
+  } catch (err) {
+    console.warn("[parse-ai] Gemini threw:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+// ── Tier 2: Lovable Gateway (OpenAI Chat Completions shape) ───────────────────
 
 async function tryLovable(text: string): Promise<ParsedResume | null> {
   const key = process.env.LOVABLE_API_KEY;
@@ -174,61 +229,6 @@ async function tryLovable(text: string): Promise<ParsedResume | null> {
     return { ...normalize(parsed), _source: "lovable" };
   } catch (err) {
     console.warn("[parse-ai] Lovable threw:", err instanceof Error ? err.message : err);
-    return null;
-  }
-}
-
-// ── Tier 2: Gemini 2.0 Flash (Google AI generateContent shape) ────────────────
-
-async function tryGemini(text: string): Promise<ParsedResume | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-
-  try {
-    // Gemini's function declaration syntax — slightly different from OpenAI
-    const geminiTool = {
-      function_declarations: [{
-        name:        EXTRACT_TOOL.name,
-        description: EXTRACT_TOOL.description,
-        parameters:  EXTRACT_TOOL.parameters,
-      }],
-    };
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [
-            { role: "user", parts: [{ text: `Parse this resume:\n\n${text}` }] },
-          ],
-          tools: [geminiTool],
-          tool_config: {
-            function_calling_config: { mode: "ANY", allowed_function_names: ["extract_resume"] },
-          },
-          generationConfig: { maxOutputTokens: 8192 },
-        }),
-        signal: AbortSignal.timeout(30_000),
-      }
-    );
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "<unreadable>");
-      console.warn(`[parse-ai] Gemini returned ${res.status}: ${errBody.slice(0, 800)}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const fnCall = data.candidates?.[0]?.content?.parts?.find(
-      (p: unknown) => (p as { functionCall?: unknown }).functionCall
-    );
-    const args = (fnCall as { functionCall?: { args?: unknown } } | undefined)?.functionCall?.args;
-    if (!args) return null;
-    return { ...normalize(args), _source: "gemini" };
-  } catch (err) {
-    console.warn("[parse-ai] Gemini threw:", err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -300,12 +300,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Resume text is too short to parse." }, { status: 400 });
     }
 
-    // Try cascade — Lovable first (free via Lovable subscription), then Gemini (free Google AI).
-    const lovable = await tryLovable(text);
-    if (lovable) return NextResponse.json(lovable);
-
+    // Try cascade — Gemini first (free Google AI, primary tier), then Lovable (skipped without LOVABLE_API_KEY).
     const gemini = await tryGemini(text);
     if (gemini) return NextResponse.json(gemini);
+
+    const lovable = await tryLovable(text);
+    if (lovable) return NextResponse.json(lovable);
 
     // Both tiers unavailable / failed — return _source: "none" so the client
     // falls back to its local heuristic auto-fill.
