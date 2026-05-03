@@ -194,6 +194,7 @@ export default function CareerProfilePage() {
         {
           user_id:         userId,
           full_name:       fullName.trim() || null,
+          phone:           phone.trim() || null,
           linkedin_url:    linkedinUrl.trim() || null,
           contact_email:   contactEmail.trim() || null,
           location:        location.trim() || null,
@@ -349,17 +350,20 @@ export default function CareerProfilePage() {
       for (const v of versions) {
         try { await deleteResumeVersion(v.id); } catch { /* best-effort */ }
       }
-      // Clear ONLY career identity fields (this page's domain).
-      // Display-identity (full_name, phone, avatar_url) is owned by /settings/account
-      // and must be preserved — clearing the resume profile here MUST NOT wipe the
-      // user's name, phone, or photo.
+      // Per Amir audit 2026-05-03 — Danger Zone deletes the ENTIRE profile.
+      // Personal Information is canonical here; nulling it is the user's intent.
+      // Avatar editor still lives on /settings/account, but avatar_url is part of
+      // the profile and the user explicitly asked for "delete entire profile".
       await supabase.from("user_profiles").upsert(
         {
           user_id:         userId,
+          full_name:       null,
+          phone:           null,
           linkedin_url:    null,
           contact_email:   null,
           location:        null,
           headline:        null,
+          avatar_url:      null,
           summary:         null,
           skills:          [],
           work_experience: [],
@@ -370,10 +374,13 @@ export default function CareerProfilePage() {
         },
         { onConflict: "user_id" },
       );
-      // Reset local state — but NOT full_name / phone / avatar_url (display identity)
-      setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setSummary("");
+      // Reset all local state.
+      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline("");
+      setAvatarUrl(null); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
+      // Notify TopBar that the avatar was wiped so it falls back to initials.
+      window.dispatchEvent(new CustomEvent("icareeros:avatar-updated", { detail: { url: null } }));
       setProfileMsg({ type: "success", text: "Profile cleared." });
     } catch (err) {
       setProfileMsg({ type: "error", text: (err as Error).message });
@@ -529,6 +536,10 @@ export default function CareerProfilePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Email <span className="text-xs font-normal text-gray-400">(from resume)</span></label>
                 <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" autoComplete="tel" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
