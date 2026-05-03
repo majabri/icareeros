@@ -456,7 +456,8 @@ async function extractPdfText(file: File): Promise<string> {
 
 async function extractDocxText(file: File): Promise<string> {
   // mammoth in the browser via ESM build
-  const mammoth = await import("mammoth/mammoth.browser");
+  const mammothModule = await import("mammoth");
+  const mammoth = (mammothModule.default ?? mammothModule) as { extractRawText: (opts: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> };
   const buf = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer: buf });
   return (result.value ?? "").trim();
