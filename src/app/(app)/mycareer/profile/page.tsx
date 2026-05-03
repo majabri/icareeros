@@ -18,6 +18,7 @@ import {
 } from "@/services/ai/resumeService";
 import type { ParsedResume } from "@/lib/parseResumeLocally";
 import { getActiveCycle, advanceStage } from "@/orchestrator/careerOsOrchestrator";
+import { exportProfile, type ExportFormat } from "@/lib/profile-export";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -103,6 +104,8 @@ export default function CareerProfilePage() {
   const [phone, setPhone]                     = useState("");
   const [linkedinUrl, setLinkedinUrl]         = useState("");
   const [contactEmail, setContactEmail]       = useState("");
+  const [location, setLocation]               = useState("");
+  const [headline, setHeadline]               = useState("");
   const [avatarUrl, setAvatarUrl]             = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [summary, setSummary]                 = useState("");
@@ -131,6 +134,8 @@ export default function CareerProfilePage() {
   const [renameValue, setRenameValue]       = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing]               = useState(false);
+  const [exporting, setExporting]             = useState<ExportFormat | null>(null);
+  const [exportMsg, setExportMsg]             = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load profile ──────────────────────────────────────────────────────────
@@ -146,7 +151,7 @@ export default function CareerProfilePage() {
         if (cycle?.id) setCycleId(cycle.id);
         const { data: p } = await supabase
           .from("user_profiles")
-          .select("full_name,phone,linkedin_url,contact_email,avatar_url,summary,skills,work_experience,education,certifications,portfolio_items")
+          .select("full_name,phone,linkedin_url,contact_email,avatar_url,summary,skills,work_experience,education,certifications,portfolio_items,location,headline")
           .eq("user_id", u.id)
           .maybeSingle();
         if (p) {
@@ -154,6 +159,8 @@ export default function CareerProfilePage() {
           setPhone(p.phone ?? "");
           setLinkedinUrl(p.linkedin_url ?? "");
           setContactEmail(p.contact_email ?? "");
+          setLocation(((p as Record<string,unknown>).location as string) ?? "");
+          setHeadline(((p as Record<string,unknown>).headline as string) ?? "");
           setAvatarUrl(p.avatar_url ?? null);
           setSummary(p.summary ?? "");
           setSkills(p.skills ?? []);
@@ -191,6 +198,8 @@ export default function CareerProfilePage() {
           phone:           phone.trim() || null,
           linkedin_url:    linkedinUrl.trim() || null,
           contact_email:   contactEmail.trim() || null,
+          location:        location.trim() || null,
+          headline:        headline.trim() || null,
           avatar_url:      avatarUrl || null,
           summary:         summary.trim() || null,
           skills,
@@ -239,6 +248,8 @@ export default function CareerProfilePage() {
       if (!linkedinUrl.trim() && parsed.contact.linkedin) setLinkedinUrl(parsed.contact.linkedin);
       if (!contactEmail.trim() && parsed.contact.email)   setContactEmail(parsed.contact.email);
       if (!summary.trim() && parsed.summary)             setSummary(parsed.summary);
+      if (!location.trim() && parsed.contact.location)   setLocation(parsed.contact.location);
+      // headline is not in the regex parser's ParsedContact yet — AI cascade fills it via merge
 
       if (parsed.skills.length > 0) {
         setSkills(prev => {
@@ -342,6 +353,24 @@ export default function CareerProfilePage() {
     } catch (e) { console.error("Delete failed", e); }
   }
 
+  async function handleExport(format: ExportFormat) {
+    setExporting(format);
+    setExportMsg(null);
+    try {
+      await exportProfile(format, {
+        fullName, email: contactEmail, phone, location,
+        linkedinUrl, headline, summary,
+        workExp, education, certifications, skills, portfolioItems,
+      });
+      setExportMsg({ type: "success", text: `Downloaded ${format.toUpperCase()} resume.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Export failed";
+      setExportMsg({ type: "error", text: msg });
+    } finally {
+      setExporting(null);
+    }
+  }
+
   async function handleClearProfile() {
     if (!userId) return;
     setClearing(true);
@@ -358,6 +387,8 @@ export default function CareerProfilePage() {
           phone:           null,
           linkedin_url:    null,
           contact_email:   null,
+          location:        null,
+          headline:        null,
           avatar_url:      null,
           summary:         null,
           skills:          [],
@@ -370,7 +401,7 @@ export default function CareerProfilePage() {
         { onConflict: "user_id" },
       );
       // Reset local state
-      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setAvatarUrl(null); setSummary("");
+      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setAvatarUrl(null); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
       setProfileMsg({ type: "success", text: "Profile cleared." });
@@ -596,6 +627,14 @@ export default function CareerProfilePage() {
                 <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
                 <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://www.linkedin.com/in/your-profile" className={inputCls} />
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
+                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="City, State or Country" className={inputCls} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Headline</label>
+                <input type="text" value={headline} onChange={e => setHeadline(e.target.value)} placeholder="One-line tagline — e.g. Senior PM building B2B SaaS" className={inputCls} />
+              </div>
             </div>
           </Section>
 
@@ -604,11 +643,6 @@ export default function CareerProfilePage() {
             <textarea value={summary} onChange={e => setSummary(e.target.value)} rows={4}
               placeholder="Brief overview of your background and what you bring to the table…"
               className={inputCls + " resize-none"} />
-          </Section>
-
-          {/* ── Skills ───────────────────────────────────────────────── */}
-          <Section title="Skills" subtitle="Press Enter or comma after each skill.">
-            <TagInput tags={skills} onChange={setSkills} placeholder="e.g. Python, Product Strategy, SQL…" />
           </Section>
 
           {/* ── Work Experience ───────────────────────────────────────── */}
@@ -685,6 +719,11 @@ export default function CareerProfilePage() {
             <TagInput tags={certifications} onChange={setCertifications} placeholder="e.g. AWS Solutions Architect, PMP, CISSP…" />
           </Section>
 
+          {/* ── Skills ───────────────────────────────────────────────── */}
+          <Section title="Skills" subtitle="Press Enter or comma after each skill.">
+            <TagInput tags={skills} onChange={setSkills} placeholder="e.g. Python, Product Strategy, SQL…" />
+          </Section>
+
           {/* ── Portfolio ─────────────────────────────────────────────── */}
           <Section title="Portfolio & Achievements" subtitle="Showcases achievements and accomplishments from your resume, plus projects and case studies.">
             {portfolioItems.length === 0 && (
@@ -708,18 +747,41 @@ export default function CareerProfilePage() {
               className="mt-1 text-sm text-brand-600 hover:text-brand-700 font-medium">+ Add Item</button>
           </Section>
 
+          {/* ── Export ───────────────────────────────────────────────── */}
+          <Section title="Export Resume" subtitle="Download your profile in any of these formats. Always reflects what you're editing right now.">
+            <div className="flex flex-wrap gap-2">
+              {(["docx","doc","ats","pdf","txt"] as const).map(fmt => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => void handleExport(fmt)}
+                  disabled={exporting !== null}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  title={fmt === "ats" ? "Plain-text ATS-optimized format (single column, no formatting)" : `Download as ${fmt.toUpperCase()}`}
+                >
+                  {exporting === fmt ? "Generating…" : fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {exportMsg && (
+              <p className={`mt-2 text-xs ${exportMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                {exportMsg.text}
+              </p>
+            )}
+          </Section>
+
           {/* ── Danger Zone ──────────────────────────────────────────── */}
           <section className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-sm">
             <h2 className="text-base font-semibold text-red-700">Danger Zone</h2>
             <p className="mt-1 text-sm text-red-500">
-              Permanently delete all profile data on this page — resume versions, work experience, education, skills, and personal info. This cannot be undone.
+              Permanently delete this entire profile — resume versions, work experience, education, skills, and personal info. This cannot be undone.
             </p>
             <button
               type="button"
               onClick={() => setShowClearConfirm(true)}
               className="mt-4 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors"
             >
-              Clear Entire Profile
+              Delete profile
             </button>
           </section>
 
@@ -743,7 +805,7 @@ export default function CareerProfilePage() {
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="mb-2 text-lg font-bold text-gray-900">Clear entire profile?</h3>
+            <h3 className="mb-2 text-lg font-bold text-gray-900">Delete entire profile?</h3>
             <p className="mb-6 text-sm text-gray-500">
               This will permanently delete all resume versions, work experience, education, skills, certifications, portfolio items, and personal info from your profile. This action cannot be undone.
             </p>
@@ -759,7 +821,7 @@ export default function CareerProfilePage() {
                 disabled={clearing}
                 className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {clearing ? "Clearing…" : "Yes, clear everything"}
+                {clearing ? "Deleting…" : "Yes, delete everything"}
               </button>
             </div>
           </div>
