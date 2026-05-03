@@ -1,16 +1,16 @@
 /**
  * /settings/account — Account
  *
- * Display identity (name + avatar shown next to Settings in the top bar) +
- * read-only auth metadata.
+ * Display identity (name + phone + avatar) + read-only auth metadata.
  *
- * Per Amir 2026-05-03:
- * - The "Display Name" and "Profile Picture" here are the values that render
- *   in the AppTopBar. They write to `user_profiles.full_name` and
- *   `user_profiles.avatar_url`.
- * - All OTHER career-identity fields (phone, LinkedIn, Current Location,
- *   Headline, Summary, Work, Education, Certifications, Skills, Portfolio)
- *   are owned by /mycareer/profile and edited there only — not here.
+ * Per Amir 2026-05-03 (revised):
+ * - "Display Name", "Phone", and "Profile Picture" are owned here. They
+ *   write to `user_profiles.full_name`, `user_profiles.phone`, and
+ *   `user_profiles.avatar_url`. Phone moved here from /mycareer/profile so
+ *   the Career Profile's Danger Zone (Delete profile) cannot wipe it.
+ * - All OTHER career-identity fields (LinkedIn, Current Location, Headline,
+ *   Summary, Work, Education, Certifications, Skills, Portfolio) are owned
+ *   by /mycareer/profile and edited there only — not here.
  */
 "use client";
 
@@ -59,6 +59,7 @@ export default function AccountPage() {
   const supabase = createClient();
   const [user, setUser]                   = useState<User | null>(null);
   const [fullName, setFullName]           = useState("");
+  const [phone, setPhone]                 = useState("");
   const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
   const [avatarFile, setAvatarFile]       = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -76,11 +77,12 @@ export default function AccountPage() {
         setUser(u);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("full_name, avatar_url")
+          .select("full_name, phone, avatar_url")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
           setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
+          setPhone(profile.phone ?? "");
           setAvatarUrl(profile.avatar_url ?? null);
         } else {
           setFullName(u.user_metadata?.full_name ?? "");
@@ -132,6 +134,7 @@ export default function AccountPage() {
         {
           user_id:    user.id,
           full_name:  fullName.trim() || null,
+          phone:      phone.trim() || null,
           avatar_url: finalAvatarUrl,
           updated_at: new Date().toISOString(),
         },
@@ -211,13 +214,22 @@ export default function AccountPage() {
             </div>
           </div>
 
-          {/* Display name */}
-          <div className="max-w-md">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Display name</label>
-            <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-            <p className="mt-1 text-xs text-gray-400">Shown in the top bar and on your Career Profile.</p>
+          {/* Display name + Phone */}
+          <div className="grid gap-4 sm:grid-cols-2 max-w-xl">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Display name</label>
+              <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-gray-400">Shown in the top bar and on your Career Profile.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="+1 (555) 000-0000" autoComplete="tel"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-gray-400">Used in your resume export and downstream career features.</p>
+            </div>
           </div>
 
           <StatusBanner msg={msg} />
@@ -252,7 +264,7 @@ export default function AccountPage() {
         <ul className="mt-4 space-y-2 text-sm">
           <li>
             <Link href="/mycareer/profile" className="text-brand-600 hover:text-brand-700 font-medium">Career Profile</Link>
-            <span className="text-gray-500"> — phone, LinkedIn, Current Location, headline, summary, work, education, skills, certifications, portfolio, resume export.</span>
+            <span className="text-gray-500"> — LinkedIn, Current Location, headline, summary, work, education, skills, certifications, portfolio, resume export.</span>
           </li>
           <li>
             <Link href="/settings/security" className="text-brand-600 hover:text-brand-700 font-medium">Security &amp; Compliance</Link>
