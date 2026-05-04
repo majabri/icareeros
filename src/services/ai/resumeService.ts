@@ -218,6 +218,27 @@ async function tryAiCascade(text: string): Promise<AiCascadeResult | null> {
   return data;
 }
 
+// ── Gap #1: per-job merge of bullets ─────────────────────────────────────────
+// Fuzzy company-name match: case-insensitive, ignores punctuation and quotes,
+// allows substring match (e.g. "Abbott" matches "Abbott Laboratories").
+function findBaselineBullets(
+  baseline: ParsedResume,
+  aiCompany: string,
+): string[] {
+  const norm = (s: string) =>
+    (s ?? "").toLowerCase().replace(/["'.,()\-]/g, "").replace(/\s+/g, " ").trim();
+  const aiKey = norm(aiCompany);
+  if (!aiKey) return [];
+  for (const b of baseline.experience) {
+    const bKey = norm(b.company);
+    if (!bKey) continue;
+    if (bKey === aiKey || bKey.includes(aiKey) || aiKey.includes(bKey)) {
+      if (b.bullets && b.bullets.length > 0) return b.bullets;
+    }
+  }
+  return [];
+}
+
 function mergeAiIntoBaseline(baseline: ParsedResume, ai: AiCascadeResult): ParsedResume {
   return {
     contact: {
@@ -231,13 +252,28 @@ function mergeAiIntoBaseline(baseline: ParsedResume, ai: AiCascadeResult): Parse
       ? ai.summary
       : baseline.summary,
     experience: ai.experience.length > 0
-      ? ai.experience.map(e => ({
-          title:   e.title,
-          company: e.company,
-          period:  e.period || [e.start_date, e.end_date].filter(Boolean).join(" - "),
-          bullets: e.bullets,
-          description: e.bullets.join("\n"),
-        }))
+      ? ai.experience.map(e => {
+          // Per-job merge: if AI returned empty bullets for this job, look
+          // for a matching entry in the regex baseline (by fuzzy company
+          // match) and use ITS bullets. This catches the case where Gemini
+          // drops bullets for one job but regex did extract them.
+          let bullets = e.bullets;
+          if (!bullets || bullets.length === 0) {
+            const fallback = findBaselineBullets(baseline, e.company);
+            if (fallback.length > 0) {
+              bullets = fallback;
+              // eslint-disable-next-line no-console
+              console.log(`[resumeService] per-job merge: used regex bullets for "${e.company}" (AI returned empty)`);
+            }
+          }
+          return {
+            title:   e.title,
+            company: e.company,
+            period:  e.period || [e.start_date, e.end_date].filter(Boolean).join(" - "),
+            bullets,
+            description: bullets.join("\n"),
+          };
+        })
       : baseline.experience,
     education: ai.education.length > 0
       ? ai.education.map(e => ({
