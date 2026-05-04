@@ -60,7 +60,9 @@ function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (
   return (
     <div
       className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 cursor-text"
-      onClick={() => ref.current?.focus()}
+      onClick={() =>
+      <h1 className="mb-6 text-2xl font-bold text-gray-900">Search Preferences</h1>
+     ref.current?.focus()}
     >
       {tags.map(tag => (
         <span key={tag} className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">

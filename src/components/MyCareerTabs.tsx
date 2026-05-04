@@ -2,8 +2,9 @@
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/mycareer/profile",     label: "Profile" },
-  { href: "/mycareer/preferences", label: "Search Preferences" },
+  { href: "/mycareer/profile",       label: "Profile"            },
+  { href: "/mycareer/target-skills", label: "Target Skills"      },
+  { href: "/mycareer/preferences",   label: "Search Preferences" },
 ];
 
 export function MyCareerTabs() {

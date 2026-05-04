@@ -6,9 +6,12 @@
  *   - education programs to consider
  *   - certifications to pursue
  *
- * Inputs come from the user's career_profile (headline, summary, current skills,
- * work experience). The user clicks ✓ on suggestions to confirm them as targets.
+ * Inputs come from THREE sources for tighter targeting:
+ *   - career_profiles      → headline, summary, current skills, recent roles
+ *   - user_profiles        → target_roles (from /mycareer/preferences)
+ *   - career_os_cycles     → goal of the user's currently-active cycle
  *
+ * The user clicks ✓ on suggestions to confirm them as targets.
  * Server-side only — ANTHROPIC_API_KEY never reaches the client.
  */
 
@@ -58,31 +61,58 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Load the user's career profile for context
-    const { data: profile } = await supabase
+    // ── Source 1: career_profiles (current skills, work history) ─────────────
+    const { data: cp } = await supabase
       .from("career_profiles")
-      .select("headline, summary, skills, work_experience, education, certifications, target_skills, target_education, target_certifications")
+      .select("headline, summary, skills, work_experience, target_skills, target_education, target_certifications")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!profile) {
-      return NextResponse.json({ error: "No career profile yet — fill out /mycareer/profile first" }, { status: 400 });
+    if (!cp) {
+      return NextResponse.json(
+        { error: "No career profile yet — fill out /mycareer/profile first" },
+        { status: 400 }
+      );
     }
 
-    // Build a compact context for the model
-    const currentSkills = (profile.skills as string[] | null) ?? [];
-    const targetSkills  = (profile.target_skills as string[] | null) ?? [];
-    const workExp = (profile.work_experience as Array<{ title?: string; company?: string; description?: string }> | null) ?? [];
+    // ── Source 2: user_profiles.target_roles (from /mycareer/preferences) ────
+    const { data: up } = await supabase
+      .from("user_profiles")
+      .select("target_roles, current_position, career_levels")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    // ── Source 3: career_os_cycles.goal (current active cycle) ───────────────
+    const { data: activeCycle } = await supabase
+      .from("career_os_cycles")
+      .select("goal, current_stage, cycle_number")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("cycle_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Build compact context block
+    const currentSkills = (cp.skills as string[] | null) ?? [];
+    const targetSkills  = (cp.target_skills as string[] | null) ?? [];
+    const targetRoles   = (up?.target_roles as string[] | null) ?? [];
+    const careerLevels  = (up?.career_levels as string[] | null) ?? [];
+    const workExp = (cp.work_experience as Array<{ title?: string; company?: string }> | null) ?? [];
     const recentRoles = workExp.slice(0, 3).map(w =>
       `${w.title ?? "?"} at ${w.company ?? "?"}`
     ).join("; ");
 
     const userBlock = [
-      profile.headline ? `Headline: ${profile.headline}` : null,
-      profile.summary  ? `Summary: ${(profile.summary as string).slice(0, 600)}` : null,
+      cp.headline ? `Headline: ${cp.headline}` : null,
+      up?.current_position ? `Current position: ${up.current_position}` : null,
+      cp.summary  ? `Summary: ${(cp.summary as string).slice(0, 600)}` : null,
       `Current skills (${currentSkills.length}): ${currentSkills.slice(0, 25).join(", ") || "—"}`,
       `Recent roles: ${recentRoles || "—"}`,
-      targetSkills.length > 0 ? `Already-confirmed target skills: ${targetSkills.join(", ")}` : null,
+      targetRoles.length > 0   ? `Target roles (where they want to go): ${targetRoles.join(", ")}` : null,
+      careerLevels.length > 0  ? `Target career levels: ${careerLevels.join(", ")}` : null,
+      activeCycle?.goal        ? `Current career-cycle goal: ${activeCycle.goal}` : null,
+      activeCycle?.cycle_number ? `Cycle #${activeCycle.cycle_number}, currently in stage: ${activeCycle.current_stage}` : null,
+      targetSkills.length > 0  ? `Already-confirmed target skills: ${targetSkills.join(", ")}` : null,
     ].filter(Boolean).join("\n");
 
     const anthropic = createTracedClient(user.id, "career-os/target-suggestions");
@@ -100,38 +130,38 @@ export async function POST() {
             properties: {
               skills: {
                 type: "array",
-                description: "5-8 skills the user should learn next, ordered by impact.",
+                description: "5-8 skills the user should learn next, ordered by impact for their target roles.",
                 items: {
                   type: "object",
                   properties: {
-                    name:   { type: "string", description: "Skill name (e.g. 'Kubernetes', 'System Design')" },
-                    reason: { type: "string", description: "One sentence on why this skill matters for them" },
+                    name:   { type: "string" },
+                    reason: { type: "string", description: "One sentence — must reference their target role or cycle goal where possible" },
                   },
                   required: ["name", "reason"],
                 },
               },
               education: {
                 type: "array",
-                description: "2-3 education programs (degree or program) to consider, only if relevant given their level.",
+                description: "0-3 education programs (degree or program) to consider, only if relevant given their target level. Be conservative.",
                 items: {
                   type: "object",
                   properties: {
-                    degree:      { type: "string", description: "Program type, e.g. 'MBA', 'M.S. Computer Science'" },
-                    institution: { type: "string", description: "Suggested institution or program type (e.g. 'Top-tier MBA program')" },
-                    reason:      { type: "string", description: "One sentence on why" },
+                    degree:      { type: "string" },
+                    institution: { type: "string" },
+                    reason:      { type: "string" },
                   },
                   required: ["degree", "institution", "reason"],
                 },
               },
               certifications: {
                 type: "array",
-                description: "3-5 certifications to pursue, ordered by relevance.",
+                description: "3-5 certifications to pursue, ordered by relevance to their target roles.",
                 items: {
                   type: "object",
                   properties: {
-                    name:   { type: "string", description: "Certification name, e.g. 'AWS Solutions Architect Associate'" },
-                    issuer: { type: "string", description: "Issuing org, e.g. 'Amazon Web Services'" },
-                    reason: { type: "string", description: "One sentence on why" },
+                    name:   { type: "string" },
+                    issuer: { type: "string" },
+                    reason: { type: "string" },
                   },
                   required: ["name", "issuer", "reason"],
                 },
@@ -143,13 +173,16 @@ export async function POST() {
       ],
       system: `You suggest aspirational targets — skills, education, and certifications — for a job-seeker inside iCareerOS.
 
-Rules:
-- Suggestions must be specific to THIS user's headline, summary, current skills, and recent roles.
-- Do NOT repeat skills they already have or have already targeted.
+PRIORITIZATION:
+- Suggestions must align FIRST with the user's target roles and career-cycle goal (if provided).
+- If target roles are present, build the bridge from current skills → target role.
+- Don't repeat skills they already have or have already targeted.
+
+QUALITY:
 - Skills: prefer concrete, in-demand skills (technologies, frameworks, methodologies) over vague ones ("communication", "leadership").
-- Education: only suggest if their career level / role would benefit from a degree program. Be conservative — for senior ICs, often empty array is correct.
-- Certifications: prefer industry-recognized credentials with clear ROI.
-- Each suggestion needs a one-sentence reason grounded in the user's data.`,
+- Education: only suggest if their target level genuinely requires it. For senior ICs targeting senior IC roles, often empty array is correct.
+- Certifications: prefer industry-recognized credentials with clear ROI for their target role.
+- Each suggestion needs a one-sentence reason that names a target role or cycle goal where possible.`,
       messages: [
         {
           role: "user",
