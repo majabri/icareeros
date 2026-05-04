@@ -1,7 +1,7 @@
 /**
  * POST /api/resume/parse-ai
  *
- * Two-tier cascade for structured resume extraction:
+ * Two-tier cascade for structured resume extraction (description-string schema):
  *
  *   1. Gemini 2.5 Flash  (preferred — Google AI Studio free tier, generous quota)
  *   2. Lovable Gateway   (fallback — only if LOVABLE_API_KEY is present)
@@ -84,14 +84,13 @@ const EXTRACT_TOOL = {
             period:       { type: "string" },
             start_date:   { type: "string" },
             end_date:     { type: "string" },
-            bullets:      {
-              type: "array",
-              items: { type: "string" },
-              description: "REQUIRED: every distinct line of responsibilities, achievements, or duties listed under this job. Lines may not have bullet markers (•/-/*) — they are still bullets if they appear between the date range and the next job header. NEVER return [] when there are description lines visible in the source. Preserve verbatim wording.",
+            description:  {
+              type: "string",
+              description: "REQUIRED: ALL responsibilities, achievements, and duties for this job, joined together with newline characters (\\n). Each line of the source should appear on its own line here. Lines may not have bullet markers (•/-/*) in the source — include them anyway. NEVER return an empty string when description lines are visible in the source. Preserve verbatim wording.",
             },
             technologies: { type: "array", items: { type: "string" } },
           },
-          required: ["title","company","location","period","start_date","end_date","bullets","technologies"],
+          required: ["title","company","location","period","start_date","end_date","description","technologies"],
         },
       },
       education: {
@@ -120,12 +119,12 @@ const EXTRACT_TOOL = {
 const SYSTEM_PROMPT = [
   "You are an expert resume parser. Call the extract_resume tool to return ALL structured data.",
   "",
-  "WORK EXPERIENCE — bullets must be extracted for EVERY job entry, not just some.",
-  "  • A job's bullets are the description lines that appear between the role's date range and the NEXT job's company name.",
-  "  • Bullets MAY have leading markers (•, -, *, ·, 1., a)) but often have NONE — plain sentences separated by blank lines or single line breaks are still bullets.",
-  "  • If you see ANY descriptive lines under a job header in the source, include them in that job's bullets array verbatim. Never drop them just because the formatting is unusual.",
-  "  • Empty bullets[] is ONLY correct when the source truly contains no description for that job (e.g., the job is just a one-line entry with title/company/dates and nothing else).",
-  "  • Before finalizing, double-check every job: if its bullets array is empty, scan the source again for that job's section — chances are you missed lines.",
+  "WORK EXPERIENCE — description must be extracted for EVERY job entry, not just some.",
+  "  • A job's description is ALL the responsibility/achievement lines between the role's date range and the NEXT job's company name, joined with newline characters (\\n).",
+  "  • Source lines MAY have leading markers (•, -, *, ·, 1., a)) but often have NONE — plain sentences separated by blank lines or single line breaks are still description content.",
+  "  • If you see ANY descriptive lines under a job header in the source, include them ALL in that job's description verbatim, joined with \\n. Never drop them just because the formatting is unusual.",
+  "  • Empty description \"\" is ONLY correct when the source truly contains no responsibilities for that job (e.g., the job is just a one-line entry with title/company/dates and nothing else).",
+  "  • Before finalizing, double-check every job: if its description is empty, scan the source again for that job's section — chances are you missed lines.",
   "",
   "OTHER FIELDS — preserve numbers verbatim, do not summarize. Empty string \"\" or empty array [] for missing fields.",
   "",
@@ -158,7 +157,7 @@ async function makeSupabaseServer() {
 // description lines between that company's header and the next company header.
 //
 // Heuristic: a "company header" is a line that has 1-6 words, mostly uppercase
-// or title-case, and matches the company string from the AI result (case-insensitive
+// or title-case, and matches the company string from AI result (case-insensitive
 // substring or fuzzy match). Description lines are non-header lines between the
 // company header and the next company header that are at least 12 chars long
 // and don't look like a date range or job title.
@@ -351,16 +350,28 @@ function normalize(raw: unknown): Omit<ParsedResume, "_source"> {
       headline:  asStr(c.headline),
     },
     summary: asStr(o.summary),
-    experience: asObjArr(o.experience, (e) => ({
-      title:        asStr(e.title),
-      company:      asStr(e.company),
-      location:     asStr(e.location),
-      period:       asStr(e.period),
-      start_date:   asStr(e.start_date),
-      end_date:     asStr(e.end_date),
-      bullets:      asStrArr(e.bullets),
-      technologies: asStrArr(e.technologies),
-    })),
+    experience: asObjArr(o.experience, (e) => {
+      // Preferred: AI returns description as a single string (Gap #2 schema —
+      // string is more reliable from smaller models than a properly-populated
+      // array). Split on newlines + filter to recover bullets[]. Legacy
+      // tolerance: if AI returns bullets[] directly, accept that too.
+      const description = asStr(e.description);
+      const bulletsFromDesc = description
+        ? description.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+        : [];
+      const bulletsLegacy = asStrArr(e.bullets);
+      const bullets = bulletsFromDesc.length > 0 ? bulletsFromDesc : bulletsLegacy;
+      return {
+        title:        asStr(e.title),
+        company:      asStr(e.company),
+        location:     asStr(e.location),
+        period:       asStr(e.period),
+        start_date:   asStr(e.start_date),
+        end_date:     asStr(e.end_date),
+        bullets,
+        technologies: asStrArr(e.technologies),
+      };
+    }),
     education: asObjArr(o.education, (e) => ({
       degree:         asStr(e.degree),
       field_of_study: asStr(e.field_of_study),
@@ -375,7 +386,7 @@ function normalize(raw: unknown): Omit<ParsedResume, "_source"> {
   };
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -412,6 +423,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Internal server error";
     console.error("[parse-ai] error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
