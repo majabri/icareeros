@@ -462,7 +462,6 @@ export default function CareerProfilePage() {
 
   return (
     <>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Career Profile</h1>
       <form onSubmit={e => void handleSaveProfile(e)}>
         {/* ── Page header with completeness ──────────────────────────── */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -60,9 +60,7 @@ function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (
   return (
     <div
       className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 cursor-text"
-      onClick={() =>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Search Preferences</h1>
-     ref.current?.focus()}
+      onClick={() => ref.current?.focus()}
     >
       {tags.map(tag => (
         <span key={tag} className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
@@ -216,7 +214,8 @@ export default function SearchPreferencesPage() {
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 
   return (
-    <form onSubmit={e => void handleSave(e)}>
+    <form onSubmit={e =>
+ void handleSave(e)}>
       {/* ── Save bar ──────────────────────────────────────────────────── */}
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-gray-500">Define what jobs you&apos;re looking for so the AI can surface the best matches.</p>
