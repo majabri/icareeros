@@ -193,8 +193,6 @@ export default function CareerProfilePage() {
       const { error } = await supabase.from("user_profiles").upsert(
         {
           user_id:         userId,
-          full_name:       fullName.trim() || null,
-          phone:           phone.trim() || null,
           linkedin_url:    linkedinUrl.trim() || null,
           contact_email:   contactEmail.trim() || null,
           location:        location.trim() || null,
@@ -242,13 +240,28 @@ export default function CareerProfilePage() {
       await saveResumeVersion({ versionName, resumeText: rawText, parsedData: parsed });
 
       // Pre-fill profile fields (only when currently empty)
-      if (!fullName.trim() && parsed.contact.name)       setFullName(parsed.contact.name);
-      if (!phone.trim() && parsed.contact.phone)         setPhone(parsed.contact.phone);
+      const importedName  = !fullName.trim() && parsed.contact.name  ? parsed.contact.name  : null;
+      const importedPhone = !phone.trim()    && parsed.contact.phone ? parsed.contact.phone : null;
+      if (importedName)  setFullName(importedName);
+      if (importedPhone) setPhone(importedPhone);
       if (!linkedinUrl.trim() && parsed.contact.linkedin) setLinkedinUrl(parsed.contact.linkedin);
       if (!contactEmail.trim() && parsed.contact.email)   setContactEmail(parsed.contact.email);
       if (!summary.trim() && parsed.summary)             setSummary(parsed.summary);
       if (!location.trim() && parsed.contact.location)   setLocation(parsed.contact.location);
       // headline is not in the regex parser's ParsedContact yet — AI cascade fills it via merge
+
+      // Display identity (full_name, phone) lives on /settings/account. The resume import
+      // is the ONE exception that may bootstrap those columns from /mycareer/profile —
+      // but ONLY if they're currently empty. We never overwrite values the user set on
+      // Settings.
+      if (userId && (importedName || importedPhone)) {
+        const seed: Record<string, unknown> = { user_id: userId, updated_at: new Date().toISOString() };
+        if (importedName)  seed.full_name = importedName;
+        if (importedPhone) seed.phone     = importedPhone;
+        void supabase.from("user_profiles").upsert(seed, { onConflict: "user_id" }).then(({ error }) => {
+          if (error) console.warn("[mycareer/profile] resume import failed to seed display identity:", error.message);
+        });
+      }
 
       if (parsed.skills.length > 0) {
         setSkills(prev => {
@@ -350,20 +363,17 @@ export default function CareerProfilePage() {
       for (const v of versions) {
         try { await deleteResumeVersion(v.id); } catch { /* best-effort */ }
       }
-      // Per Amir audit 2026-05-03 — Danger Zone deletes the ENTIRE profile.
-      // Personal Information is canonical here; nulling it is the user's intent.
-      // Avatar editor still lives on /settings/account, but avatar_url is part of
-      // the profile and the user explicitly asked for "delete entire profile".
+      // Per Amir 2026-05-03 — Danger Zone preserves DISPLAY IDENTITY (full_name,
+      // phone, avatar_url) since those are owned by /settings/account. Wipes only
+      // career-identity columns so deleting the resume profile here can't destroy
+      // what the user set on Settings.
       await supabase.from("user_profiles").upsert(
         {
           user_id:         userId,
-          full_name:       null,
-          phone:           null,
           linkedin_url:    null,
           contact_email:   null,
           location:        null,
           headline:        null,
-          avatar_url:      null,
           summary:         null,
           skills:          [],
           work_experience: [],
@@ -374,13 +384,10 @@ export default function CareerProfilePage() {
         },
         { onConflict: "user_id" },
       );
-      // Reset all local state.
-      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline("");
-      setAvatarUrl(null); setSummary("");
+      // Reset career-only local state. Display identity stays on the page (loaded from DB).
+      setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
-      // Notify TopBar that the avatar was wiped so it falls back to initials.
-      window.dispatchEvent(new CustomEvent("icareeros:avatar-updated", { detail: { url: null } }));
       setProfileMsg({ type: "success", text: "Profile cleared." });
     } catch (err) {
       setProfileMsg({ type: "error", text: (err as Error).message });
@@ -530,16 +537,24 @@ export default function CareerProfilePage() {
             {/* Fields grid */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Full Name</label>
-                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Doe" className={inputCls} />
+                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700">
+                  Full Name
+                  <span className="text-xs font-normal text-gray-400">(edit on <a href="/settings/account" className="text-brand-600 hover:text-brand-700 underline-offset-2 hover:underline">Settings</a>)</span>
+                </label>
+                <input type="text" value={fullName} readOnly placeholder="Jane Doe"
+                  className={inputCls + " cursor-not-allowed bg-gray-50 text-gray-700"} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Email <span className="text-xs font-normal text-gray-400">(from resume)</span></label>
                 <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" autoComplete="tel" className={inputCls} />
+                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700">
+                  Phone
+                  <span className="text-xs font-normal text-gray-400">(edit on <a href="/settings/account" className="text-brand-600 hover:text-brand-700 underline-offset-2 hover:underline">Settings</a>)</span>
+                </label>
+                <input type="tel" value={phone} readOnly placeholder="+1 (555) 000-0000"
+                  className={inputCls + " cursor-not-allowed bg-gray-50 text-gray-700"} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
