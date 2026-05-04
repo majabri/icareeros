@@ -108,7 +108,6 @@ export default function CareerProfilePage() {
   const [contactEmail, setContactEmail]       = useState("");
   const [location, setLocation]               = useState("");
   const [headline, setHeadline]               = useState("");
-  const [avatarUrl, setAvatarUrl]             = useState<string | null>(null);
   const [summary, setSummary]                 = useState("");
   const [skills, setSkills]                   = useState<string[]>([]);
 
@@ -151,8 +150,8 @@ export default function CareerProfilePage() {
         const cycle = await getActiveCycle(u.id);
         if (cycle?.id) setCycleId(cycle.id);
         const { data: p } = await supabase
-          .from("user_profiles")
-          .select("full_name,phone,linkedin_url,contact_email,avatar_url,summary,skills,work_experience,education,certifications,portfolio_items,location,headline")
+          .from("career_profiles")
+          .select("full_name,phone,linkedin_url,contact_email,summary,skills,work_experience,education,certifications,portfolio_items,location,headline")
           .eq("user_id", u.id)
           .maybeSingle();
         if (p) {
@@ -162,7 +161,6 @@ export default function CareerProfilePage() {
           setContactEmail(p.contact_email ?? "");
           setLocation(((p as Record<string,unknown>).location as string) ?? "");
           setHeadline(((p as Record<string,unknown>).headline as string) ?? "");
-          setAvatarUrl(p.avatar_url ?? null);
           setSummary(p.summary ?? "");
           setSkills(p.skills ?? []);
           if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
@@ -203,20 +201,21 @@ export default function CareerProfilePage() {
     if (!userId) return;
     setSaving(true); setProfileMsg(null);
     try {
-      const { error } = await supabase.from("user_profiles").upsert(
+      const { error } = await supabase.from("career_profiles").upsert(
         {
           user_id:         userId,
-          linkedin_url:    linkedinUrl.trim() || null,
+          full_name:       fullName.trim() || null,
+          phone:           phone.trim() || null,
           contact_email:   contactEmail.trim() || null,
+          linkedin_url:    linkedinUrl.trim() || null,
           location:        location.trim() || null,
           headline:        headline.trim() || null,
-          avatar_url:      avatarUrl || null,
           summary:         summary.trim() || null,
           skills,
           work_experience: workExp,
-          portfolio_items: portfolioItems,
           education,
           certifications,
+          portfolio_items: portfolioItems,
           updated_at:      new Date().toISOString(),
         },
         { onConflict: "user_id" },
@@ -252,70 +251,97 @@ export default function CareerProfilePage() {
 
       await saveResumeVersion({ versionName, resumeText: rawText, parsedData: parsed });
 
-      // Pre-fill profile fields (only when currently empty)
-      const importedName  = !fullName.trim() && parsed.contact.name  ? parsed.contact.name  : null;
-      const importedPhone = !phone.trim()    && parsed.contact.phone ? parsed.contact.phone : null;
-      if (importedName)  setFullName(importedName);
-      if (importedPhone) setPhone(importedPhone);
-      if (!linkedinUrl.trim() && parsed.contact.linkedin) setLinkedinUrl(parsed.contact.linkedin);
-      if (!contactEmail.trim() && parsed.contact.email)   setContactEmail(parsed.contact.email);
-      if (!summary.trim() && parsed.summary)             setSummary(parsed.summary);
-      if (!location.trim() && parsed.contact.location)   setLocation(parsed.contact.location);
-      // headline is not in the regex parser's ParsedContact yet — AI cascade fills it via merge
+      // Compute next field values — fall back to parsed values when current is empty.
+      const nextName     = fullName.trim()     || parsed.contact.name     || "";
+      const nextPhone    = phone.trim()        || parsed.contact.phone    || "";
+      const nextEmail    = contactEmail.trim() || parsed.contact.email    || "";
+      const nextLinkedin = linkedinUrl.trim()  || parsed.contact.linkedin || "";
+      const nextLocation = location.trim()     || parsed.contact.location || "";
+      const nextHeadline = headline.trim() || ""; // headline isn't in regex parser; AI fills via merge if available
+      const nextSummary  = summary.trim() || parsed.summary || "";
 
-      // Display identity (full_name, phone) lives on /settings/account. The resume import
-      // is the ONE exception that may bootstrap those columns from /mycareer/profile —
-      // but ONLY if they're currently empty. We never overwrite values the user set on
-      // Settings.
-      if (userId && (importedName || importedPhone)) {
-        const seed: Record<string, unknown> = { user_id: userId, updated_at: new Date().toISOString() };
-        if (importedName)  seed.full_name = importedName;
-        if (importedPhone) seed.phone     = importedPhone;
-        void supabase.from("user_profiles").upsert(seed, { onConflict: "user_id" }).then(({ error }) => {
-          if (error) console.warn("[mycareer/profile] resume import failed to seed display identity:", error.message);
-        });
-      }
+      // Compute next array values — merge with existing local state.
+      const mergedSkills = parsed.skills.length > 0
+        ? (() => {
+            const existing = new Set(skills.map(s => s.toLowerCase()));
+            return [...skills, ...parsed.skills.filter(s => !existing.has(s.toLowerCase()))];
+          })()
+        : skills;
+      const mergedWorkExp = workExp.length === 0 && parsed.experience.length > 0
+        ? parsed.experience.map(ex => ({
+            title:       ex.title,
+            company:     ex.company,
+            startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
+            endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
+            description: ex.bullets.join(" "),
+          }))
+        : workExp;
+      const mergedEducation = education.length === 0 && parsed.education.length > 0
+        ? parsed.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year }))
+        : education;
+      const mergedCerts = parsed.certifications.length > 0
+        ? (() => {
+            const existing = new Set(certifications.map(c => c.name.toLowerCase()));
+            const toAdd = parsed.certifications
+              .filter(c => !existing.has(c.toLowerCase()))
+              .map((name): Cert => ({ name, issuer: "", date: "", license_number: "" }));
+            return [...certifications, ...toAdd];
+          })()
+        : certifications;
+      const mergedPortfolio = parsed.achievements.length > 0
+        ? (() => {
+            const existingTitles = new Set(portfolioItems.map(p => p.title.toLowerCase()));
+            const newItems = parsed.achievements
+              .filter(a => !existingTitles.has(a.toLowerCase()))
+              .map(a => ({ title: a, url: "", desc: "" }));
+            return [...portfolioItems, ...newItems];
+          })()
+        : portfolioItems;
 
-      if (parsed.skills.length > 0) {
-        setSkills(prev => {
-          const existing = new Set(prev.map(s => s.toLowerCase()));
-          return [...prev, ...parsed.skills.filter(s => !existing.has(s.toLowerCase()))];
-        });
-      }
-      if (workExp.length === 0 && parsed.experience.length > 0) {
-        setWorkExp(parsed.experience.map(ex => ({
-          title:       ex.title,
-          company:     ex.company,
-          startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
-          endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
-          description: ex.bullets.join(" "),
-        })));
-      }
-      if (education.length === 0 && parsed.education.length > 0) {
-        setEducation(parsed.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year })));
-      }
-      if (parsed.certifications.length > 0) {
-        setCertifications(prev => {
-          const existing = new Set(prev.map(c => c.name.toLowerCase()));
-          const toAdd = parsed.certifications
-            .filter(c => !existing.has(c.toLowerCase()))
-            .map((name): Cert => ({ name, issuer: "", date: "", license_number: "" }));
-          return [...prev, ...toAdd];
-        });
-      }
+      // Apply local state.
+      setFullName(nextName);
+      setPhone(nextPhone);
+      setContactEmail(nextEmail);
+      setLinkedinUrl(nextLinkedin);
+      setLocation(nextLocation);
+      setHeadline(nextHeadline);
+      setSummary(nextSummary);
+      setSkills(mergedSkills);
+      setWorkExp(mergedWorkExp);
+      setEducation(mergedEducation);
+      setCertifications(mergedCerts);
+      setPortfolioItems(mergedPortfolio);
 
-      if (parsed.achievements.length > 0) {
-        setPortfolioItems(prev => {
-          const existingTitles = new Set(prev.map(p => p.title.toLowerCase()));
-          const newItems = parsed.achievements
-            .filter(a => !existingTitles.has(a.toLowerCase()))
-            .map(a => ({ title: a, url: "", desc: "" }));
-          return [...prev, ...newItems];
-        });
+      // Auto-persist the entire career profile so the user doesn't have to click
+      // Save Profile after import. career_profiles is owned exclusively by this
+      // page; user_profiles (display identity for /settings/account) is NOT touched.
+      if (userId) {
+        const { error: upsertErr } = await supabase
+          .from("career_profiles")
+          .upsert(
+            {
+              user_id:         userId,
+              full_name:       nextName     || null,
+              phone:           nextPhone    || null,
+              contact_email:   nextEmail    || null,
+              linkedin_url:    nextLinkedin || null,
+              location:        nextLocation || null,
+              headline:        nextHeadline || null,
+              summary:         nextSummary  || null,
+              skills:          mergedSkills,
+              work_experience: mergedWorkExp,
+              education:       mergedEducation,
+              certifications:  mergedCerts,
+              portfolio_items: mergedPortfolio,
+              updated_at:      new Date().toISOString(),
+            },
+            { onConflict: "user_id" },
+          );
+        if (upsertErr) console.warn("[mycareer/profile] auto-persist failed:", upsertErr.message);
       }
 
       setUploadedFile(null);
-      setParseMsg({ type: "success", text: `"${versionName}" saved. Profile pre-filled — review and click "Save Profile".` });
+      setParseMsg({ type: "success", text: `"${versionName}" imported and saved.` });
       await loadVersions();
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
@@ -324,7 +350,7 @@ export default function CareerProfilePage() {
       setParsing(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, phone, linkedinUrl, contactEmail, summary, workExp, education, loadVersions]);
+  }, [fullName, phone, linkedinUrl, contactEmail, location, headline, summary, skills, workExp, education, certifications, portfolioItems, userId, supabase, loadVersions]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -379,15 +405,16 @@ export default function CareerProfilePage() {
       for (const v of versions) {
         try { await deleteResumeVersion(v.id); } catch { /* best-effort */ }
       }
-      // Per Amir 2026-05-03 — Danger Zone preserves DISPLAY IDENTITY (full_name,
-      // phone, avatar_url) since those are owned by /settings/account. Wipes only
-      // career-identity columns so deleting the resume profile here can't destroy
-      // what the user set on Settings.
-      await supabase.from("user_profiles").upsert(
+      // Delete profile wipes the ENTIRE career_profiles row plus all resume_versions.
+      // career_profiles is owned exclusively by this page; user_profiles (used by
+      // /settings/account for display identity) is NOT touched.
+      await supabase.from("career_profiles").upsert(
         {
           user_id:         userId,
-          linkedin_url:    null,
+          full_name:       null,
+          phone:           null,
           contact_email:   null,
+          linkedin_url:    null,
           location:        null,
           headline:        null,
           summary:         null,
@@ -400,8 +427,9 @@ export default function CareerProfilePage() {
         },
         { onConflict: "user_id" },
       );
-      // Reset career-only local state. Display identity stays on the page (loaded from DB).
-      setLinkedinUrl(""); setContactEmail(""); setLocation(""); setHeadline(""); setSummary("");
+      // Reset all local state.
+      setFullName(""); setPhone(""); setLinkedinUrl(""); setContactEmail("");
+      setLocation(""); setHeadline(""); setSummary("");
       setSkills([]); setWorkExp([]); setEducation([]); setCertifications([]);
       setPortfolioItems([]); setVersions([]);
       setProfileMsg({ type: "success", text: "Profile cleared." });
@@ -557,24 +585,16 @@ export default function CareerProfilePage() {
             {/* Fields grid */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700">
-                  Full Name
-                  <span className="text-xs font-normal text-gray-400">(edit on <a href="/settings/account" className="text-brand-600 hover:text-brand-700 underline-offset-2 hover:underline">Settings</a>)</span>
-                </label>
-                <input type="text" value={fullName} readOnly placeholder="Jane Doe"
-                  className={inputCls + " cursor-not-allowed bg-gray-50 text-gray-700"} />
+                <label className="mb-1 block text-sm font-medium text-gray-700">Full Name</label>
+                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Doe" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Email <span className="text-xs font-normal text-gray-400">(from resume)</span></label>
                 <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
               </div>
               <div>
-                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700">
-                  Phone
-                  <span className="text-xs font-normal text-gray-400">(edit on <a href="/settings/account" className="text-brand-600 hover:text-brand-700 underline-offset-2 hover:underline">Settings</a>)</span>
-                </label>
-                <input type="tel" value={phone} readOnly placeholder="+1 (555) 000-0000"
-                  className={inputCls + " cursor-not-allowed bg-gray-50 text-gray-700"} />
+                <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" autoComplete="tel" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn Profile URL</label>
