@@ -24,14 +24,16 @@ type Msg = { type: "success" | "error"; text: string };
 
 interface WorkExp  { title: string; company: string; startDate: string; endDate: string; description: string; }
 interface Edu      { degree: string; institution: string; year: string; }
+interface Cert     { name: string; issuer: string; date: string; license_number: string; }
 
 const EMPTY_EXP  = (): WorkExp => ({ title: "", company: "", startDate: "", endDate: "", description: "" });
 const EMPTY_EDU  = (): Edu    => ({ degree: "", institution: "", year: "" });
+const EMPTY_CERT = (): Cert   => ({ name: "", issuer: "", date: "", license_number: "" });
 
 // ── Profile completeness ──────────────────────────────────────────────────────
 function computeCompleteness(data: {
   fullName: string; summary: string; skills: string[]; workExp: WorkExp[];
-  education: Edu[]; certifications: string[]; versions: ResumeVersion[];
+  education: Edu[]; certifications: Cert[]; versions: ResumeVersion[];
 }): number {
   const checks = [
     !!data.fullName,
@@ -113,7 +115,7 @@ export default function CareerProfilePage() {
   // — rich resume sections
   const [workExp, setWorkExp]               = useState<WorkExp[]>([]);
   const [education, setEducation]           = useState<Edu[]>([]);
-  const [certifications, setCertifications] = useState<string[]>([]);
+  const [certifications, setCertifications] = useState<Cert[]>([]);
   const [portfolioItems, setPortfolioItems] = useState<{title:string;url:string;desc:string}[]>([]);
 
   // — ui state
@@ -166,7 +168,18 @@ export default function CareerProfilePage() {
           if (Array.isArray(p.portfolio_items)) setPortfolioItems(p.portfolio_items as {title:string;url:string;desc:string}[]);
           setWorkExp((p.work_experience as WorkExp[]) ?? []);
           setEducation((p.education as Edu[]) ?? []);
-          setCertifications(p.certifications ?? []);
+          // Normalize certifications: tolerate legacy string[] or new object[].
+          const rawCerts = (p.certifications ?? []) as unknown[];
+          setCertifications(rawCerts.map((c): Cert => {
+            if (typeof c === "string") return { name: c, issuer: "", date: "", license_number: "" };
+            const o = (c ?? {}) as Record<string, unknown>;
+            return {
+              name:           typeof o.name           === "string" ? o.name           : "",
+              issuer:         typeof o.issuer         === "string" ? o.issuer         : "",
+              date:           typeof o.date           === "string" ? o.date           : "",
+              license_number: typeof o.license_number === "string" ? o.license_number : "",
+            };
+          }));
         }
       } finally {
         setProfileLoading(false);
@@ -283,8 +296,11 @@ export default function CareerProfilePage() {
       }
       if (parsed.certifications.length > 0) {
         setCertifications(prev => {
-          const existing = new Set(prev.map(c => c.toLowerCase()));
-          return [...prev, ...parsed.certifications.filter(c => !existing.has(c.toLowerCase()))];
+          const existing = new Set(prev.map(c => c.name.toLowerCase()));
+          const toAdd = parsed.certifications
+            .filter(c => !existing.has(c.toLowerCase()))
+            .map((name): Cert => ({ name, issuer: "", date: "", license_number: "" }));
+          return [...prev, ...toAdd];
         });
       }
 
@@ -405,6 +421,10 @@ export default function CareerProfilePage() {
     setEducation(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
   }
   function removeEdu(i: number) { setEducation(prev => prev.filter((_, idx) => idx !== i)); }
+  function updateCert(i: number, field: keyof Cert, value: string) {
+    setCertifications(prev => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
+  }
+  function removeCert(i: number) { setCertifications(prev => prev.filter((_, idx) => idx !== i)); }
 
   if (profileLoading) {
     return <div className="flex min-h-[40vh] items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" /></div>;
@@ -648,8 +668,37 @@ export default function CareerProfilePage() {
           </Section>
 
           {/* ── Certifications ────────────────────────────────────────── */}
-          <Section title="Certifications" subtitle="Press Enter or comma after each certification.">
-            <TagInput tags={certifications} onChange={setCertifications} placeholder="e.g. AWS Solutions Architect, PMP, CISSP…" />
+          <Section title="Certifications" subtitle="Auto-filled from your resume. Add issuer, date, and license number for each.">
+            <div className="space-y-4">
+              {certifications.map((c, i) => (
+                <div key={i} className="relative rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <button type="button" onClick={() => removeCert(i)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Certificate Name</label>
+                      <input type="text" value={c.name} onChange={ev => updateCert(i, "name", ev.target.value)} placeholder="AWS Solutions Architect — Associate" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Issuing Organization</label>
+                      <input type="text" value={c.issuer} onChange={ev => updateCert(i, "issuer", ev.target.value)} placeholder="Amazon Web Services" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Date</label>
+                      <input type="text" value={c.date} onChange={ev => updateCert(i, "date", ev.target.value)} placeholder="Jun 2024" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">License Number</label>
+                      <input type="text" value={c.license_number} onChange={ev => updateCert(i, "license_number", ev.target.value)} placeholder="ABC123XYZ" className={inputCls} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => setCertifications(prev => [...prev, EMPTY_CERT()])}
+                className="w-full rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
+                + Add Certification
+              </button>
+            </div>
           </Section>
 
           {/* ── Skills ───────────────────────────────────────────────── */}
