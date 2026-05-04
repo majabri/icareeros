@@ -53,7 +53,7 @@ interface ParsedResume {
 const EXTRACT_TOOL = {
   name: "extract_resume",
   description:
-    "Extract ALL structured resume data into the schema. Be exhaustive — preserve numbers verbatim, do not summarize bullets, do not skip fields.",
+    "Extract ALL structured resume data into the schema. Be exhaustive — preserve numbers verbatim, extract every job's bullets (even when there are no bullet markers), do not summarize, do not skip fields.",
   parameters: {
     type: "object",
     properties: {
@@ -74,6 +74,7 @@ const EXTRACT_TOOL = {
       summary: { type: "string" },
       experience: {
         type: "array",
+        description: "EVERY job/role/position the candidate has held. Each item must include its bullets (responsibilities/achievements). Bullets are the lines between the date and the next job header — they often have NO leading marker, just plain sentences separated by blank lines. Extract them ALL.",
         items: {
           type: "object",
           properties: {
@@ -83,7 +84,11 @@ const EXTRACT_TOOL = {
             period:       { type: "string" },
             start_date:   { type: "string" },
             end_date:     { type: "string" },
-            bullets:      { type: "array", items: { type: "string" } },
+            bullets:      {
+              type: "array",
+              items: { type: "string" },
+              description: "REQUIRED: every distinct line of responsibilities, achievements, or duties listed under this job. Lines may not have bullet markers (•/-/*) — they are still bullets if they appear between the date range and the next job header. NEVER return [] when there are description lines visible in the source. Preserve verbatim wording.",
+            },
             technologies: { type: "array", items: { type: "string" } },
           },
           required: ["title","company","location","period","start_date","end_date","bullets","technologies"],
@@ -112,10 +117,20 @@ const EXTRACT_TOOL = {
   },
 };
 
-const SYSTEM_PROMPT =
-  "You are an expert resume parser. Call the extract_resume tool to return ALL structured data. " +
-  "Be exhaustive — preserve numbers verbatim, do not summarize bullets, extract every distinct piece of information. " +
-  "Empty string \"\" or empty array [] for missing fields. You MUST call the tool — do not return prose.";
+const SYSTEM_PROMPT = [
+  "You are an expert resume parser. Call the extract_resume tool to return ALL structured data.",
+  "",
+  "WORK EXPERIENCE — bullets must be extracted for EVERY job entry, not just some.",
+  "  • A job's bullets are the description lines that appear between the role's date range and the NEXT job's company name.",
+  "  • Bullets MAY have leading markers (•, -, *, ·, 1., a)) but often have NONE — plain sentences separated by blank lines or single line breaks are still bullets.",
+  "  • If you see ANY descriptive lines under a job header in the source, include them in that job's bullets array verbatim. Never drop them just because the formatting is unusual.",
+  "  • Empty bullets[] is ONLY correct when the source truly contains no description for that job (e.g., the job is just a one-line entry with title/company/dates and nothing else).",
+  "  • Before finalizing, double-check every job: if its bullets array is empty, scan the source again for that job's section — chances are you missed lines.",
+  "",
+  "OTHER FIELDS — preserve numbers verbatim, do not summarize. Empty string \"\" or empty array [] for missing fields.",
+  "",
+  "You MUST call the extract_resume tool. Do not return prose.",
+].join("\n");
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 
