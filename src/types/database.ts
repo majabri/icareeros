@@ -787,6 +787,65 @@ export type Database = {
           updated_at?:       string
         }
       }
+      career_profiles: {
+        Row: {
+          user_id:         string
+          full_name:       string | null
+          phone:           string | null
+          contact_email:   string | null
+          linkedin_url:    string | null
+          location:        string | null
+          headline:        string | null
+          summary:         string | null
+          skills:          string[]
+          work_experience: Json
+          education:       Json
+          certifications:  Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items: Json
+          raw_text:        string | null
+          raw_text_format: string | null
+          created_at:      string
+          updated_at:      string
+        }
+        Insert: {
+          user_id:          string
+          full_name?:       string | null
+          phone?:           string | null
+          contact_email?:   string | null
+          linkedin_url?:    string | null
+          location?:        string | null
+          headline?:        string | null
+          summary?:         string | null
+          skills?:          string[]
+          work_experience?: Json
+          education?:       Json
+          certifications?:  Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items?: Json
+          raw_text?:        string | null
+          raw_text_format?: string | null
+          created_at?:      string
+          updated_at?:      string
+        }
+        Update: {
+          user_id?:         string
+          full_name?:       string | null
+          phone?:           string | null
+          contact_email?:   string | null
+          linkedin_url?:    string | null
+          location?:        string | null
+          headline?:        string | null
+          summary?:         string | null
+          skills?:          string[]
+          work_experience?: Json
+          education?:       Json
+          certifications?:  Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items?: Json
+          raw_text?:        string | null
+          raw_text_format?: string | null
+          created_at?:      string
+          updated_at?:      string
+        }
+      }
     Views: { [_ in never]: never }
     Functions: { [_ in never]: never }
     Enums: { [_ in never]: never }
