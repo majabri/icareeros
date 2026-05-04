@@ -263,59 +263,93 @@ export default function CareerProfilePage() {
       if (!location.trim() && parsed.contact.location)   setLocation(parsed.contact.location);
       // headline is not in the regex parser's ParsedContact yet — AI cascade fills it via merge
 
-      // Display identity (full_name, phone) lives on /settings/account. The resume import
-      // is the ONE exception that may bootstrap those columns from /mycareer/profile —
-      // but ONLY if they're currently empty. We never overwrite values the user set on
-      // Settings.
-      if (userId && (importedName || importedPhone)) {
-        const seed: Record<string, unknown> = { user_id: userId, updated_at: new Date().toISOString() };
-        if (importedName)  seed.full_name = importedName;
-        if (importedPhone) seed.phone     = importedPhone;
-        void supabase.from("user_profiles").upsert(seed, { onConflict: "user_id" }).then(({ error }) => {
-          if (error) console.warn("[mycareer/profile] resume import failed to seed display identity:", error.message);
-        });
-      }
+      // Compute the next local-state arrays (so we can both setState AND persist
+      // the same values in one DB upsert below).
+      const mergedSkills =
+        parsed.skills.length > 0
+          ? (() => {
+              const existing = new Set(skills.map(s => s.toLowerCase()));
+              return [...skills, ...parsed.skills.filter(s => !existing.has(s.toLowerCase()))];
+            })()
+          : skills;
 
-      if (parsed.skills.length > 0) {
-        setSkills(prev => {
-          const existing = new Set(prev.map(s => s.toLowerCase()));
-          return [...prev, ...parsed.skills.filter(s => !existing.has(s.toLowerCase()))];
-        });
-      }
-      if (workExp.length === 0 && parsed.experience.length > 0) {
-        setWorkExp(parsed.experience.map(ex => ({
-          title:       ex.title,
-          company:     ex.company,
-          startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
-          endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
-          description: ex.bullets.join(" "),
-        })));
-      }
-      if (education.length === 0 && parsed.education.length > 0) {
-        setEducation(parsed.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year })));
-      }
-      if (parsed.certifications.length > 0) {
-        setCertifications(prev => {
-          const existing = new Set(prev.map(c => c.name.toLowerCase()));
-          const toAdd = parsed.certifications
-            .filter(c => !existing.has(c.toLowerCase()))
-            .map((name): Cert => ({ name, issuer: "", date: "", license_number: "" }));
-          return [...prev, ...toAdd];
-        });
-      }
+      const mergedWorkExp =
+        workExp.length === 0 && parsed.experience.length > 0
+          ? parsed.experience.map(ex => ({
+              title:       ex.title,
+              company:     ex.company,
+              startDate:   ex.period.split(/[-–—]/)[0]?.trim() ?? "",
+              endDate:     ex.period.split(/[-–—]/)[1]?.trim() ?? "",
+              description: ex.bullets.join(" "),
+            }))
+          : workExp;
 
-      if (parsed.achievements.length > 0) {
-        setPortfolioItems(prev => {
-          const existingTitles = new Set(prev.map(p => p.title.toLowerCase()));
-          const newItems = parsed.achievements
-            .filter(a => !existingTitles.has(a.toLowerCase()))
-            .map(a => ({ title: a, url: "", desc: "" }));
-          return [...prev, ...newItems];
-        });
+      const mergedEducation =
+        education.length === 0 && parsed.education.length > 0
+          ? parsed.education.map(ed => ({ degree: ed.degree, institution: ed.school, year: ed.year }))
+          : education;
+
+      const mergedCerts =
+        parsed.certifications.length > 0
+          ? (() => {
+              const existing = new Set(certifications.map(c => c.name.toLowerCase()));
+              const toAdd = parsed.certifications
+                .filter(c => !existing.has(c.toLowerCase()))
+                .map((name): Cert => ({ name, issuer: "", date: "", license_number: "" }));
+              return [...certifications, ...toAdd];
+            })()
+          : certifications;
+
+      const mergedPortfolio =
+        parsed.achievements.length > 0
+          ? (() => {
+              const existingTitles = new Set(portfolioItems.map(p => p.title.toLowerCase()));
+              const newItems = parsed.achievements
+                .filter(a => !existingTitles.has(a.toLowerCase()))
+                .map(a => ({ title: a, url: "", desc: "" }));
+              return [...portfolioItems, ...newItems];
+            })()
+          : portfolioItems;
+
+      // Apply local state.
+      setSkills(mergedSkills);
+      setWorkExp(mergedWorkExp);
+      setEducation(mergedEducation);
+      setCertifications(mergedCerts);
+      setPortfolioItems(mergedPortfolio);
+
+      // Auto-persist EVERYTHING the parser produced. Display identity (full_name +
+      // phone) is bootstrapped here ONCE — only when those columns are empty, since
+      // /settings/account is the canonical edit surface for those two. All other
+      // career fields are owned by /mycareer/profile so we always overwrite them
+      // with the merged values (matching what the user now sees in the UI).
+      if (userId) {
+        const payload: Record<string, unknown> = {
+          user_id:         userId,
+          contact_email:   (contactEmail.trim() || parsed.contact.email)    || null,
+          linkedin_url:    (linkedinUrl.trim() || parsed.contact.linkedin)  || null,
+          location:        (location.trim()    || parsed.contact.location)  || null,
+          headline:        headline.trim() || null,
+          summary:         (summary.trim()     || parsed.summary)           || null,
+          skills:          mergedSkills,
+          work_experience: mergedWorkExp,
+          education:       mergedEducation,
+          certifications:  mergedCerts,
+          portfolio_items: mergedPortfolio,
+          updated_at:      new Date().toISOString(),
+        };
+        // Display identity: only seed if currently empty in DB (importedName/Phone
+        // were already gated by !fullName.trim() / !phone.trim() above).
+        if (importedName)  payload.full_name = importedName;
+        if (importedPhone) payload.phone     = importedPhone;
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert(payload, { onConflict: "user_id" });
+        if (error) console.warn("[mycareer/profile] resume import auto-persist failed:", error.message);
       }
 
       setUploadedFile(null);
-      setParseMsg({ type: "success", text: `"${versionName}" saved. Profile pre-filled — review and click "Save Profile".` });
+      setParseMsg({ type: "success", text: `"${versionName}" imported and saved.` });
       await loadVersions();
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
@@ -324,7 +358,7 @@ export default function CareerProfilePage() {
       setParsing(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, phone, linkedinUrl, contactEmail, summary, workExp, education, loadVersions]);
+  }, [fullName, phone, linkedinUrl, contactEmail, location, headline, summary, skills, workExp, education, certifications, portfolioItems, userId, supabase, loadVersions]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
