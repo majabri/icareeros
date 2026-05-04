@@ -485,18 +485,26 @@ export function parseResumeLocally(rawText: string): ParsedResume {
     }
 
     // ── Body end: scan backward from next date anchor ─────────────────────
+    // Reserve up to 2 non-blank lines for the NEXT job's title + company
+    // headers. Without this cap, a series of short bullet lines (each
+    // <100 chars, no bullet marker) gets misidentified as "next job
+    // headers" and the current job ends up with bullets:[] — observed for
+    // Abbott Laboratories + MARVELL SEMICONDUCTORS in real resumes where
+    // every bullet was <100 chars. Cap matches the forward title/company
+    // scan above, which also uses nonBlankCount < 2.
     const nextDi = di < dateIndices.length - 1 ? dateIndices[di + 1] : expLines.length;
     let bodyEnd = nextDi;
 
     if (di < dateIndices.length - 1) {
       let k = nextDi - 1;
-      while (k > di0) {
+      let backNonBlankCount = 0;
+      while (k > di0 && backNonBlankCount < 2) {
         const l = expLines[k];
         if (l === undefined) break;
-        if (!l) { k--; continue; }          // blank — skip, don't break
+        if (!l) { k--; continue; }          // blank — skip, don't count
         if (isBullet(l)) break;
         if (l.match(DATE_RANGE)) break;
-        if (l.length < 100) { bodyEnd = k; k--; }
+        if (l.length < 100) { bodyEnd = k; k--; backNonBlankCount++; }
         else break;
       }
     }
