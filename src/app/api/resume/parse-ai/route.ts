@@ -150,6 +150,81 @@ async function makeSupabaseServer() {
   );
 }
 
+// ── Backfill helper: fix empty bullets[] from raw text ────────────────────────
+// Even with a strict prompt, Gemini occasionally returns bullets:[] for a job
+// when the source DID contain description lines (observed for Abbott Laboratories
+// and MARVELL SEMICONDUCTORS in Samir Jabri's resume). This deterministic fallback
+// scans the raw text for each empty-bullet job's section and extracts the
+// description lines between that company's header and the next company header.
+//
+// Heuristic: a "company header" is a line that has 1-6 words, mostly uppercase
+// or title-case, and matches the company string from the AI result (case-insensitive
+// substring or fuzzy match). Description lines are non-header lines between the
+// company header and the next company header that are at least 12 chars long
+// and don't look like a date range or job title.
+
+function looksLikeDateRange(line: string): boolean {
+  return /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|present)\b/i.test(line)
+      || /\b(19|20)\d{2}\b/.test(line)
+      || /^\s*\d{1,2}\s*\/\s*\d{1,2}/.test(line);
+}
+
+function backfillEmptyBullets(parsed: ParsedResume, rawText: string): ParsedResume {
+  if (!Array.isArray(parsed.experience) || parsed.experience.length === 0) return parsed;
+
+  // Find the index in rawText where each company's section starts.
+  const lines = rawText.split(/\r?\n/);
+  const lowerLines = lines.map(l => l.trim().toLowerCase());
+
+  const companyIndexes: Array<{ idx: number; exp_index: number }> = [];
+  parsed.experience.forEach((exp, expIdx) => {
+    const companyKey = (exp.company ?? "").trim().toLowerCase();
+    if (!companyKey) return;
+    // Find the first line that is mostly the company name (allowing slight diffs).
+    const found = lowerLines.findIndex((l, i) => {
+      if (companyIndexes.some(ci => ci.idx === i)) return false; // already used
+      if (l === companyKey) return true;
+      // Also accept the line if it CONTAINS the company key as a whole token segment
+      // and the line is not too long (avoid matching a paragraph mentioning the company).
+      if (l.length < companyKey.length + 30 && l.includes(companyKey)) return true;
+      return false;
+    });
+    if (found >= 0) companyIndexes.push({ idx: found, exp_index: expIdx });
+  });
+
+  // Sort by source-text position so we can compute each section's range.
+  companyIndexes.sort((a, b) => a.idx - b.idx);
+
+  for (let ci = 0; ci < companyIndexes.length; ci++) {
+    const { idx, exp_index } = companyIndexes[ci];
+    const exp = parsed.experience[exp_index];
+    if (Array.isArray(exp.bullets) && exp.bullets.length > 0) continue; // already has bullets
+
+    const endIdx = ci + 1 < companyIndexes.length ? companyIndexes[ci + 1].idx : lines.length;
+
+    // Collect candidate description lines.
+    const titleKey = (exp.title ?? "").trim().toLowerCase();
+    const candidates: string[] = [];
+    for (let i = idx + 1; i < endIdx; i++) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      if (raw.length < 12) continue;                  // too short, likely a heading
+      if (looksLikeDateRange(raw)) continue;          // date line
+      if (raw.toLowerCase() === titleKey) continue;   // job title repeat
+      // Skip section markers like "EDUCATION", "SKILLS", etc. — short uppercase headers
+      if (raw.length < 40 && raw === raw.toUpperCase()) continue;
+      candidates.push(raw);
+    }
+
+    if (candidates.length > 0) {
+      parsed.experience[exp_index] = { ...exp, bullets: candidates };
+      console.log(`[parse-ai] backfill: filled ${candidates.length} bullets for "${exp.company}"`);
+    }
+  }
+
+  return parsed;
+}
+
 // ── Tier 1: Gemini 2.5 Flash (Google AI generateContent shape) ────────────────
 
 async function tryGemini(text: string): Promise<ParsedResume | null> {
@@ -198,7 +273,7 @@ async function tryGemini(text: string): Promise<ParsedResume | null> {
     );
     const args = (fnCall as { functionCall?: { args?: unknown } } | undefined)?.functionCall?.args;
     if (!args) return null;
-    return { ...normalize(args), _source: "gemini" };
+    return { ...backfillEmptyBullets(normalize(args), text), _source: "gemini" };
   } catch (err) {
     console.warn("[parse-ai] Gemini threw:", err instanceof Error ? err.message : err);
     return null;
@@ -241,7 +316,7 @@ async function tryLovable(text: string): Promise<ParsedResume | null> {
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall?.function?.arguments) return null;
     const parsed = JSON.parse(toolCall.function.arguments);
-    return { ...normalize(parsed), _source: "lovable" };
+    return { ...backfillEmptyBullets(normalize(parsed), text), _source: "lovable" };
   } catch (err) {
     console.warn("[parse-ai] Lovable threw:", err instanceof Error ? err.message : err);
     return null;
