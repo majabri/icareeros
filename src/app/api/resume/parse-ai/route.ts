@@ -169,7 +169,7 @@ function looksLikeDateRange(line: string): boolean {
       || /^\s*\d{1,2}\s*\/\s*\d{1,2}/.test(line);
 }
 
-function backfillEmptyBullets(parsed: ParsedResume, rawText: string): ParsedResume {
+function backfillEmptyBullets<T extends Omit<ParsedResume, "_source">>(parsed: T, rawText: string): T {
   if (!Array.isArray(parsed.experience) || parsed.experience.length === 0) return parsed;
 
   // Find the index in rawText where each company's section starts.
