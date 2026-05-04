@@ -333,7 +333,7 @@ export type Database = {
           career_goals_long: string | null
           career_goals_short: string | null
           career_level: string | null
-          certifications: string[] | null
+          certifications: Array<{ name: string; issuer: string; date: string; license_number: string }> | null
           daily_apply_cap: number
           education: Json | null
           email: string | null
@@ -361,7 +361,7 @@ export type Database = {
           career_goals_long?: string | null
           career_goals_short?: string | null
           career_level?: string | null
-          certifications?: string[] | null
+          certifications?: Array<{ name: string; issuer: string; date: string; license_number: string }> | null
           daily_apply_cap?: number
           education?: Json | null
           email?: string | null
@@ -389,7 +389,7 @@ export type Database = {
           career_goals_long?: string | null
           career_goals_short?: string | null
           career_level?: string | null
-          certifications?: string[] | null
+          certifications?: Array<{ name: string; issuer: string; date: string; license_number: string }> | null
           daily_apply_cap?: number
           education?: Json | null
           email?: string | null

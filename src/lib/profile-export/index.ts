@@ -31,7 +31,7 @@ export interface ExportableProfile {
   summary:       string;
   workExp:       Array<{ title: string; company: string; startDate: string; endDate: string; description: string }>;
   education:     Array<{ degree: string; institution: string; year: string }>;
-  certifications: string[];
+  certifications: Array<{ name: string; issuer: string; date: string; license_number: string }>;
   skills:        string[];
   portfolioItems: Array<{ title: string; url: string; desc: string }>;
 }
@@ -124,8 +124,11 @@ async function exportWord(p: ExportableProfile, filename: string, ext: "docx" | 
   // ── Certifications ──────────────────────────────────────────────────────
   if (p.certifications.length > 0) {
     children.push(heading("CERTIFICATIONS"));
-    for (const c of p.certifications) {
-      children.push(new Paragraph({ text: c, bullet: { level: 0 } }));
+    for (const cert of p.certifications) {
+      const head = [cert.name, cert.issuer].filter(Boolean).join(" — ");
+      const meta = [cert.date, cert.license_number ? `License ${cert.license_number}` : ""].filter(Boolean).join(" · ");
+      const text = meta ? `${head} (${meta})` : head;
+      if (text) children.push(new Paragraph({ text, bullet: { level: 0 } }));
     }
     children.push(para(""));
   }
@@ -232,7 +235,12 @@ async function exportPdf(p: ExportableProfile, filename: string): Promise<void> 
 
   if (p.certifications.length > 0) {
     sectionHeading("Certifications");
-    for (const c of p.certifications) writeWrapped(`• ${c}`, 10);
+    for (const cert of p.certifications) {
+      const head = [cert.name, cert.issuer].filter(Boolean).join(" — ");
+      const meta = [cert.date, cert.license_number ? `License ${cert.license_number}` : ""].filter(Boolean).join(" · ");
+      const text = meta ? `• ${head} (${meta})` : `• ${head}`;
+      if (head) writeWrapped(text, 10);
+    }
   }
 
   if (p.skills.length > 0) {
@@ -302,7 +310,11 @@ function exportPlainText(p: ExportableProfile, filename: string, format: "ats" |
 
   if (p.certifications.length > 0) {
     section("Certifications");
-    for (const c of p.certifications) lines.push(`- ${c}`);
+    for (const cert of p.certifications) {
+      const head = [cert.name, cert.issuer].filter(Boolean).join(" — ");
+      const meta = [cert.date, cert.license_number ? `License ${cert.license_number}` : ""].filter(Boolean).join(" · ");
+      if (head) lines.push(meta ? `- ${head} (${meta})` : `- ${head}`);
+    }
     lines.push("");
   }
 
