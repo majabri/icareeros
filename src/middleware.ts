@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
-const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
+const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/target-skills", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
 const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 

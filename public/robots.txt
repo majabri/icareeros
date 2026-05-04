@@ -9,6 +9,7 @@ Disallow: /settings
 Disallow: /admin
 Disallow: /interview
 Disallow: /resumeadvisor
+Disallow: /target-skills
 Disallow: /offers
 Disallow: /support
 Disallow: /recruiter

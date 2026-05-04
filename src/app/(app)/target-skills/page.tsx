@@ -203,8 +203,9 @@ export default function TargetSkillsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 space-y-6">
       <header>
+        <h1 className="mb-2 text-2xl font-bold text-gray-900">Target Skills</h1>
         <p className="text-sm text-gray-500">
           What you want to acquire next — skills, education, or certifications you&apos;re working toward. Suggestions below are AI-generated from your profile, target roles, and current career-cycle goal; click <strong>Confirm</strong> on any you want to add.
         </p>
