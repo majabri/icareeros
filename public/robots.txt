@@ -8,7 +8,7 @@ Disallow: /profile
 Disallow: /settings
 Disallow: /admin
 Disallow: /interview
-Disallow: /resume
+Disallow: /resumeadvisor
 Disallow: /offers
 Disallow: /support
 Disallow: /recruiter

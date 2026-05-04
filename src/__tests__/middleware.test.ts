@@ -32,6 +32,8 @@ describe("AI route detection", () => {
   const AI_ROUTES = [
     "/api/career-os",
     "/api/resume/rewrite",
+    "/api/resume/critique",
+    "/api/resume/cover-letter-from-text",
     "/api/cover-letter",
     "/api/outreach",
     "/api/recruiter",
@@ -44,6 +46,8 @@ describe("AI route detection", () => {
   it("marks AI routes correctly", () => {
     expect(isAi("/api/career-os/evaluate")).toBe(true);
     expect(isAi("/api/resume/rewrite")).toBe(true);
+    expect(isAi("/api/resume/critique")).toBe(true);
+    expect(isAi("/api/resume/cover-letter-from-text")).toBe(true);
     expect(isAi("/api/cover-letter")).toBe(true);
     expect(isAi("/api/salary-intelligence")).toBe(true);
   });
@@ -57,7 +61,7 @@ describe("AI route detection", () => {
 });
 
 describe("Protected routes", () => {
-  const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resume", "/offers", "/support", "/recruiter"];
+  const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
   const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
   const isProtected = (p: string) => PROTECTED.some((r) => p.startsWith(r));
@@ -67,11 +71,13 @@ describe("Protected routes", () => {
     expect(isProtected("/dashboard")).toBe(true);
     expect(isProtected("/jobs")).toBe(true);
     expect(isProtected("/recruiter/analysis")).toBe(true);
+    expect(isProtected("/resumeadvisor")).toBe(true);
   });
 
   it("does not mark public routes as protected", () => {
     expect(isProtected("/")).toBe(false);
     expect(isProtected("/api/health")).toBe(false);
+    expect(isProtected("/resume")).toBe(false); // /resume route was deleted in PR #106
   });
 
   it("marks auth-only routes correctly", () => {

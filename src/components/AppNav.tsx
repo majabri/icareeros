@@ -10,13 +10,13 @@ export function AppNav() {
   const { t } = useTranslation();
 
   const NAV_LINKS = [
-    { href: "/dashboard",  label: t.nav.careerOS,     icon: "🔄", shortLabel: "Career"    },
-    { href: "/jobs",       label: t.nav.opportunities, icon: "💼", shortLabel: "Jobs"      },
-    { href: "/interview",  label: t.nav.interview,     icon: "🎤", shortLabel: "Interview" },
-    { href: "/resume",     label: t.nav.resume,        icon: "🎯", shortLabel: "Fit"       },
-    { href: "/offers",     label: t.nav.offers,        icon: "🤝", shortLabel: "Offers"    },
-    { href: "/recruiter",  label: t.nav.recruiter,     icon: "🔍", shortLabel: "Recruit"   },
-    { href: "/settings",   label: t.nav.settings,      icon: "👤", shortLabel: "My Career" },
+    { href: "/dashboard",     label: t.nav.careerOS,      icon: "🔄", shortLabel: "Career"    },
+    { href: "/jobs",          label: t.nav.opportunities, icon: "💼", shortLabel: "Jobs"      },
+    { href: "/interview",     label: t.nav.interview,     icon: "🎤", shortLabel: "Interview" },
+    { href: "/resumeadvisor", label: t.nav.resume,        icon: "🎯", shortLabel: "Fit"       },
+    { href: "/offers",        label: t.nav.offers,        icon: "🤝", shortLabel: "Offers"    },
+    { href: "/recruiter",     label: t.nav.recruiter,     icon: "🔍", shortLabel: "Recruit"   },
+    { href: "/settings",      label: t.nav.settings,      icon: "👤", shortLabel: "My Career" },
   ];
 
   const isActive = (href: string) =>

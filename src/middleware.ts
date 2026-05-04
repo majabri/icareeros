@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
-const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resume", "/offers", "/support", "/recruiter"];
+const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
 const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
@@ -13,6 +13,8 @@ const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
 const AI_ROUTES = [
   "/api/career-os",
   "/api/resume/rewrite",
+  "/api/resume/critique",
+  "/api/resume/cover-letter-from-text",
   "/api/cover-letter",
   "/api/outreach",
   "/api/recruiter",
