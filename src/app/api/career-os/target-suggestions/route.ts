@@ -1,7 +1,7 @@
 /**
  * POST /api/career-os/target-suggestions
  *
- * Generates suggestions for the Target Skills page (/mycareer/target-skills):
+ * Generates suggestions for the Target Skills page (/targetskills):
  *   - skills the user should learn next
  *   - education programs to consider
  *   - certifications to pursue

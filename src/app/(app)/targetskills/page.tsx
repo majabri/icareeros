@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /mycareer/target-skills
+ * /targetskills
  *
  * Aspirational targets — what the user wants to acquire next.
  * Three sections:
