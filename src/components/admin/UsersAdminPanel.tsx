@@ -385,7 +385,7 @@ export function UsersAdminPanel({ users }: Props) {
                     <td className="px-4 py-3 tabular-nums text-gray-600">{u.cycle_count}</td>
 
                     <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-gray-400">
-                      {new Date(u.created_at).toLocaleDateString()}
+                      {new Date(u.created_at).toISOString().slice(0, 10)}
                     </td>
 
                     <td className="px-4 py-3">
