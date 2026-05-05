@@ -63,9 +63,60 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Load user profile context ───────────────────────────────────────────────
+  // Priority order:
+  //   1. career_profiles      — the user's actual resume (skills, experience, education, certs)
+  //   2. career_os_stages     — Evaluate-stage AI notes (rich but only present after evaluate)
+  //   3. user_profiles        — basic preferences (fallback)
   let userContext = "";
 
-  // Prefer evaluate stage notes (richest signal)
+  // 1. PRIMARY — read the user's actual resume content
+  const { data: career } = await supabase
+    .from("career_profiles")
+    .select("headline, summary, skills, work_experience, education, certifications, target_skills")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (career) {
+    const skills        = (career.skills as string[] | null) ?? [];
+    const targetSkills  = (career.target_skills as string[] | null) ?? [];
+    const workExp       = (career.work_experience as Array<{
+      title?: string; company?: string; startDate?: string; endDate?: string; description?: string;
+    }> | null) ?? [];
+    const education     = (career.education as Array<{
+      degree?: string; institution?: string; year?: string;
+    }> | null) ?? [];
+    const certs         = (career.certifications as Array<{
+      name?: string; issuer?: string;
+    }> | null) ?? [];
+
+    // Compact each work entry — title, company, dates, first 200 chars of description
+    const workSummary = workExp.slice(0, 5).map(w => {
+      const dates = [w.startDate, w.endDate].filter(Boolean).join(" — ") || "";
+      const head  = `${w.title ?? "?"} at ${w.company ?? "?"}${dates ? ` (${dates})` : ""}`;
+      const desc  = w.description ? ` — ${(w.description as string).replace(/\s+/g, " ").slice(0, 200)}` : "";
+      return `• ${head}${desc}`;
+    }).join("\n");
+
+    const eduSummary = education.slice(0, 4).map(e =>
+      `• ${e.degree ?? "?"}, ${e.institution ?? "?"}${e.year ? ` (${e.year})` : ""}`
+    ).join("\n");
+
+    const certSummary = certs.slice(0, 6).map(c =>
+      `• ${c.name ?? "?"}${c.issuer ? ` — ${c.issuer}` : ""}`
+    ).join("\n");
+
+    userContext = [
+      career.headline ? `HEADLINE: ${career.headline}`        : null,
+      career.summary  ? `SUMMARY: ${(career.summary as string).slice(0, 600)}` : null,
+      skills.length   ? `SKILLS (${skills.length}): ${skills.slice(0, 40).join(", ")}` : null,
+      targetSkills.length ? `TARGET SKILLS (acquiring): ${targetSkills.join(", ")}` : null,
+      workSummary     ? `WORK EXPERIENCE:\n${workSummary}`   : null,
+      eduSummary      ? `EDUCATION:\n${eduSummary}`          : null,
+      certSummary     ? `CERTIFICATIONS:\n${certSummary}`    : null,
+    ].filter(Boolean).join("\n\n");
+  }
+
+  // 2. SECONDARY — append Evaluate-stage AI notes if present (extra signal)
   if (cycleId) {
     const { data: stageRow } = await supabase
       .from("career_os_stages")
@@ -78,17 +129,21 @@ export async function POST(req: NextRequest) {
 
     if (stageRow?.notes) {
       const n = stageRow.notes as Record<string, unknown>;
-      userContext = [
+      const stageNotes = [
         `Career level: ${n.careerLevel ?? "unknown"}`,
         `Market fit score: ${n.marketFitScore ?? "N/A"}/100`,
         `Skills: ${Array.isArray(n.skills) ? (n.skills as string[]).join(", ") : "none listed"}`,
         `Skill gaps: ${Array.isArray(n.gaps) ? (n.gaps as string[]).join(", ") : "none listed"}`,
         `AI summary: ${n.summary ?? ""}`,
       ].join("\n");
+      // Append Evaluate notes to whatever resume context we already have
+      userContext = userContext
+        ? `${userContext}\n\nEVALUATE-STAGE NOTES:\n${stageNotes}`
+        : stageNotes;
     }
   }
 
-  // Fallback: user_profiles table
+  // Fallback: user_profiles table (only when career_profiles is empty too)
   if (!userContext) {
     const { data: profile } = await supabase
       .from("user_profiles")

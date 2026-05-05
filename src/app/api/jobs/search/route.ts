@@ -88,13 +88,21 @@ export async function POST(req: Request) {
       const targetRoles = ((up.data?.target_roles as string[] | null) ?? []).filter(Boolean);
       const headline   = (cp.data?.headline as string | null) ?? "";
       const currentPos = (up.data?.current_position as string | null) ?? "";
+      const skills     = ((cp.data?.skills as string[] | null) ?? []).filter(Boolean);
 
-      // Pick the strongest signal: target_roles[0] > headline > current_position
-      const what =
+      // Pick the strongest TITLE signal: target_roles[0] > headline > current_position
+      const titlePart =
         targetRoles[0]?.trim() ||
         headline.trim() ||
         currentPos.trim() ||
         "";
+
+      // Augment with top-3 skills from the resume so Adzuna ranks results
+      // that match BOTH the role title AND the candidate's actual skill set.
+      // Adzuna's `what` is space-separated AND-ish — we keep it short to
+      // avoid over-constraining (skills aren't required keywords on every JD).
+      const skillSeasoning = skills.slice(0, 3).filter(s => s.length <= 25).join(" ");
+      const what = [titlePart, skillSeasoning].filter(Boolean).join(" ").trim();
 
       // Compose location: City, State (or just State, or just Country if nothing else)
       const city  = (up.data?.location_city as string | null) ?? "";
