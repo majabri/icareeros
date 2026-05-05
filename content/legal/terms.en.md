@@ -13,7 +13,7 @@ locale: en
 
 ## 1. Agreement
 
-These Terms of Service (the "**Terms**") form a legal agreement between you ("**you**", "**your**") and **Jabri Solutions LLC**, a `[STATE]` limited liability company ("**iCareerOS**", "**we**", "**us**", "**our**"), governing your access to and use of `icareeros.com`, any subdomain, and the iCareerOS application (together, the "**Service**").
+These Terms of Service (the "**Terms**") form a legal agreement between you ("**you**", "**your**") and **iCareerOS LLC**, a Michigan limited liability company ("**iCareerOS**", "**we**", "**us**", "**our**"), governing your access to and use of `icareeros.com`, any subdomain, and the iCareerOS application (together, the "**Service**").
 
 **By creating an account, you agree to these Terms and to our [Privacy Policy](/legal/privacy).** If you do not agree, do not create an account.
 
@@ -212,7 +212,7 @@ We may change these Terms from time to time. Material changes will be communicat
 
 ## 15. Governing law and dispute resolution
 
-These Terms are governed by the laws of the **State of `[STATE]`**, USA, without regard to conflict-of-laws rules.
+These Terms are governed by the laws of the **State of Michigan**, USA, without regard to conflict-of-laws rules.
 
 ### 15.1 Informal resolution first
 
@@ -220,7 +220,7 @@ Before filing a formal claim, you agree to contact us at legal@icareeros.com and
 
 ### 15.2 Binding arbitration (US users)
 
-Any unresolved dispute will be resolved by **binding arbitration** administered by the American Arbitration Association under its Consumer Arbitration Rules, in `[CITY, STATE]` (or another mutually agreed venue, or virtually). The arbitrator's award is final and may be entered in any court of competent jurisdiction.
+Any unresolved dispute will be resolved by **binding arbitration** administered by the American Arbitration Association under its Consumer Arbitration Rules, in Detroit, Michigan (or another mutually agreed venue, or virtually). The arbitrator's award is final and may be entered in any court of competent jurisdiction.
 
 ### 15.3 Class-action waiver
 
@@ -255,5 +255,5 @@ Any claim must be brought within **one year** of the event giving rise to it, or
 ## 17. Contact
 
 **legal@icareeros.com**
-Jabri Solutions LLC
+iCareerOS LLC
 `[MAILING ADDRESS]`

@@ -13,7 +13,7 @@ locale: en
 
 ## 1. Who we are
 
-iCareerOS ("**iCareerOS**", "**we**", "**us**", "**our**") is a career operating system that helps you evaluate your career, get advice, learn new skills, take action, receive coaching, and achieve career goals. The service is operated by **Jabri Solutions LLC**, a `[STATE]`-registered limited liability company with its principal place of business at `[MAILING ADDRESS]`.
+iCareerOS ("**iCareerOS**", "**we**", "**us**", "**our**") is a career operating system that helps you evaluate your career, get advice, learn new skills, take action, receive coaching, and achieve career goals. The service is operated by **iCareerOS LLC**, a Michigan-registered limited liability company with its principal place of business at `[MAILING ADDRESS]`.
 
 Contact us about this policy:
 
@@ -22,7 +22,7 @@ Contact us about this policy:
 - EU GDPR contact: **dpo@icareeros.com**
 - Mailing address: `[MAILING ADDRESS]`
 
-For the purposes of EU/UK GDPR, **Jabri Solutions LLC is the data controller** for personal data we process about you when you use iCareerOS as an end user. When iCareerOS is used by an employer or recruiter to evaluate you (B2B customers, when launched), we may act as a processor on the employer's instructions; in that case the employer is the controller and you should also consult their privacy notice.
+For the purposes of EU/UK GDPR, **iCareerOS LLC is the data controller** for personal data we process about you when you use iCareerOS as an end user. When iCareerOS is used by an employer or recruiter to evaluate you (B2B customers, when launched), we may act as a processor on the employer's instructions; in that case the employer is the controller and you should also consult their privacy notice.
 
 ---
 
@@ -233,7 +233,7 @@ We may update this policy from time to time. Material changes (those that meanin
 
 ### 13.1 European Economic Area, United Kingdom
 
-The Jabri Solutions LLC contact above acts as the GDPR controller. Until we appoint a formal EU representative under Art. 27 (required when we have substantial EU users or systematic monitoring), `dpo@icareeros.com` is the contact for EU residents. Your local supervisory authority list is at `edpb.europa.eu`.
+The iCareerOS LLC contact above acts as the GDPR controller. Until we appoint a formal EU representative under Art. 27 (required when we have substantial EU users or systematic monitoring), `dpo@icareeros.com` is the contact for EU residents. Your local supervisory authority list is at `edpb.europa.eu`.
 
 ### 13.2 United Kingdom
 
@@ -258,7 +258,7 @@ Your privacy commissioner is the Office of the Privacy Commissioner of Canada (`
 Privacy questions, data requests, or anything that touches this policy:
 
 **privacy@icareeros.com**
-Jabri Solutions LLC
+iCareerOS LLC
 `[MAILING ADDRESS]`
 
 We aim to acknowledge requests within 5 business days and resolve within the legally-mandated window for your jurisdiction.
