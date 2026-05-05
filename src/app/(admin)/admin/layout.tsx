@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import type { CookieOptions } from "@supabase/ssr";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
-const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -26,7 +25,13 @@ async function getUser() {
 export default async function AdminRootLayout({ children }: { children: React.ReactNode }) {
   const { data: { user } } = await getUser();
   if (!user) redirect("/auth/login?redirect=/admin");
-  if (!ADMIN_EMAILS.includes(user.email ?? "")) redirect("/dashboard");
+  // Check role from public.profiles — single source of truth
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (profile?.role !== "admin") redirect("/dashboard");
 
   return (
     <div className="flex min-h-screen bg-gray-50">

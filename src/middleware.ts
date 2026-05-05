@@ -6,8 +6,9 @@ const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", 
 const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
-// Accounts that belong to the admin panel only — never the career OS
-const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
+// Admin status is read from public.profiles.role per request below.
+// (Removed hardcoded ADMIN_EMAILS — admin assignment is now DB-driven so
+// promote/demote actions in /admin/users actually take effect.)
 
 // AI-heavy routes get a stricter per-user rate limit
 const AI_ROUTES = [
@@ -110,7 +111,17 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // ── Auth guards ────────────────────────────────────────────────────────────
-  const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
+  // Look up role from public.profiles to determine admin status. Single
+  // SELECT per request; cheap. Falls back to non-admin on any error.
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    isAdmin = profile?.role === "admin";
+  }
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAdminProtected = ADMIN_PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthRoute = AUTH_ONLY.some((p) => pathname.startsWith(p));

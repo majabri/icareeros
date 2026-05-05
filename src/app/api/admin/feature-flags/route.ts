@@ -2,7 +2,7 @@
  * GET  /api/admin/feature-flags          → list all feature flags
  * PATCH /api/admin/feature-flags          → toggle a flag  { key: string, enabled: boolean }
  *
- * Admin-only: caller must be authenticated as majabri714@gmail.com.
+ * Admin-only: caller must have role=admin in public.profiles.
  * Uses the service-role key via SUPABASE_SERVICE_ROLE_KEY if available,
  * otherwise falls back to anon key (RLS must allow admin writes).
  */
@@ -11,8 +11,6 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-
-const ADMIN_EMAIL = "majabri714@gmail.com";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -47,7 +45,12 @@ async function requireAdmin() {
     error,
   } = await supabase.auth.getUser();
   if (error || !user) return { supabase, user: null, adminErr: "Unauthorized" };
-  if (user.email !== ADMIN_EMAIL)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (profile?.role !== "admin")
     return { supabase, user, adminErr: "Forbidden" };
   return { supabase, user, adminErr: null };
 }

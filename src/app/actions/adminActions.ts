@@ -10,11 +10,15 @@ function makeSvc() {
   );
 }
 
-// ─── Admin email allow-list — defense in depth ──────────────────────────────
-// Mirrors src/middleware.ts and src/app/(admin)/admin/layout.tsx. The page
-// layer redirects non-admins away from /admin, but server actions can be
-// invoked directly by anyone who knows the action ID — so we re-check here.
-const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
+// ─── Admin authorization — checks profiles.role in the DB ───────────────────
+// Single source of truth: public.profiles.role. Roles are managed via the
+// /admin/users UsersAdminPanel (promote/demote actions). New signups default
+// to role='user'; only existing admins can change roles.
+//
+// Defense in depth: middleware.ts and src/app/(admin)/admin/layout.tsx do
+// the same check at the page layer; this re-check runs in every server
+// action because actions can be invoked directly by anyone who knows the
+// action ID.
 
 async function requireAdmin(): Promise<{ id: string; email: string } | { error: string }> {
   const { cookies } = await import("next/headers");
@@ -32,7 +36,17 @@ async function requireAdmin(): Promise<{ id: string; email: string } | { error: 
   );
   const { data: { user } } = await ssr.auth.getUser();
   if (!user) return { error: "Not authenticated" };
-  if (!ADMIN_EMAILS.includes(user.email ?? "")) {
+
+  // Use the service-role client to bypass RLS — the user might not have
+  // SELECT permission on their own profiles row depending on policy.
+  const svc = makeSvc();
+  const { data: profile } = await svc
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!profile || profile.role !== "admin") {
     return { error: "Forbidden — admin access required" };
   }
   return { id: user.id, email: user.email ?? "" };

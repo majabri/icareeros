@@ -15,9 +15,6 @@ const USERNAME_MAP: Record<string, string> = {
   azadmin: "azadmin@icareeros.com",
 };
 
-// Emails that land on /admin after login
-const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
-
 export function AuthForm({ mode }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
@@ -127,8 +124,16 @@ export function AuthForm({ mode }: AuthFormProps) {
         });
         if (error) throw error;
 
-        // Admin users go to /admin; everyone else to /dashboard (or ?redirect=)
-        const isAdmin = ADMIN_EMAILS.includes(data.user?.email ?? "");
+        // Look up role from public.profiles — single source of truth
+        let isAdmin = false;
+        if (data.user?.id) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("user_id", data.user.id)
+            .maybeSingle();
+          isAdmin = profile?.role === "admin";
+        }
         const redirect = new URLSearchParams(window.location.search).get("redirect");
         window.location.href = redirect ?? (isAdmin ? "/admin" : "/dashboard");
       }
