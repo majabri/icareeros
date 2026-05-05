@@ -50,6 +50,8 @@ const ICONS = {
   offers:     "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
   coach:      "M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z",
   achieve:    "M3 17l2-2 4 1 7-7 M21 3l-6.5 18a.55.55 0 0 1-1 0L11 13 3 9a.55.55 0 0 1 0-1z",
+  course:     "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
+  market:     "M3 9l1-6h16l1 6 M5 22V12h14v10 M9 22v-5h6v5",
 } as const;
 
 type IconKey = keyof typeof ICONS;
@@ -82,15 +84,13 @@ const STAGES: StageSection[] = [
   {
     stage: "learn", num: 3, label: "Learn", icon: "store",
     items: [
-      { href: "/targetskills",          label: "Target Skills", icon: "target" },
-      { href: "/services",             label: "Skill Store",   icon: "store"  },
+      { href: "/targetskills", label: "Target Skills", icon: "target" },
     ],
   },
   {
     stage: "act", num: 4, label: "Act", icon: "jobs",
     items: [
       { href: "/jobs",         label: "Opportunities", icon: "jobs"       },
-      { href: "/gigs",         label: "Open Market",   icon: "openmarket" },
       { href: "/auto-apply",   label: "Autopilot",     icon: "autopilot"  },
       { href: "/applications", label: "Pipeline",      icon: "pipeline"   },
       { href: "/interview",    label: "Interview",     icon: "interview"  },
@@ -105,6 +105,23 @@ const STAGES: StageSection[] = [
     stage: "achieve", num: 6, label: "Achieve", icon: "achieve",
     items: [{ href: "/career", label: "Flight Plan", icon: "achieve" }],
   },
+];
+
+// ── Marketplace (always available, NOT stage-gated) ─────────────────────────
+type MarketplaceItem = {
+  href?: string;          // present = clickable
+  label: string;
+  icon: IconKey;
+  comingSoon?: boolean;   // true = shows "Soon" pill, no nav
+};
+
+const MARKETPLACE_ITEMS: MarketplaceItem[] = [
+  { href: "/services", label: "Skill Store",       icon: "store"      },
+  { href: "/gigs",     label: "Open Market",       icon: "openmarket" },
+  { label: "Coursera",          icon: "course", comingSoon: true },
+  { label: "Udemy",             icon: "course", comingSoon: true },
+  { label: "LinkedIn Learning", icon: "course", comingSoon: true },
+  { label: "edX",               icon: "course", comingSoon: true },
 ];
 
 function stageStatus(stage: CareerOsStage, current: CareerOsStage | null): "past" | "current" | "future" {
@@ -505,6 +522,62 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
               </div>
             );
           })}
+
+          {/* ── Marketplace (always available — not stage-gated) ──────────── */}
+          {stageLoaded && (
+            <div role="group" aria-label="Marketplace" className="mt-4">
+              {show && (
+                <div className="mx-1 mb-1 px-2 py-0.5">
+                  <span className="text-[9.5px] font-bold uppercase tracking-widest text-gray-400">
+                    Marketplace
+                  </span>
+                </div>
+              )}
+              {MARKETPLACE_ITEMS.map((item) => {
+                const active = !!item.href && isActive(item.href);
+                if (item.comingSoon) {
+                  return (
+                    <div
+                      key={item.label}
+                      role="button"
+                      aria-disabled="true"
+                      tabIndex={-1}
+                      title={show ? `${item.label} — Coming soon` : item.label}
+                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium text-gray-400 cursor-default
+                        ${!show ? "justify-center px-2" : ""}`}
+                    >
+                      <span className="text-gray-300"><Ic d={ICONS[item.icon]} /></span>
+                      {show && (
+                        <>
+                          <span className="flex-1">{item.label}</span>
+                          <span className="text-[8px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full leading-none">
+                            Soon
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    title={!show ? item.label : undefined}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium transition-colors
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
+                      ${active ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}
+                      ${!show ? "justify-center px-2" : ""}`}
+                  >
+                    <span className={active ? "text-brand-600" : "text-gray-400"}>
+                      <Ic d={ICONS[item.icon]} />
+                    </span>
+                    {show && <span>{item.label}</span>}
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         {/* Sign out footer */}
