@@ -5,22 +5,22 @@
  *
  * Aspirational targets — what the user wants to acquire next.
  * Three sections:
- *   - Target Skills        (tag-style chips)
- *   - Target Education     (rows: degree, institution, target_date)
- *   - Target Certifications (rows: name, issuer, target_date)
+ *   - Skills        (tag-style chips)
+ *   - Education     (rows: degree, institution, target_date)
+ *   - Certifications (rows: name, issuer, target_date)
  *
- * On mount the page asks /api/career-os/target-suggestions to generate
- * AI-suggested items (based on the user's career profile). Each suggestion
- * appears in a "Suggested for you" panel inside its section with a "+ Add"
- * button. Clicking "+ Add" promotes the suggestion to the confirmed list.
+ * On mount the page calls /api/career-os/target-suggestions which
+ * RESEARCHES the user's target job titles (from /mycareer/preferences)
+ * and returns standard skills/education/certs for those roles. Each
+ * suggestion carries a source_role tag so the user can see which target
+ * job title drove the recommendation.
  *
  * Persists confirmed targets to:
  *   career_profiles.target_skills
  *   career_profiles.target_education
  *   career_profiles.target_certifications
  *
- * Distinct from /mycareer/profile which holds CURRENT skills/education/certs
- * (what the user already has).
+ * Distinct from /mycareer/profile which holds CURRENT skills/education/certs.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -36,12 +36,34 @@ interface TargetCertification {
   issuer: string;
   target_date: string;
 }
-interface SkillSuggestion       { name: string;        reason: string }
-interface EducationSuggestion   { degree: string;      institution: string; reason: string }
-interface CertificationSuggestion { name: string;      issuer: string;      reason: string }
+interface SkillSuggestion         { name: string;        source_role: string; reason: string }
+interface EducationSuggestion     { degree: string;      institution: string; source_role: string; reason: string }
+interface CertificationSuggestion { name: string;        issuer: string;      source_role: string; reason: string }
+
+interface SuggestionResponse {
+  target_roles_used: string[];
+  skills: SkillSuggestion[];
+  education: EducationSuggestion[];
+  certifications: CertificationSuggestion[];
+  _meta?: {
+    had_target_roles: boolean;
+    had_cycle_goal: boolean;
+    inferred: boolean;
+  };
+}
 
 const EMPTY_EDU:  TargetEducation     = { degree: "", institution: "", target_date: "" };
 const EMPTY_CERT: TargetCertification = { name: "",   issuer: "",      target_date: "" };
+
+// ── Source-role pill ─────────────────────────────────────────────────────────
+function SourceRolePill({ role }: { role: string }) {
+  if (!role) return null;
+  return (
+    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 border border-blue-100">
+      for: {role}
+    </span>
+  );
+}
 
 export default function TargetSkillsPage() {
   const supabase = createClient();
@@ -57,6 +79,8 @@ export default function TargetSkillsPage() {
   const [skillSugs, setSkillSugs] = useState<SkillSuggestion[]>([]);
   const [eduSugs,   setEduSugs]   = useState<EducationSuggestion[]>([]);
   const [certSugs,  setCertSugs]  = useState<CertificationSuggestion[]>([]);
+  const [rolesUsed, setRolesUsed] = useState<string[]>([]);
+  const [meta, setMeta] = useState<SuggestionResponse["_meta"] | null>(null);
   const [sugsLoading, setSugsLoading] = useState(false);
   const [sugsErr,     setSugsErr]     = useState<string | null>(null);
 
@@ -87,19 +111,19 @@ export default function TargetSkillsPage() {
     return () => { cancelled = true; };
   }, [supabase]);
 
-  // ── Fetch AI suggestions on mount (after profile loads) ──────────────────
+  // ── Fetch AI suggestions ──────────────────────────────────────────────────
   const fetchSuggestions = useCallback(async () => {
     setSugsLoading(true);
     setSugsErr(null);
     try {
       const res = await fetch("/api/career-os/target-suggestions", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error ?? `Failed (${res.status})`);
-      }
+      if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`);
       setSkillSugs(Array.isArray(data.skills) ? data.skills : []);
       setEduSugs(Array.isArray(data.education) ? data.education : []);
       setCertSugs(Array.isArray(data.certifications) ? data.certifications : []);
+      setRolesUsed(Array.isArray(data.target_roles_used) ? data.target_roles_used : []);
+      setMeta(data._meta ?? null);
     } catch (e) {
       setSugsErr(e instanceof Error ? e.message : "Failed to load suggestions");
     } finally {
@@ -111,24 +135,18 @@ export default function TargetSkillsPage() {
     if (!loading && userId) void fetchSuggestions();
   }, [loading, userId, fetchSuggestions]);
 
-  // ── Skill chip handlers ────────────────────────────────────────────────────
+  // ── Skill handlers ─────────────────────────────────────────────────────────
   function addSkill() {
     const t = skillDraft.trim();
     if (!t) return;
-    if (skills.some(s => s.toLowerCase() === t.toLowerCase())) {
-      setSkillDraft("");
-      return;
+    if (!skills.some(s => s.toLowerCase() === t.toLowerCase())) {
+      setSkills([...skills, t]);
     }
-    setSkills([...skills, t]);
     setSkillDraft("");
   }
-  function removeSkill(idx: number) {
-    setSkills(skills.filter((_, i) => i !== idx));
-  }
+  function removeSkill(idx: number) { setSkills(skills.filter((_, i) => i !== idx)); }
   function confirmSkillSuggestion(name: string) {
-    if (!skills.some(s => s.toLowerCase() === name.toLowerCase())) {
-      setSkills([...skills, name]);
-    }
+    if (!skills.some(s => s.toLowerCase() === name.toLowerCase())) setSkills([...skills, name]);
     setSkillSugs(skillSugs.filter(s => s.name.toLowerCase() !== name.toLowerCase()));
   }
   function dismissSkillSuggestion(name: string) {
@@ -140,9 +158,7 @@ export default function TargetSkillsPage() {
   function updateEducation(idx: number, patch: Partial<TargetEducation>) {
     setEducation(education.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
   }
-  function removeEducation(idx: number) {
-    setEducation(education.filter((_, i) => i !== idx));
-  }
+  function removeEducation(idx: number) { setEducation(education.filter((_, i) => i !== idx)); }
   function confirmEduSuggestion(s: EducationSuggestion) {
     setEducation([...education, { degree: s.degree, institution: s.institution, target_date: "" }]);
     setEduSugs(eduSugs.filter(x => !(x.degree === s.degree && x.institution === s.institution)));
@@ -156,9 +172,7 @@ export default function TargetSkillsPage() {
   function updateCert(idx: number, patch: Partial<TargetCertification>) {
     setCertifications(certifications.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
   }
-  function removeCert(idx: number) {
-    setCertifications(certifications.filter((_, i) => i !== idx));
-  }
+  function removeCert(idx: number) { setCertifications(certifications.filter((_, i) => i !== idx)); }
   function confirmCertSuggestion(s: CertificationSuggestion) {
     setCertifications([...certifications, { name: s.name, issuer: s.issuer, target_date: "" }]);
     setCertSugs(certSugs.filter(x => !(x.name === s.name && x.issuer === s.issuer)));
@@ -203,13 +217,33 @@ export default function TargetSkillsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 space-y-6">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 space-y-6">
       <header>
         <h1 className="mb-2 text-2xl font-bold text-gray-900">Target Skills</h1>
         <p className="text-sm text-gray-500">
-          What you want to acquire next — skills, education, or certifications you&apos;re working toward. Suggestions below are AI-generated from your profile, target roles, and current career-cycle goal; click <strong>Confirm</strong> on any you want to add.
+          What you want to acquire next — researched against your target job titles. Suggestions below are AI-generated; click <strong>Confirm</strong> on any you want to add. You can also add your own.
         </p>
       </header>
+
+      {/* Show which target roles were researched */}
+      {!sugsLoading && rolesUsed.length > 0 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Researching for target job title{rolesUsed.length > 1 ? "s" : ""}:{" "}
+          <strong>{rolesUsed.join(" · ")}</strong>
+          {meta?.inferred && (
+            <span className="ml-2 text-xs text-blue-600">
+              (inferred from your profile — set explicit target roles in <a href="/mycareer/preferences" className="underline hover:no-underline">Search Preferences</a>)
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* No target roles set at all */}
+      {!sugsLoading && !sugsErr && rolesUsed.length === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No target job titles set. Add them in <a href="/mycareer/preferences" className="underline font-medium hover:no-underline">Search Preferences</a> for tailored suggestions, then come back here.
+        </div>
+      )}
 
       {sugsErr && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -231,7 +265,6 @@ export default function TargetSkillsPage() {
           <p className="text-sm text-gray-500">Skills you want to learn. Press Enter or comma to add manually.</p>
         </div>
 
-        {/* Confirmed skill chips */}
         {skills.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {skills.map((s, i) => (
@@ -247,41 +280,34 @@ export default function TargetSkillsPage() {
           type="text"
           value={skillDraft}
           onChange={e => setSkillDraft(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSkill(); }
-          }}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSkill(); } }}
           onBlur={addSkill}
           placeholder="Add your own — e.g. Kubernetes, GraphQL, System Design"
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
         />
 
-        {/* Skill suggestions */}
         <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {sugsLoading ? "Loading suggestions…" : skillSugs.length > 0 ? "Suggested for you — confirm to add" : "No skill suggestions"}
+            {sugsLoading ? "Researching target job titles…" : skillSugs.length > 0 ? "Suggested for you — confirm to add" : "No skill suggestions"}
           </p>
           {!sugsLoading && skillSugs.length > 0 && (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {skillSugs.map((s, i) => (
                 <li key={`${s.name}-${i}`} className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    onClick={() => confirmSkillSuggestion(s.name)}
-                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                  >
+                  <button type="button" onClick={() => confirmSkillSuggestion(s.name)}
+                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shrink-0">
                     ✓ Confirm
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissSkillSuggestion(s.name)}
-                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100"
-                    aria-label="Dismiss"
-                  >
+                  <button type="button" onClick={() => dismissSkillSuggestion(s.name)}
+                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 shrink-0" aria-label="Dismiss">
                     ×
                   </button>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-900">{s.name}</span>
-                    <span className="ml-2 text-xs text-gray-500">— {s.reason}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm font-medium text-gray-900">{s.name}</span>
+                      <SourceRolePill role={s.source_role} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">{s.reason}</p>
                   </div>
                 </li>
               ))}
@@ -317,34 +343,29 @@ export default function TargetSkillsPage() {
           </div>
         )}
 
-        {/* Education suggestions */}
         <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {sugsLoading ? "Loading suggestions…" : eduSugs.length > 0 ? "Suggested for you — confirm to add" : "No education suggestions"}
+            {sugsLoading ? "Researching…" : eduSugs.length > 0 ? "Suggested for you — confirm to add" : "No education suggestions"}
           </p>
           {!sugsLoading && eduSugs.length > 0 && (
             <ul className="space-y-3">
               {eduSugs.map((s, i) => (
                 <li key={`${s.degree}-${i}`} className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    onClick={() => confirmEduSuggestion(s)}
-                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                  >
+                  <button type="button" onClick={() => confirmEduSuggestion(s)}
+                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shrink-0">
                     ✓ Confirm
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissEduSuggestion(s)}
-                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100"
-                    aria-label="Dismiss"
-                  >
+                  <button type="button" onClick={() => dismissEduSuggestion(s)}
+                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 shrink-0" aria-label="Dismiss">
                     ×
                   </button>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-900">{s.degree}</span>
-                    <span className="text-sm text-gray-600"> — {s.institution}</span>
-                    <p className="text-xs text-gray-500 mt-0.5">{s.reason}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm font-medium text-gray-900">{s.degree}</span>
+                      <span className="text-sm text-gray-600">— {s.institution}</span>
+                      <SourceRolePill role={s.source_role} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">{s.reason}</p>
                   </div>
                 </li>
               ))}
@@ -380,34 +401,29 @@ export default function TargetSkillsPage() {
           </div>
         )}
 
-        {/* Certification suggestions */}
         <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {sugsLoading ? "Loading suggestions…" : certSugs.length > 0 ? "Suggested for you — confirm to add" : "No certification suggestions"}
+            {sugsLoading ? "Researching…" : certSugs.length > 0 ? "Suggested for you — confirm to add" : "No certification suggestions"}
           </p>
           {!sugsLoading && certSugs.length > 0 && (
             <ul className="space-y-3">
               {certSugs.map((s, i) => (
                 <li key={`${s.name}-${i}`} className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    onClick={() => confirmCertSuggestion(s)}
-                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                  >
+                  <button type="button" onClick={() => confirmCertSuggestion(s)}
+                    className="mt-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shrink-0">
                     ✓ Confirm
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissCertSuggestion(s)}
-                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100"
-                    aria-label="Dismiss"
-                  >
+                  <button type="button" onClick={() => dismissCertSuggestion(s)}
+                    className="mt-0.5 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 shrink-0" aria-label="Dismiss">
                     ×
                   </button>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-900">{s.name}</span>
-                    <span className="text-sm text-gray-600"> — {s.issuer}</span>
-                    <p className="text-xs text-gray-500 mt-0.5">{s.reason}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm font-medium text-gray-900">{s.name}</span>
+                      <span className="text-sm text-gray-600">— {s.issuer}</span>
+                      <SourceRolePill role={s.source_role} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">{s.reason}</p>
                   </div>
                 </li>
               ))}
@@ -418,17 +434,11 @@ export default function TargetSkillsPage() {
 
       {/* ── Save bar ──────────────────────────────────────────────────────── */}
       <div className="sticky bottom-0 -mx-4 sm:-mx-6 border-t border-gray-200 bg-white px-4 py-4 sm:px-6 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => void fetchSuggestions()}
-          disabled={sugsLoading}
+        <button type="button" onClick={() => void fetchSuggestions()} disabled={sugsLoading}
           className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           {sugsLoading ? "Loading…" : "Refresh suggestions"}
         </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
+        <button type="button" onClick={handleSave} disabled={saving}
           className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
           {saving ? "Saving…" : "Save targets"}
         </button>
