@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
+import { CookieConsent } from "@/components/legal/CookieConsent";
+import { GlobalLegalFooter } from "@/components/legal/GlobalLegalFooter";
 
 export const metadata: Metadata = {
   title: "iCareerOS — Your AI Career Operating System",
@@ -61,6 +63,8 @@ export default function RootLayout({
           Skip to main content
         </a>
         <I18nProvider>{children}</I18nProvider>
+        <GlobalLegalFooter />
+        <CookieConsent />
       </body>
     </html>
   );

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { readConsent } from "@/lib/consent/storage";
+import { postConsent } from "@/lib/consent/api";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -18,6 +20,7 @@ const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
 export function AuthForm({ mode }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [success, setSuccess]       = useState<string | null>(null);
@@ -28,11 +31,17 @@ export function AuthForm({ mode }: AuthFormProps) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (mode === "signup" && !acceptTerms) {
+      setError("Please accept the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: identifier,
           password,
           options: {
@@ -40,10 +49,40 @@ export function AuthForm({ mode }: AuthFormProps) {
           },
         });
         if (error) throw error;
+
+        // Record ToS+Privacy acceptance:
+        // 1) accepted_terms_at on user_profiles (handled by row's INSERT trigger
+        //    on first profile creation; we also POST a consent_records row for
+        //    audit trail purposes — it's append-only and survives profile edits).
+        // 2) consent_records row (kind = 'tos').
+        try {
+          if (data?.user?.id) {
+            await supabase
+              .from("user_profiles")
+              .upsert(
+                { user_id: data.user.id, accepted_terms_at: new Date().toISOString() },
+                { onConflict: "user_id", ignoreDuplicates: false }
+              );
+          }
+          const cookieConsent = readConsent();
+          await postConsent(
+            cookieConsent ?? {
+              version: 1,
+              timestamp: new Date().toISOString(),
+              necessary: true,
+              functional: false,
+              analytics: false,
+              marketing: false,
+              gpcDetected: false,
+            },
+            "tos",
+          );
+        } catch {
+          // Don't block signup if the audit trail write fails.
+        }
+
         // Confirmation email is sent by Supabase Auth using the branded
         // template configured in dashboard → Authentication → Emails.
-        // We do NOT send a separate welcome email here — that fires before
-        // the user has even confirmed and creates a confusing double-email.
         setSuccess(
           "Check your inbox — we just sent you an email from iCareerOS with a link to confirm your account. Click it to finish signing up."
         );
@@ -70,6 +109,8 @@ export function AuthForm({ mode }: AuthFormProps) {
       setLoading(false);
     }
   }
+
+  const submitDisabled = loading || !!success || (mode === "signup" && !acceptTerms);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -121,9 +162,34 @@ export function AuthForm({ mode }: AuthFormProps) {
         />
       </div>
 
+      {mode === "signup" && (
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            id="accept-terms"
+            data-testid="accept-terms"
+            type="checkbox"
+            checked={acceptTerms}
+            onChange={(e) => setAcceptTerms(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            required
+          />
+          <span>
+            I agree to the{" "}
+            <a href="/legal/terms" className="font-medium text-brand-700 underline hover:text-brand-800">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="/legal/privacy" className="font-medium text-brand-700 underline hover:text-brand-800">
+              Privacy Policy
+            </a>
+            .
+          </span>
+        </label>
+      )}
+
       <button
         type="submit"
-        disabled={loading || !!success}
+        disabled={submitDisabled}
         className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold
                    text-white shadow-sm hover:bg-brand-700 focus-visible:outline
                    focus-visible:outline-2 focus-visible:outline-brand-600
