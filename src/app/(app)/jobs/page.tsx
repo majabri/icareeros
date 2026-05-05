@@ -80,21 +80,27 @@ export default function JobsPage() {
     setFitScores({});
 
     try {
-      const body = m === "auto"
-        ? { mode: "auto" as const }
-        : {
+      // Auto mode → AI agent (multi-query plan + parallel run + dedupe)
+      // Manual mode → direct single-query search
+      let res: Response;
+      if (m === "auto") {
+        res = await fetch("/api/jobs/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+      } else {
+        res = await fetch("/api/jobs/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             mode:    "manual" as const,
             what:    manualFilters.what,
             where:   manualFilters.where,
             remote:  manualFilters.remote,
             jobType: manualFilters.jobType || undefined,
-          };
-
-      const res = await fetch("/api/jobs/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+          }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `Search failed (${res.status})`);
 

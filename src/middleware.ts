@@ -20,6 +20,7 @@ const AI_ROUTES = [
   "/api/recruiter",
   "/api/salary-intelligence",
   "/api/jobs/fit-scores",
+  "/api/jobs/agent",
 ];
 
 // ─── Rate limiting (Upstash Redis REST, graceful fallback) ───────────────────
