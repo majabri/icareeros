@@ -162,7 +162,7 @@ export default function LinkedAccountsPage() {
       setMsg({ kind: "err", text: "You must keep at least one sign-in method linked." });
       return;
     }
-    if (provider === "email" && !hasEmailIdentity) {
+    if ((provider as string) === "email" && !hasEmailIdentity) {
       // shouldn't happen, defensive
       return;
     }
