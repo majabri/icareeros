@@ -247,7 +247,7 @@ Any claim must be brought within **one year** of the event giving rise to it, or
 - **No waiver.** Our failure to enforce a provision is not a waiver of our right to enforce it later.
 - **Assignment.** You may not assign these Terms without our consent. We may assign them to an affiliate or in connection with a merger, acquisition, or sale of assets.
 - **Force majeure.** We are not liable for failures caused by events beyond our reasonable control (natural disasters, war, infrastructure outages of upstream providers, etc.).
-- **Notices.** We send legal notices to the email associated with your account; you should keep it current. Send notices to us at legal@icareeros.com and `[MAILING ADDRESS]`.
+- **Notices.** We send legal notices to the email associated with your account; you should keep it current. Send notices to us at legal@icareeros.com.
 - **Survival.** Sections 6 (Your content), 7 (IP), 11 (Disclaimers), 12 (Limitation), 13 (Indemnification), 15 (Governing law), and 16 (Miscellaneous) survive termination.
 
 ---
@@ -256,4 +256,3 @@ Any claim must be brought within **one year** of the event giving rise to it, or
 
 **legal@icareeros.com**
 iCareerOS LLC
-`[MAILING ADDRESS]`
