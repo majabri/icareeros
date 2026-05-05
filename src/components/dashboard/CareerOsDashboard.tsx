@@ -7,6 +7,7 @@ import { CycleStageCard }  from "./CycleStageCard";
 import { CycleSummaryPanel } from "./CycleSummaryPanel";
 import {
   startCycle,
+  listActiveCycles,
   getActiveCycle,
   advanceStage,
   completeCycle,
@@ -83,6 +84,7 @@ export function CareerOsDashboard() {
   const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
   const [cycle, setCycle]             = useState<ActiveCycle | null>(null);
+  const [activeCycles, setActiveCycles] = useState<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>>([]);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
   const [stageNotes, setStageNotes]   = useState<StageNotesMap>(emptyNotesMap());
   const [loading, setLoading]         = useState(true);
@@ -124,12 +126,21 @@ export function CareerOsDashboard() {
     });
   }, []);
 
-  const refreshCycle = useCallback(async (uid: string) => {
-    const fresh = await getActiveCycle(uid);
-    setCycle(fresh);
-    setStageStatus(buildStageStatus(fresh));
-    if (fresh) {
-      const notes = await loadStageNotes(fresh.id);
+  const refreshCycle = useCallback(async (uid: string, preferCycleId?: string) => {
+    const [list, fresh] = await Promise.all([
+      listActiveCycles(uid),
+      getActiveCycle(uid),
+    ]);
+    setActiveCycles(list);
+    // If caller asked for a specific cycle (e.g. just-created), pick it.
+    // Otherwise default to the freshest active cycle.
+    const target = preferCycleId
+      ? list.find(c => c.id === preferCycleId) ?? fresh
+      : fresh;
+    setCycle(target ?? null);
+    setStageStatus(buildStageStatus(target ?? null));
+    if (target) {
+      const notes = await loadStageNotes(target.id);
       setStageNotes(notes);
     } else {
       setStageNotes(emptyNotesMap());
@@ -145,7 +156,8 @@ export function CareerOsDashboard() {
       if (result.status === "abandoned") {
         setError(result.error ?? "Failed to start cycle.");
       } else {
-        await refreshCycle(userId);
+        // Switch view to the new cycle (in case user had others)
+        await refreshCycle(userId, result.cycleId);
         setShowGoalInput(false);
         setGoal("");
       }
@@ -153,6 +165,29 @@ export function CareerOsDashboard() {
       setRunning(false);
     }
   }, [userId, goal, refreshCycle]);
+
+  /**
+   * Start a parallel cycle WITHOUT closing the current one. The user may
+   * pursue multiple goals on their roadmap simultaneously.
+   */
+  const handleStartParallelCycle = useCallback(async (parallelGoal: string) => {
+    if (!userId) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const result = await startCycle(userId, parallelGoal || undefined);
+      if (result.status === "abandoned") {
+        setError(result.error ?? "Failed to start cycle.");
+      } else {
+        // Switch view to the new cycle
+        await refreshCycle(userId, result.cycleId);
+        setShowGoalInput(false);
+        setGoal("");
+      }
+    } finally {
+      setRunning(false);
+    }
+  }, [userId, refreshCycle]);
 
   const handleAdvanceStage = useCallback(async () => {
     if (!userId || !cycle) return;
@@ -309,20 +344,87 @@ export function CareerOsDashboard() {
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setShowGoalInput(true)}
-              className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-6 py-2.5
-                         text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              + New cycle
-            </button>
+            <>
+              <button
+                onClick={() => setShowGoalInput(true)}
+                className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-6 py-2.5
+                           text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                + Start a cycle
+              </button>
+              <p className="mt-3 text-xs text-gray-400">
+                Not ready? You can also{" "}
+                <a href="/mycareer/profile" className="underline hover:text-gray-600">build your profile</a>,{" "}
+                <a href="/jobs" className="underline hover:text-gray-600">browse opportunities</a>, or{" "}
+                <a href="/resumeadvisor" className="underline hover:text-gray-600">try the resume advisor</a>.
+              </p>
+            </>
           )}
+        </div>
+      )}
+
+      {/* Multi-cycle picker (only shown if user has 2+ active cycles) */}
+      {activeCycles.length > 1 && cycle && (
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Your active cycles ({activeCycles.length})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {activeCycles.map(c => {
+              const selected = c.id === cycle.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => userId && void refreshCycle(userId, c.id)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                    selected
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                  title={c.goal ?? `Cycle #${c.cycle_number}`}
+                >
+                  <span className="font-semibold">#{c.cycle_number}</span>
+                  {c.goal && <span className="ml-1.5 max-w-[200px] truncate inline-block align-bottom">— {c.goal}</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Active cycle */}
       {cycle && (
         <>
+          {showGoalInput && (
+            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 shadow-sm space-y-3">
+              <p className="text-sm font-medium text-brand-900">Start a parallel cycle for a different goal:</p>
+              <input
+                type="text"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                placeholder="e.g. Become a Director of Engineering"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                onKeyDown={(e) => e.key === "Enter" && void handleStartParallelCycle(goal)}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void handleStartParallelCycle(goal)}
+                  disabled={running}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {running ? "Starting…" : "Start cycle"}
+                </button>
+                <button
+                  onClick={() => { setShowGoalInput(false); setGoal(""); }}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between text-sm">
               <div>
@@ -336,14 +438,9 @@ export function CareerOsDashboard() {
                   Active
                 </span>
                 <button
-                  onClick={() => {
-                    if (window.confirm(
-                      `Mark Cycle #${cycle.cycle_number} as complete and start a new one?`
-                    )) {
-                      void handleStartNextCycle();
-                    }
-                  }}
+                  onClick={() => setShowGoalInput(true)}
                   disabled={running}
+                  title="Add a new cycle for a different goal — keeps your current cycle open"
                   className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   + New cycle

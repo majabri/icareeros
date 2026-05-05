@@ -209,3 +209,24 @@ export async function getActiveCycle(
 
   return data ?? null;
 }
+
+/**
+ * List ALL active cycles for a user. The user can have multiple parallel
+ * cycles (one per goal on their roadmap) — getActiveCycle returns just the
+ * most recent, but the dashboard uses this to show a switcher when more
+ * than one cycle is active.
+ */
+export async function listActiveCycles(
+  userId: string,
+): Promise<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("career_os_cycles")
+    .select("id, cycle_number, goal, status, current_stage, created_at")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data;
+}
