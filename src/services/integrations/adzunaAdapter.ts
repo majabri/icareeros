@@ -65,7 +65,6 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
     app_key:          appKey,
     results_per_page: String(perPage),
     sort_by:          params.sortBy ?? "relevance",
-    content_type:     "application/json",
   });
   if (params.what)      q.set("what",  params.what);
   if (params.where)     q.set("where", params.where);
@@ -83,7 +82,10 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "Accept": "application/json", "User-Agent": "iCareerOS/1.0" },
+    });
     clearTimeout(timeout);
 
     if (!res.ok) {
