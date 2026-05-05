@@ -134,8 +134,24 @@ export function AuthForm({ mode }: AuthFormProps) {
             .maybeSingle();
           isAdmin = profile?.role === "admin";
         }
-        const redirect = new URLSearchParams(window.location.search).get("redirect");
-        window.location.href = redirect ?? (isAdmin ? "/admin" : "/dashboard");
+        // Decide landing page based on ROLE only — never on email or hint params.
+        // If a ?redirect=… is present, honor it ONLY if the role allows it:
+        //   - admin trying to go to a /admin page → allowed
+        //   - admin trying to go to a non-admin page → still goto /admin (admins
+        //     are not supposed to use the user-facing app)
+        //   - non-admin trying to go to a /admin page → reject; goto /dashboard
+        //   - non-admin trying to go anywhere else → honor the redirect
+        const requested = new URLSearchParams(window.location.search).get("redirect") ?? "";
+        const wantsAdmin = requested.startsWith("/admin");
+        let dest: string;
+        if (isAdmin) {
+          dest = "/admin"; // admins always land on /admin regardless of redirect
+        } else if (wantsAdmin) {
+          dest = "/dashboard"; // non-admin asked for /admin — refuse, send home
+        } else {
+          dest = requested || "/dashboard";
+        }
+        window.location.href = dest;
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
