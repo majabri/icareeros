@@ -53,7 +53,7 @@ async function makeSupabaseServer() {
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const supabase = await makeSupabaseServer();
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -61,11 +61,19 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Optional: caller can include in-memory dismissed lists so the AI sees them
+    // before they have been persisted to the DB. Merge with DB-stored on read.
+    const body = await req.json().catch(() => ({})) as {
+      dismissedSkills?: string[];
+      dismissedEducation?: Array<{ degree: string; institution: string }>;
+      dismissedCertifications?: Array<{ name: string; issuer: string }>;
+    };
+
     // ── Load all three sources in parallel ────────────────────────────────────
     const [cpRes, upRes, cycleRes] = await Promise.all([
       supabase
         .from("career_profiles")
-        .select("headline, summary, skills, work_experience, target_skills, target_education, target_certifications")
+        .select("headline, summary, skills, work_experience, target_skills, target_education, target_certifications, dismissed_target_skills, dismissed_target_education, dismissed_target_certifications")
         .eq("user_id", user.id)
         .maybeSingle(),
       supabase
@@ -105,6 +113,30 @@ export async function POST() {
     // ── Build context block ──────────────────────────────────────────────────
     const currentSkills      = (cp.skills as string[] | null) ?? [];
     const alreadyTargeted    = (cp.target_skills as string[] | null) ?? [];
+    // Blocklist = DB-stored ∪ caller-provided (the page may have in-flight
+    // dismissals that haven't been Saved yet).
+    const dbDismissedSkills    = (cp.dismissed_target_skills as string[] | null) ?? [];
+    const dbDismissedEducation = (cp.dismissed_target_education as Array<{ degree: string; institution: string }> | null) ?? [];
+    const dbDismissedCerts     = (cp.dismissed_target_certifications as Array<{ name: string; issuer: string }> | null) ?? [];
+
+    const dismissedSkills = Array.from(new Set([
+      ...dbDismissedSkills,
+      ...(body.dismissedSkills ?? []),
+    ].map(s => s.trim()).filter(Boolean)));
+
+    const dedupedEdu = new Map<string, { degree: string; institution: string }>();
+    for (const e of [...dbDismissedEducation, ...(body.dismissedEducation ?? [])]) {
+      const key = `${e.degree}::${e.institution}`.toLowerCase();
+      if (!dedupedEdu.has(key)) dedupedEdu.set(key, e);
+    }
+    const dismissedEducation = Array.from(dedupedEdu.values());
+
+    const dedupedCerts = new Map<string, { name: string; issuer: string }>();
+    for (const c of [...dbDismissedCerts, ...(body.dismissedCertifications ?? [])]) {
+      const key = `${c.name}::${c.issuer}`.toLowerCase();
+      if (!dedupedCerts.has(key)) dedupedCerts.set(key, c);
+    }
+    const dismissedCertifications = Array.from(dedupedCerts.values());
     const workExp            = (cp.work_experience as Array<{ title?: string; company?: string }> | null) ?? [];
     const recentRoles        = workExp.slice(0, 3).map(w =>
       `${w.title ?? "?"} at ${w.company ?? "?"}`
@@ -132,6 +164,20 @@ export async function POST() {
       alreadyTargeted.length > 0
         ? `Already-confirmed target skills: ${alreadyTargeted.join(", ")}`
         : `(none yet)`,
+      ``,
+      `=== USER HAS DISMISSED THESE — DO NOT EVER SUGGEST AGAIN ===`,
+      dismissedSkills.length > 0
+        ? `Dismissed skills: ${dismissedSkills.join(", ")}`
+        : null,
+      dismissedEducation.length > 0
+        ? `Dismissed education: ${dismissedEducation.map(e => `${e.degree} at ${e.institution}`).join("; ")}`
+        : null,
+      dismissedCertifications.length > 0
+        ? `Dismissed certifications: ${dismissedCertifications.map(c => `${c.name} by ${c.issuer}`).join("; ")}`
+        : null,
+      (dismissedSkills.length === 0 && dismissedEducation.length === 0 && dismissedCertifications.length === 0)
+        ? `(no dismissed items yet)`
+        : null,
     ].filter(Boolean).join("\n");
 
     const anthropic = createTracedClient(user.id, "career-os/target-suggestions");

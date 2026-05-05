@@ -75,6 +75,11 @@ export default function TargetSkillsPage() {
   const [education, setEducation] = useState<TargetEducation[]>([]);
   const [certifications, setCertifications] = useState<TargetCertification[]>([]);
 
+  // Dismissed (do-not-suggest blocklist) — persisted to career_profiles.dismissed_target_*
+  const [dismissedSkills,        setDismissedSkills]        = useState<string[]>([]);
+  const [dismissedEducation,     setDismissedEducation]     = useState<Array<{ degree: string; institution: string }>>([]);
+  const [dismissedCertifications, setDismissedCertifications] = useState<Array<{ name: string; issuer: string }>>([]);
+
   // Suggestions
   const [skillSugs, setSkillSugs] = useState<SkillSuggestion[]>([]);
   const [eduSugs,   setEduSugs]   = useState<EducationSuggestion[]>([]);
@@ -98,7 +103,7 @@ export default function TargetSkillsPage() {
 
       const { data } = await supabase
         .from("career_profiles")
-        .select("target_skills, target_education, target_certifications")
+        .select("target_skills, target_education, target_certifications, dismissed_target_skills, dismissed_target_education, dismissed_target_certifications")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -106,6 +111,9 @@ export default function TargetSkillsPage() {
       setSkills((data?.target_skills as string[]) ?? []);
       setEducation((data?.target_education as TargetEducation[]) ?? []);
       setCertifications((data?.target_certifications as TargetCertification[]) ?? []);
+      setDismissedSkills((data?.dismissed_target_skills as string[]) ?? []);
+      setDismissedEducation((data?.dismissed_target_education as Array<{ degree: string; institution: string }>) ?? []);
+      setDismissedCertifications((data?.dismissed_target_certifications as Array<{ name: string; issuer: string }>) ?? []);
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -116,7 +124,15 @@ export default function TargetSkillsPage() {
     setSugsLoading(true);
     setSugsErr(null);
     try {
-      const res = await fetch("/api/career-os/target-suggestions", { method: "POST" });
+      const res = await fetch("/api/career-os/target-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dismissedSkills,
+          dismissedEducation,
+          dismissedCertifications,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`);
       setSkillSugs(Array.isArray(data.skills) ? data.skills : []);
@@ -129,11 +145,15 @@ export default function TargetSkillsPage() {
     } finally {
       setSugsLoading(false);
     }
-  }, []);
+  }, [dismissedSkills, dismissedEducation, dismissedCertifications]);
 
   useEffect(() => {
     if (!loading && userId) void fetchSuggestions();
-  }, [loading, userId, fetchSuggestions]);
+    // We deliberately do NOT include fetchSuggestions in this effect's deps —
+    // we only want to fetch on initial load, not every time the user dismisses
+    // an item. The "Refresh suggestions" button is the explicit re-fetch path.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, userId]);
 
   // ── Skill handlers ─────────────────────────────────────────────────────────
   function addSkill() {
@@ -144,13 +164,22 @@ export default function TargetSkillsPage() {
     }
     setSkillDraft("");
   }
-  function removeSkill(idx: number) { setSkills(skills.filter((_, i) => i !== idx)); }
+  function removeSkill(idx: number) {
+    const removed = skills[idx];
+    setSkills(skills.filter((_, i) => i !== idx));
+    if (removed && !dismissedSkills.some(d => d.toLowerCase() === removed.toLowerCase())) {
+      setDismissedSkills([...dismissedSkills, removed]);
+    }
+  }
   function confirmSkillSuggestion(name: string) {
     if (!skills.some(s => s.toLowerCase() === name.toLowerCase())) setSkills([...skills, name]);
     setSkillSugs(skillSugs.filter(s => s.name.toLowerCase() !== name.toLowerCase()));
   }
   function dismissSkillSuggestion(name: string) {
     setSkillSugs(skillSugs.filter(s => s.name.toLowerCase() !== name.toLowerCase()));
+    if (!dismissedSkills.some(d => d.toLowerCase() === name.toLowerCase())) {
+      setDismissedSkills([...dismissedSkills, name]);
+    }
   }
 
   // ── Education handlers ─────────────────────────────────────────────────────
@@ -158,13 +187,25 @@ export default function TargetSkillsPage() {
   function updateEducation(idx: number, patch: Partial<TargetEducation>) {
     setEducation(education.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
   }
-  function removeEducation(idx: number) { setEducation(education.filter((_, i) => i !== idx)); }
+  function removeEducation(idx: number) {
+    const removed = education[idx];
+    setEducation(education.filter((_, i) => i !== idx));
+    if (removed && (removed.degree || removed.institution)) {
+      const key = { degree: removed.degree, institution: removed.institution };
+      if (!dismissedEducation.some(d => d.degree === key.degree && d.institution === key.institution)) {
+        setDismissedEducation([...dismissedEducation, key]);
+      }
+    }
+  }
   function confirmEduSuggestion(s: EducationSuggestion) {
     setEducation([...education, { degree: s.degree, institution: s.institution, target_date: "" }]);
     setEduSugs(eduSugs.filter(x => !(x.degree === s.degree && x.institution === s.institution)));
   }
   function dismissEduSuggestion(s: EducationSuggestion) {
     setEduSugs(eduSugs.filter(x => !(x.degree === s.degree && x.institution === s.institution)));
+    if (!dismissedEducation.some(d => d.degree === s.degree && d.institution === s.institution)) {
+      setDismissedEducation([...dismissedEducation, { degree: s.degree, institution: s.institution }]);
+    }
   }
 
   // ── Cert handlers ──────────────────────────────────────────────────────────
@@ -172,13 +213,25 @@ export default function TargetSkillsPage() {
   function updateCert(idx: number, patch: Partial<TargetCertification>) {
     setCertifications(certifications.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
   }
-  function removeCert(idx: number) { setCertifications(certifications.filter((_, i) => i !== idx)); }
+  function removeCert(idx: number) {
+    const removed = certifications[idx];
+    setCertifications(certifications.filter((_, i) => i !== idx));
+    if (removed && (removed.name || removed.issuer)) {
+      const key = { name: removed.name, issuer: removed.issuer };
+      if (!dismissedCertifications.some(d => d.name === key.name && d.issuer === key.issuer)) {
+        setDismissedCertifications([...dismissedCertifications, key]);
+      }
+    }
+  }
   function confirmCertSuggestion(s: CertificationSuggestion) {
     setCertifications([...certifications, { name: s.name, issuer: s.issuer, target_date: "" }]);
     setCertSugs(certSugs.filter(x => !(x.name === s.name && x.issuer === s.issuer)));
   }
   function dismissCertSuggestion(s: CertificationSuggestion) {
     setCertSugs(certSugs.filter(x => !(x.name === s.name && x.issuer === s.issuer)));
+    if (!dismissedCertifications.some(d => d.name === s.name && d.issuer === s.issuer)) {
+      setDismissedCertifications([...dismissedCertifications, { name: s.name, issuer: s.issuer }]);
+    }
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -198,6 +251,9 @@ export default function TargetSkillsPage() {
           target_skills: skills,
           target_education: cleanEdu,
           target_certifications: cleanCerts,
+          dismissed_target_skills:         dismissedSkills,
+          dismissed_target_education:      dismissedEducation,
+          dismissed_target_certifications: dismissedCertifications,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" }
@@ -206,7 +262,7 @@ export default function TargetSkillsPage() {
     setSaving(false);
     if (error) setMsg({ kind: "err", text: error.message });
     else setMsg({ kind: "ok", text: "Targets saved." });
-  }, [userId, skills, education, certifications, supabase]);
+  }, [userId, skills, education, certifications, dismissedSkills, dismissedEducation, dismissedCertifications, supabase]);
 
   if (loading) {
     return (
