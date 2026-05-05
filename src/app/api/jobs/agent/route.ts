@@ -23,6 +23,8 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
 import type { OpportunityResult } from "@/services/opportunityTypes";
+import { validateJobs } from "@/services/jobs/jobValidator";
+import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 
 interface SearchPlan {
   what:        string;
@@ -245,10 +247,17 @@ QUALITY
       }
     });
 
+    // ── Validate quality + drop bad jobs ─────────────────────────────────
+    const validated = validateJobs(merged);
+    const cleaned   = validated.kept;
+
+    // ── Resolve direct apply-on-company URLs (when description has one) ──
+    const enriched  = attachCompanyApplyUrls(cleaned);
+
     // ── Upsert into opportunities for fit-scoring ─────────────────────────
-    let opportunitiesWithIds = merged;
-    if (merged.length > 0) {
-      const rows = merged.map(o => ({
+    let opportunitiesWithIds: typeof enriched = enriched;
+    if (enriched.length > 0) {
+      const rows = enriched.map(o => ({
         source:           "adzuna",
         source_id:        o.id?.replace(/^adzuna-/, "") ?? null,
         title:            o.title,
@@ -263,6 +272,9 @@ QUALITY
         salary_currency:  o.salary_currency ?? null,
         posted_at:        o.first_seen_at ?? null,
         is_active:        true,
+        is_flagged:       o.is_flagged ?? false,
+        flag_reasons:     o.flag_reasons ?? null,
+        quality_score:    o.quality_score ?? null,
       }));
 
       const { data: upserted, error: upsertErr } = await supabase
@@ -277,7 +289,7 @@ QUALITY
         for (const row of upserted) {
           if (row.source_id) idMap.set(`${row.source}::${row.source_id}`, row.id as string);
         }
-        opportunitiesWithIds = merged.map(o => {
+        opportunitiesWithIds = enriched.map(o => {
           const sid = o.id?.replace(/^adzuna-/, "") ?? "";
           const dbId = idMap.get(`adzuna::${sid}`);
           return dbId ? { ...o, id: dbId } : o;
@@ -293,8 +305,11 @@ QUALITY
       // We keep a shortened summary for transparency without leaking the
       // full keyword strategy.
       agent: {
-        plansRun: plans.length,
-        rawTotal: aggregateTotal,
+        plansRun:    plans.length,
+        rawTotal:    aggregateTotal,
+        beforeFilter: merged.length,
+        hidden:      validated.hiddenCount,
+        flagged:     validated.flaggedCount,
       },
       sourceFallback: allFallback,
     });

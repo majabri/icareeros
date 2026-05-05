@@ -26,6 +26,10 @@ export interface OpportunityResult {
   source?: string;
   first_seen_at?: string;
 
+  // Direct-apply URL on company's own site (extracted from description). When
+  // null, the apply button falls back to opportunity.url (Adzuna redirect).
+  apply_url_company?: string | null;
+
   // AI match fields (from user_opportunity_matches)
   fit_score?: number | null;
   matched_skills?: string[];

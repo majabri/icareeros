@@ -130,13 +130,13 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             )}
             {opp.url && (
               <a
-                href={opp.url}
+                href={opp.apply_url_company ?? opp.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white
                            hover:bg-brand-700 transition-colors"
               >
-                Apply →
+                {opp.apply_url_company ? "Apply on company site →" : "Apply →"}
               </a>
             )}
           </div>
