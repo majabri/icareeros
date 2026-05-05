@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SocialLogins } from "@/components/auth/SocialLogins";
 import { createClient } from "@/lib/supabase";
 import { readConsent } from "@/lib/consent/storage";
 import { postConsent } from "@/lib/consent/api";
@@ -114,6 +115,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      <SocialLogins mode={mode} />
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
