@@ -42,7 +42,7 @@ export interface SupportTicket {
   updated_at: string;
 }
 
-const ADMIN_EMAIL = process.env.SUPPORT_ADMIN_EMAIL ?? "info@icareeros.com";
+const ADMIN_EMAIL = process.env.SUPPORT_ADMIN_EMAIL ?? "majabri714@gmail.com";
 
 // ── GET ────────────────────────────────────────────────────────────────────────
 

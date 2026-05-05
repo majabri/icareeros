@@ -2,7 +2,7 @@
  * GET  /api/admin/feature-flags          → list all feature flags
  * PATCH /api/admin/feature-flags          → toggle a flag  { key: string, enabled: boolean }
  *
- * Admin-only: caller must be authenticated as info@icareeros.com.
+ * Admin-only: caller must be authenticated as majabri714@gmail.com.
  * Uses the service-role key via SUPABASE_SERVICE_ROLE_KEY if available,
  * otherwise falls back to anon key (RLS must allow admin writes).
  */
@@ -12,7 +12,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const ADMIN_EMAIL = "info@icareeros.com";
+const ADMIN_EMAIL = "majabri714@gmail.com";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
