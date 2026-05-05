@@ -164,8 +164,8 @@ export default function JobsPage() {
         <h1 className="mb-1 text-2xl font-bold text-gray-900">Opportunities</h1>
         <p className="text-sm text-gray-500">
           {mode === "auto"
-            ? "Jobs matched to your profile — target roles, location, and search preferences."
-            : "Search jobs your way — keywords, location, type, and salary filters."}
+            ? "Curated for you."
+            : "Search by keyword, location, and filters."}
         </p>
       </header>
 
@@ -177,7 +177,7 @@ export default function JobsPage() {
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors
             ${mode === "auto" ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
         >
-          Auto-match (from your profile)
+          For you
         </button>
         <button
           type="button"
@@ -185,28 +185,9 @@ export default function JobsPage() {
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors
             ${mode === "manual" ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
         >
-          Search myself
+          Search
         </button>
       </div>
-
-      {/* Auto-mode summary */}
-      {mode === "auto" && derivedFrom && derivedFrom.source === "auto" && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>Searching for</span>
-            <strong className="rounded bg-white px-2 py-0.5 border border-blue-200">{derivedFrom.what || "—"}</strong>
-            {derivedFrom.where && (
-              <>
-                <span>in</span>
-                <strong className="rounded bg-white px-2 py-0.5 border border-blue-200">{derivedFrom.where}</strong>
-              </>
-            )}
-            <a href="/mycareer/preferences" className="ml-auto text-xs underline hover:no-underline">
-              Edit preferences
-            </a>
-          </div>
-        </div>
-      )}
 
       {/* Manual filters */}
       {mode === "manual" && (
@@ -277,7 +258,8 @@ export default function JobsPage() {
           >
             ↻ Refresh
           </button>
-          {scoringFit && <span className="text-xs text-gray-500">Scoring fit…</span>}
+          {scoringFit && <span className="text-xs text-gray-500">Ranking results…</span>}
+          <a href="/mycareer/preferences" className="ml-auto text-xs text-gray-400 hover:text-gray-600">Tune your preferences</a>
         </div>
       )}
 
@@ -285,7 +267,7 @@ export default function JobsPage() {
       {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-sm text-gray-500">
           <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
-          Searching Adzuna for matching jobs…
+          Finding matches…
         </div>
       )}
 
@@ -306,7 +288,7 @@ export default function JobsPage() {
         <>
           <div className="text-sm text-gray-500">
             <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
-            {scoringFit && <span className="ml-2 text-xs">· Scoring fit…</span>}
+            {scoringFit && <span className="ml-2 text-xs">· Ranking…</span>}
           </div>
           <div className="space-y-3">
             {decoratedResults.map((opp, i) => (
@@ -319,7 +301,7 @@ export default function JobsPage() {
       {/* Empty state */}
       {!loading && !error && results.length === 0 && hasAutoSearched && !warning && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-12 text-center text-sm text-gray-500">
-          No jobs matched. Try the “Search myself” mode or update your preferences.
+          No jobs matched. Try the “Search” mode or update your preferences.
         </div>
       )}
     </div>

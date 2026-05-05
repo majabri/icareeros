@@ -157,8 +157,8 @@ export async function POST(req: Request) {
         total: 0,
         derivedFrom,
         warning: mode === "auto"
-          ? "No target role / headline / current position to auto-search. Set target roles in /mycareer/preferences."
-          : "Please provide a search keyword.",
+          ? "We need a bit more about you to personalize results. Add a target role or headline in your profile."
+          : "Please enter a keyword to search.",
       });
     }
 
