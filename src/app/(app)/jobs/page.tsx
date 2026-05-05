@@ -1,400 +1,327 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+/**
+ * /jobs — Opportunities page (Career OS Stage 4: Act)
+ *
+ * Two modes:
+ *   - "auto"   (default): server derives the search from the user's
+ *              career_profile + user_profiles preferences (target roles,
+ *              location, work mode, salary, job type) and queries Adzuna.
+ *   - "manual" (toggle): user provides keyword + filters directly.
+ *
+ * Both modes hit /api/jobs/search which calls the Adzuna adapter, then
+ * the page kicks off non-blocking fit scoring against the active cycle.
+ */
+
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { scoreFitBatch, type FitScore } from "@/services/ai/fitScoreService";
-import { enrichSalaries, type SalaryRange } from "@/services/ai/salaryIntelligenceService";
 import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
-import { JobAlertModal } from "@/components/jobs/JobAlertModal";
 
-const PAGE_SIZE = 30;
-const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Freelance"];
+type Mode = "auto" | "manual";
 
-interface Filters {
-  query: string;
-  remote: boolean;
-  jobType: string;
+interface ManualFilters {
+  what:    string;
+  where:   string;
+  remote:  boolean;
+  jobType: string;     // "" | "full_time" | "part_time" | "contract" | "permanent"
 }
 
-const DEFAULTS: Filters = { query: "", remote: false, jobType: "" };
+const EMPTY_MANUAL: ManualFilters = { what: "", where: "", remote: false, jobType: "" };
+
+const JOB_TYPE_OPTIONS = [
+  { value: "",           label: "Any type"  },
+  { value: "full_time",  label: "Full-time" },
+  { value: "part_time",  label: "Part-time" },
+  { value: "contract",   label: "Contract"  },
+  { value: "permanent",  label: "Permanent" },
+];
 
 export default function JobsPage() {
-  const [filters,    setFilters]    = useState<Filters>(DEFAULTS);
-  const [draft,      setDraft]      = useState<Filters>(DEFAULTS);
-  const [results,    setResults]    = useState<OpportunityResult[]>([]);
-  const [total,      setTotal]      = useState(0);
-  const [offset,     setOffset]     = useState(0);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
-  const [searched,   setSearched]   = useState(false);
-  // Fit score state — populated non-blocking after search
+  // ── Mode state ─────────────────────────────────────────────────────────
+  const [mode,           setMode]           = useState<Mode>("auto");
+  const [manual,         setManual]         = useState<ManualFilters>(EMPTY_MANUAL);
+  const [hasAutoSearched, setHasAutoSearched] = useState(false);
+
+  // ── Result state ──────────────────────────────────────────────────────
+  const [results,        setResults]        = useState<OpportunityResult[]>([]);
+  const [total,          setTotal]          = useState(0);
+  const [derivedFrom,    setDerivedFrom]    = useState<{ source: "auto" | "manual"; what: string; where: string } | null>(null);
+  const [warning,        setWarning]        = useState<string | null>(null);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
+
+  // ── Fit scoring ────────────────────────────────────────────────────────
   const [fitScores,  setFitScores]  = useState<Record<string, FitScore>>({});
   const [scoringFit, setScoringFit] = useState(false);
-  const [salaryRanges, setSalaryRanges] = useState<Record<string, SalaryRange>>({});
-  const [enrichingSalary, setEnrichingSalary] = useState(false);
   const [cycleId,    setCycleId]    = useState<string | null>(null);
-  const [showAlert,  setShowAlert]  = useState(false);
 
-  // Load active cycle ID once on mount (needed for evaluate-stage enrichment)
+  // ── Load active cycle (for fit scoring) ───────────────────────────────
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const cycle = await getActiveCycle(user.id);
         if (cycle) setCycleId(cycle.id);
-      } catch {
-        // non-critical — fit scoring still works via user_profiles fallback
-      }
+      } catch { /* fit scoring still works via user_profiles fallback */ }
     })();
   }, []);
 
-  /** Fire background fit scoring for a page of results (non-blocking) */
-  const runFitScoring = useCallback(async (opps: OpportunityResult[], cId: string | null) => {
-    const ids = opps.map((o) => o.id).filter((id): id is string => !!id);
-    if (ids.length === 0) return;
+  // ── Search ─────────────────────────────────────────────────────────────
+  const runSearch = useCallback(async (m: Mode, manualFilters: ManualFilters) => {
+    setLoading(true);
+    setError(null);
+    setWarning(null);
+    setResults([]);
+    setFitScores({});
 
+    try {
+      const body = m === "auto"
+        ? { mode: "auto" as const }
+        : {
+            mode:    "manual" as const,
+            what:    manualFilters.what,
+            where:   manualFilters.where,
+            remote:  manualFilters.remote,
+            jobType: manualFilters.jobType || undefined,
+          };
+
+      const res = await fetch("/api/jobs/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? `Search failed (${res.status})`);
+
+      const opps: OpportunityResult[] = Array.isArray(data.opportunities) ? data.opportunities : [];
+      setResults(opps);
+      setTotal(typeof data.total === "number" ? data.total : opps.length);
+      setDerivedFrom(data.derivedFrom ?? null);
+      if (data.warning) setWarning(data.warning);
+
+      // Non-blocking fit scoring against active cycle
+      if (opps.length > 0) {
+        runFitScoring(opps, cycleId);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [cycleId]);
+
+  // ── Auto-search on first mount, when mode is 'auto' ───────────────────
+  useEffect(() => {
+    if (mode === "auto" && !hasAutoSearched) {
+      setHasAutoSearched(true);
+      void runSearch("auto", EMPTY_MANUAL);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, hasAutoSearched]);
+
+  // ── Fit scoring ────────────────────────────────────────────────────────
+  const runFitScoring = useCallback(async (opps: OpportunityResult[], cId: string | null) => {
+    const ids = opps.map(o => o.id).filter((id): id is string => !!id && /^[0-9a-f-]{36}$/.test(id));
+    if (ids.length === 0) return;
     setScoringFit(true);
     try {
       const result = await scoreFitBatch(ids, cId ?? undefined);
-      setFitScores((prev) => ({ ...prev, ...result.scores }));
-    } catch {
-      // Scoring is non-critical — silently ignore errors
+      if (result?.scores) {
+        const map: Record<string, FitScore> = {};
+        for (const [oppId, fit] of Object.entries(result.scores)) {
+          if (fit) map[oppId] = fit;
+        }
+        setFitScores(map);
+      }
+    } catch (e) {
+      console.warn("[jobs] fit scoring failed:", e instanceof Error ? e.message : e);
     } finally {
       setScoringFit(false);
     }
   }, []);
 
-  /** Enrich salary ranges for null-salary opportunities (non-blocking) */
-  const runSalaryEnrichment = useCallback(async (opps: OpportunityResult[]) => {
-    const ids = opps
-      .filter((o) => o.id && o.salary_min == null && o.salary_max == null && !o.salary)
-      .map((o) => o.id as string);
-    if (ids.length === 0) return;
-
-    setEnrichingSalary(true);
-    try {
-      const result = await enrichSalaries(ids);
-      setSalaryRanges((prev) => ({ ...prev, ...result.ranges }));
-    } catch {
-      // Enrichment is non-critical — silently ignore errors
-    } finally {
-      setEnrichingSalary(false);
-    }
-  }, []);
-
-  const search = useCallback(async (f: Filters, off: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      let q = supabase
-        .from("opportunities")
-        .select(
-          "id,title,company,location,job_type,is_remote,salary_min,salary_max,salary_currency,source,quality_score,first_seen_at,description,url,is_flagged,flag_reasons",
-          { count: "exact" }
-        )
-        .eq("is_active", true)
-        .order("quality_score", { ascending: false, nullsFirst: false })
-        .order("first_seen_at", { ascending: false })
-        .range(off, off + PAGE_SIZE - 1);
-
-      if (f.query.trim()) {
-        q = q.or(`title.ilike.%${f.query.trim()}%,company.ilike.%${f.query.trim()}%`);
-      }
-      if (f.remote)  q = q.eq("is_remote", true);
-      if (f.jobType) q = q.ilike("job_type", `%${f.jobType}%`);
-
-      const { data, error: qErr, count } = await q;
-      if (qErr) throw new Error(qErr.message);
-
-      type Row = {
-        id: string; title: string; company: string; location: string;
-        job_type: string; is_remote: boolean; salary_min: number | null;
-        salary_max: number | null; salary_currency: string | null;
-        source: string; quality_score: number | null; first_seen_at: string;
-        description: string; url: string; is_flagged: boolean;
-        flag_reasons: string[] | null;
-      };
-
-      const mapped: OpportunityResult[] = (data as Row[] ?? []).map((row) => ({
-        id:            row.id,
-        title:         row.title,
-        company:       row.company,
-        location:      row.location,
-        type:          row.job_type ?? "",
-        is_remote:     row.is_remote,
-        salary:        undefined,
-        source:        row.source,
-        quality_score: row.quality_score ?? undefined,
-        first_seen_at: row.first_seen_at,
-        description:   row.description,
-        url:           row.url,
-        is_flagged:    row.is_flagged,
-        flag_reasons:  row.flag_reasons ?? undefined,
-        matchReason:   "",
-        ...(row.salary_min != null ? { salary_min: row.salary_min } : {}),
-        ...(row.salary_max != null ? { salary_max: row.salary_max } : {}),
-      }));
-
-      if (off === 0) {
-        setResults(mapped);
-        // Clear stale scores when starting a new search
-        setFitScores({});
-        setSalaryRanges({});
-      } else {
-        setResults((prev) => [...prev, ...mapped]);
-      }
-
-      setTotal(count ?? 0);
-      setSearched(true);
-
-      // Fire background fit scoring — don't await (non-blocking)
-      void runFitScoring(mapped, cycleId);
-      // Fire background salary enrichment for null-salary jobs — don't await (non-blocking)
-      void runSalaryEnrichment(mapped);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed — please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [cycleId, runFitScoring, runSalaryEnrichment]);
-
-  useEffect(() => { search(DEFAULTS, 0); }, [search]);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setOffset(0);
-    setFilters(draft);
-    search(draft, 0);
-  }
-
-  function handleLoadMore() {
-    const next = offset + PAGE_SIZE;
-    setOffset(next);
-    search(filters, next);
-  }
-
-  function handleReset() {
-    setDraft(DEFAULTS);
-    setFilters(DEFAULTS);
-    setOffset(0);
-    search(DEFAULTS, 0);
-  }
-
-  /** Merge live fit scores into an opportunity result */
-  function withFitScore(opp: OpportunityResult): OpportunityResult {
-    if (!opp.id) return opp;
-    const fs = fitScores[opp.id];
-    if (!fs) return opp;
+  // Augment results with fit scores (non-mutating)
+  const decoratedResults = results.map(r => {
+    const fit = r.id ? fitScores[r.id] : null;
+    if (!fit) return r;
     return {
-      ...opp,
-      fit_score:     fs.fit_score,
-      match_summary: fs.match_summary,
-      strengths:     fs.strengths,
-      skill_gaps:    fs.skill_gaps,
+      ...r,
+      fit_score:     fit.fit_score      ?? r.fit_score,
+      match_summary: fit.match_summary  ?? r.match_summary,
+      matched_skills: fit.strengths     ?? r.matched_skills,
+      skill_gaps:    fit.skill_gaps     ?? r.skill_gaps,
     };
-  }
-
-  /** Merge AI-estimated salary ranges into an opportunity result */
-  function withSalary(opp: OpportunityResult): OpportunityResult {
-    if (!opp.id) return opp;
-    const range = salaryRanges[opp.id];
-    // Only enrich when the DB has no salary data
-    if (!range || opp.salary || opp.salary_min != null || opp.salary_max != null) return opp;
-    return { ...opp, salary: range.label };
-  }
-
-  const loadingFirst = loading && offset === 0;
-  const loadingMore  = loading && offset > 0;
+  });
 
   return (
-    <>
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 space-y-6">
+      <header>
+        <h1 className="mb-1 text-2xl font-bold text-gray-900">Opportunities</h1>
+        <p className="text-sm text-gray-500">
+          {mode === "auto"
+            ? "Jobs matched to your profile — target roles, location, and search preferences."
+            : "Search jobs your way — keywords, location, type, and salary filters."}
+        </p>
+      </header>
 
-        {/* Page header */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Find Opportunities</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Search curated job listings matched to your career profile.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowAlert(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300
-                       bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700
-                       hover:bg-amber-100 transition-colors"
-            aria-label="Set job alert"
-          >
-            🔔 Alert
-          </button>
-        </div>
-
-        {/* Search form */}
-        <form
-          onSubmit={handleSubmit}
-          className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+      {/* Mode toggle */}
+      <div className="flex gap-0 rounded-xl border border-gray-200 bg-white p-1 w-fit shadow-sm">
+        <button
+          type="button"
+          onClick={() => setMode("auto")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors
+            ${mode === "auto" ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
         >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={draft.query}
-              onChange={(e) => setDraft((d) => ({ ...d, query: e.target.value }))}
-              placeholder="Search job titles or companies…"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm
-                         text-gray-900 placeholder-gray-400 shadow-sm
-                         focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <button
-              type="submit"
-              disabled={loadingFirst}
-              className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white
-                         shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors"
-            >
-              {loadingFirst ? "Searching…" : "Search"}
-            </button>
+          Auto-match (from your profile)
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("manual")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors
+            ${mode === "manual" ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Search myself
+        </button>
+      </div>
+
+      {/* Auto-mode summary */}
+      {mode === "auto" && derivedFrom && derivedFrom.source === "auto" && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Searching for</span>
+            <strong className="rounded bg-white px-2 py-0.5 border border-blue-200">{derivedFrom.what || "—"}</strong>
+            {derivedFrom.where && (
+              <>
+                <span>in</span>
+                <strong className="rounded bg-white px-2 py-0.5 border border-blue-200">{derivedFrom.where}</strong>
+              </>
+            )}
+            <a href="/mycareer/preferences" className="ml-auto text-xs underline hover:no-underline">
+              Edit preferences
+            </a>
           </div>
+        </div>
+      )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <select
-              value={draft.jobType}
-              onChange={(e) => setDraft((d) => ({ ...d, jobType: e.target.value }))}
-              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm
-                         text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-400"
-            >
-              <option value="">All types</option>
-              {JOB_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 select-none">
+      {/* Manual filters */}
+      {mode === "manual" && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); void runSearch("manual", manual); }}
+          className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3"
+        >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Keyword</label>
+              <input
+                type="text"
+                value={manual.what}
+                onChange={e => setManual({ ...manual, what: e.target.value })}
+                placeholder="e.g. accountant, product manager"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Location</label>
+              <input
+                type="text"
+                value={manual.where}
+                onChange={e => setManual({ ...manual, where: e.target.value })}
+                placeholder="City, State"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Job type</label>
+              <select
+                value={manual.jobType}
+                onChange={e => setManual({ ...manual, jobType: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
+              >
+                {JOB_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
-                checked={draft.remote}
-                onChange={(e) => setDraft((d) => ({ ...d, remote: e.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                checked={manual.remote}
+                onChange={e => setManual({ ...manual, remote: e.target.checked })}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
-              Remote only
+              Remote-only
             </label>
-
             <button
-              type="button"
-              onClick={handleReset}
-              className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              type="submit"
+              disabled={loading || !manual.what.trim()}
+              className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
-              Reset filters
+              {loading ? "Searching…" : "Search jobs"}
             </button>
           </div>
         </form>
+      )}
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+      {/* Refresh button (auto mode) */}
+      {mode === "auto" && !loading && (
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={() => void runSearch("auto", EMPTY_MANUAL)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            ↻ Refresh
+          </button>
+          {scoringFit && <span className="text-xs text-gray-500">Scoring fit…</span>}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-sm text-gray-500">
+          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+          Searching Adzuna for matching jobs…
+        </div>
+      )}
+
+      {/* Error / warning */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          ⚠ {error}
+        </div>
+      )}
+      {warning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {warning}
+        </div>
+      )}
+
+      {/* Results */}
+      {!loading && !error && results.length > 0 && (
+        <>
+          <div className="text-sm text-gray-500">
+            <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
+            {scoringFit && <span className="ml-2 text-xs">· Scoring fit…</span>}
           </div>
-        )}
-
-        {/* Result count + scoring indicator */}
-        {searched && !loadingFirst && (
-          <div className="mb-4 flex items-center gap-3">
-            <p className="text-sm text-gray-500">
-              {total === 0
-                ? "No opportunities found — try different keywords or remove filters."
-                : `Showing ${results.length} of ${total.toLocaleString()} opportunit${total === 1 ? "y" : "ies"}`}
-            </p>
-            {scoringFit && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5
-                               text-xs font-medium text-brand-600">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-brand-400" />
-                Scoring fit…
-              </span>
-            )}
-            {enrichingSalary && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5
-                               text-xs font-medium text-green-600">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-green-400" />
-                Enriching salaries…
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {loadingFirst && (
-          <div className="space-y-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-40 animate-pulse rounded-xl bg-gray-100" />
+          <div className="space-y-3">
+            {decoratedResults.map((opp, i) => (
+              <OpportunityCard key={opp.id ?? `${opp.url}-${i}`} opportunity={opp} cycleId={cycleId} />
             ))}
           </div>
-        )}
-
-        {/* Results */}
-        {!loadingFirst && (
-          <>
-            {results.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {results.map((opp) => (
-                  <OpportunityCard
-                    key={opp.id ?? `${opp.company}::${opp.title}`}
-                    opportunity={withFitScore(withSalary(opp))}
-                    cycleId={cycleId}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {searched && results.length === 0 && (
-              <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-12 text-center">
-                <div className="text-4xl">🔍</div>
-                <h3 className="mt-4 text-lg font-semibold text-gray-900">No opportunities found</h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Try a broader search or remove filters.
-                </p>
-                <button
-                  onClick={handleReset}
-                  className="mt-6 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold
-                             text-white hover:bg-brand-700 transition-colors"
-                >
-                  Clear filters
-                </button>
-              </div>
-            )}
-
-            {/* Load more */}
-            {results.length < total && !loadingMore && (
-              <div className="mt-6 text-center">
-                <button
-                  onClick={handleLoadMore}
-                  className="rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm
-                             font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
-                >
-                  Load more ({total - results.length} remaining)
-                </button>
-              </div>
-            )}
-
-            {loadingMore && (
-              <p className="mt-6 text-center text-sm text-gray-400">Loading more…</p>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-
-      {/* Job Alert Modal */}
-      {showAlert && (
-        <JobAlertModal
-          initialQuery={draft.query}
-          onClose={() => setShowAlert(false)}
-        />
+        </>
       )}
-    </>
+
+      {/* Empty state */}
+      {!loading && !error && results.length === 0 && hasAutoSearched && !warning && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-12 text-center text-sm text-gray-500">
+          No jobs matched. Try the “Search myself” mode or update your preferences.
+        </div>
+      )}
+    </div>
   );
 }
