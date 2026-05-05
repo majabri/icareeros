@@ -21,7 +21,7 @@ export function GlobalLegalFooter() {
       className="border-t border-gray-200 bg-white/70 px-4 py-3 text-xs text-gray-600 backdrop-blur"
     >
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 sm:flex-row sm:justify-between">
-        <span>&copy; {new Date().getFullYear()} Jabri Solutions LLC. All rights reserved.</span>
+        <span>&copy; {new Date().getFullYear()} iCareerOS LLC. All rights reserved.</span>
         <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <a href="/legal/privacy" className="hover:text-gray-900 hover:underline">Privacy</a>
           <a href="/legal/terms" className="hover:text-gray-900 hover:underline">Terms</a>
