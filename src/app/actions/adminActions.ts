@@ -14,7 +14,7 @@ function makeSvc() {
 // Mirrors src/middleware.ts and src/app/(admin)/admin/layout.tsx. The page
 // layer redirects non-admins away from /admin, but server actions can be
 // invoked directly by anyone who knows the action ID — so we re-check here.
-const ADMIN_EMAILS = ["azadmin@icareeros.com", "majabri714@gmail.com"];
+const ADMIN_EMAILS = ["azadmin@icareeros.com", "info@icareeros.com"];
 
 async function requireAdmin(): Promise<{ id: string; email: string } | { error: string }> {
   const { cookies } = await import("next/headers");
