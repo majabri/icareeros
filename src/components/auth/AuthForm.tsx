@@ -25,8 +25,36 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [success, setSuccess]       = useState<string | null>(null);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resending, setResending]   = useState(false);
+  const [resentMsg, setResentMsg]   = useState<string | null>(null);
 
   const supabase = createClient();
+
+  async function handleResend() {
+    setResending(true);
+    setResentMsg(null);
+    try {
+      const email = USERNAME_MAP[identifier.toLowerCase().trim()] ?? identifier.trim();
+      if (!email) {
+        setResentMsg("Enter your email above first.");
+        return;
+      }
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      setResentMsg(`Sent again to ${email}. Check your inbox AND spam/promotions folders.`);
+    } catch (e) {
+      setResentMsg(e instanceof Error ? e.message : "Could not resend the email.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,8 +113,10 @@ export function AuthForm({ mode }: AuthFormProps) {
         // Confirmation email is sent by Supabase Auth using the branded
         // template configured in dashboard → Authentication → Emails.
         setSuccess(
-          "Check your inbox — we just sent you an email from iCareerOS with a link to confirm your account. Click it to finish signing up."
+          `Check your inbox at ${identifier.trim()} — we sent you a link from bugs@icareeros.com to confirm your account. ` +
+          `If you don't see it within a minute, check your Spam or Promotions folder.`
         );
+        setNeedsConfirmation(true);
       } else {
         // Resolve username alias → email
         const email = USERNAME_MAP[identifier.toLowerCase().trim()] ?? identifier.trim();
@@ -103,9 +133,12 @@ export function AuthForm({ mode }: AuthFormProps) {
         window.location.href = redirect ?? (isAdmin ? "/admin" : "/dashboard");
       }
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Something went wrong. Please try again."
-      );
+      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setError(msg);
+      // Surface the resend button when login fails because email isn't confirmed
+      if (mode === "login" && /email[\s_-]?not[\s_-]?confirmed|email link|otp|confirm/i.test(msg)) {
+        setNeedsConfirmation(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -124,6 +157,26 @@ export function AuthForm({ mode }: AuthFormProps) {
       {success && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {success}
+        </div>
+      )}
+
+      {needsConfirmation && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+          <p className="font-medium text-amber-900">Didn&apos;t receive the email?</p>
+          <p className="mt-1 text-xs text-amber-800">
+            Check your <strong>Spam</strong> or <strong>Promotions</strong> folder. New domains often land there.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleResend()}
+            disabled={resending}
+            className="mt-3 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {resending ? "Sending..." : "Resend confirmation email"}
+          </button>
+          {resentMsg && (
+            <p className="mt-2 text-xs text-amber-900">{resentMsg}</p>
+          )}
         </div>
       )}
 
