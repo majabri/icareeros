@@ -186,7 +186,7 @@ function regexResultIncomplete(p: ParsedResume): boolean {
   return allBulletsEmpty;
 }
 
-interface AiCascadeResult {
+export interface AiCascadeResult {
   _source: "lovable" | "gemini" | "none";
   contact: {
     name: string; email: string; phone: string; location: string;
@@ -221,7 +221,7 @@ async function tryAiCascade(text: string): Promise<AiCascadeResult | null> {
 // ── Gap #1: per-job merge of bullets ─────────────────────────────────────────
 // Fuzzy company-name match: case-insensitive, ignores punctuation and quotes,
 // allows substring match (e.g. "Abbott" matches "Abbott Laboratories").
-function findBaselineBullets(
+export function findBaselineBullets(
   baseline: ParsedResume,
   aiCompany: string,
 ): string[] {
@@ -239,7 +239,7 @@ function findBaselineBullets(
   return [];
 }
 
-function mergeAiIntoBaseline(baseline: ParsedResume, ai: AiCascadeResult): ParsedResume {
+export function mergeAiIntoBaseline(baseline: ParsedResume, ai: AiCascadeResult): ParsedResume {
   return {
     contact: {
       name:     baseline.contact.name     || ai.contact.name,
