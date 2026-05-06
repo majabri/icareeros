@@ -6,10 +6,31 @@ import type {
 } from "./types";
 
 /**
+ * Master switch — when monetization is not yet enabled, every billing-service
+ * call short-circuits to a safe default. Set NEXT_PUBLIC_MONETIZATION_ENABLED
+ * to "true" in Vercel when products are live.
+ *
+ * Why guard at the call site instead of deploying a stub edge function:
+ *   - The `billing-service` edge function does not exist in the icareeros
+ *     Supabase project (kuneabeiwcxavvyyfjkx). It exists in the legacy
+ *     azjobs project, which is paused and reference-only per CLAUDE.md.
+ *   - Without this guard, every page load that reads the user's plan
+ *     (dashboard, settings/billing) generates an OPTIONS + 404 against
+ *     the missing function — ~100/hour in Supabase logs as of 2026-05-06.
+ *   - Guarding at the client avoids a network round-trip entirely until
+ *     monetization ships, and aligns with the existing convention in
+ *     BillingSettings.tsx (which already reads this same env var).
+ */
+function isMonetizationEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_MONETIZATION_ENABLED === "true";
+}
+
+/**
  * Get the current user's subscription.
  * Falls back to Free if no subscription row exists.
  */
 export async function getSubscription(): Promise<UserSubscription | null> {
+  if (!isMonetizationEnabled()) return null;
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{
     success: boolean;
@@ -31,6 +52,7 @@ export async function getSubscription(): Promise<UserSubscription | null> {
 export async function createCheckoutSession(
   plan: "premium" | "professional"
 ): Promise<string | null> {
+  if (!isMonetizationEnabled()) return null;
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{
     success: boolean;
@@ -49,6 +71,7 @@ export async function createCheckoutSession(
  * Open the Stripe Billing Portal for managing an existing subscription.
  */
 export async function getBillingPortalUrl(): Promise<string | null> {
+  if (!isMonetizationEnabled()) return null;
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{
     success: boolean;
@@ -67,6 +90,7 @@ export async function getBillingPortalUrl(): Promise<string | null> {
  * Cancel subscription at current period end.
  */
 export async function cancelSubscription(): Promise<boolean> {
+  if (!isMonetizationEnabled()) return false;
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{
     success: boolean;
@@ -87,6 +111,7 @@ export async function cancelSubscription(): Promise<boolean> {
  * This is the master switch — flip it in Supabase when ready to charge.
  */
 export async function canAccessFeature(featureKey: FeatureKey): Promise<boolean> {
+  if (!isMonetizationEnabled()) return true;
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke<{
     success: boolean;
