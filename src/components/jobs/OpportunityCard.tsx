@@ -77,9 +77,12 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
           )}
           {opp.is_remote && <Tag color="sky">Remote</Tag>}
           {salary && <Tag color="green">{salary}</Tag>}
-          {opp.source && (
-            <Tag color="gray">{opp.source}</Tag>
-          )}
+          {/*
+            Source tag is intentionally hidden. Adzuna (and similar
+            aggregators) are plumbing — users care about the company,
+            not which job board indexed the listing. Re-introduce only
+            for sources users would recognize positively (e.g., LinkedIn).
+          */}
         </div>
 
         {/* Description snippet */}
@@ -128,15 +131,15 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
                 ✉ Outreach
               </button>
             )}
-            {opp.url && (
+            {(opp.apply_url_company || opp.url) && (
               <a
-                href={opp.apply_url_company ?? opp.url}
+                href={opp.apply_url_company ?? opp.url ?? "#"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white
                            hover:bg-brand-700 transition-colors"
               >
-                {opp.apply_url_company ? "Apply on company site →" : "Apply →"}
+                Apply →
               </a>
             )}
           </div>

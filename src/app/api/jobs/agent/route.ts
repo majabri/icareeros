@@ -25,6 +25,7 @@ import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/a
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { validateJobs } from "@/services/jobs/jobValidator";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
+import { chaseApplyUrlsBatch }   from "@/services/jobs/applyUrlChaser";
 
 interface SearchPlan {
   what:        string;
@@ -252,7 +253,13 @@ QUALITY
     const cleaned   = validated.kept;
 
     // ── Resolve direct apply-on-company URLs (when description has one) ──
-    const enriched  = attachCompanyApplyUrls(cleaned);
+    const enriched0 = attachCompanyApplyUrls(cleaned);
+
+    // ── Chase Adzuna redirects to their final destination so the Apply
+    //    button goes company-direct (or ATS) whenever possible. Aggregator
+    //    final destinations are skipped — keeping the resolver's answer or
+    //    falling back to opp.url at the UI layer.
+    const enriched  = await chaseApplyUrlsBatch(enriched0);
 
     // ── Upsert into opportunities for fit-scoring ─────────────────────────
     let opportunitiesWithIds: typeof enriched = enriched;

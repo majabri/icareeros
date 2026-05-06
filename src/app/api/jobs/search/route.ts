@@ -21,6 +21,8 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
+import { chaseApplyUrlsBatch }    from "@/services/jobs/applyUrlChaser";
 
 interface SearchRequestBody {
   mode?: "auto" | "manual";
@@ -164,11 +166,18 @@ export async function POST(req: Request) {
 
     const result = await searchAdzuna(params);
 
+    // Resolve direct apply-on-company URLs from descriptions, then chase
+    // the Adzuna redirect to its actual destination so the Apply button
+    // points to the company / ATS instead of the aggregator wherever
+    // possible. Aggregator final destinations are skipped automatically.
+    const enriched0 = attachCompanyApplyUrls(result.opportunities);
+    const enriched  = await chaseApplyUrlsBatch(enriched0);
+
     // Upsert into the opportunities table so fit-scoring (which keys off the
     // DB UUID) can match these listings. Conflict target is (source, source_id).
-    let opportunitiesWithDbIds = result.opportunities;
-    if (result.opportunities.length > 0) {
-      const rows = result.opportunities.map(o => ({
+    let opportunitiesWithDbIds: typeof enriched = enriched;
+    if (enriched.length > 0) {
+      const rows = enriched.map(o => ({
         source:           "adzuna",
         source_id:        o.id?.replace(/^adzuna-/, "") ?? null,
         title:            o.title,
@@ -199,7 +208,7 @@ export async function POST(req: Request) {
         for (const row of upserted) {
           if (row.source_id) idMap.set(`${row.source}::${row.source_id}`, row.id as string);
         }
-        opportunitiesWithDbIds = result.opportunities.map(o => {
+        opportunitiesWithDbIds = enriched.map(o => {
           const sid = o.id?.replace(/^adzuna-/, "") ?? "";
           const dbId = idMap.get(`adzuna::${sid}`);
           return dbId ? { ...o, id: dbId } : o;
