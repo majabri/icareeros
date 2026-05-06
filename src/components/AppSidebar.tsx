@@ -300,7 +300,10 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
           {/* Lifecycle stages */}
           {stageLoaded && STAGES.map((section) => {
             const status    = stageStatus(section.stage, currentStage);
-            const isFuture  = status === "future";
+            // Per UAT: ALL sidebar items are always available. We keep status for
+            // visual cues (past stage check / current stage highlight) but never
+            // gate clicks on it.
+            const isFuture  = false;
             const isCurrent = status === "current";
             const isPast    = status === "past";
             const mobileExpanded = mobile ? mobileOpen_stages.has(section.stage) : true;
