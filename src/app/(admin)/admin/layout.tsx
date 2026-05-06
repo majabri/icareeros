@@ -5,9 +5,9 @@ import type { CookieOptions } from "@supabase/ssr";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 
-async function getUser() {
+async function getSupabase() {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -19,11 +19,11 @@ async function getUser() {
       },
     }
   );
-  return supabase.auth.getUser();
 }
 
 export default async function AdminRootLayout({ children }: { children: React.ReactNode }) {
-  const { data: { user } } = await getUser();
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?redirect=/admin");
   // Check role from public.profiles — single source of truth
   const { data: profile } = await supabase
