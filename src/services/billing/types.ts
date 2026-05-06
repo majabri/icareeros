@@ -24,12 +24,17 @@ export interface UserSubscription {
 }
 
 export interface PlanLimits {
-  maxCycles: number;           // -1 = unlimited
+  maxCycles: number;             // -1 = unlimited
   aiCoach: boolean;
   advancedMatch: boolean;
   prioritySupport: boolean;
-  coverLettersPerMonth: number; // 0 = none
+  coverLettersPerMonth: number;  // 0 = none
   mockInterviews: boolean;
+  coachBriefsPerMonth: number;   // -1 = unlimited; 0 = none. The on-demand
+                                 // /api/career-os/coach-brief endpoint counts
+                                 // generations against this. Free has 2/mo
+                                 // even though aiCoach=false (the structured
+                                 // Sonnet coach is gated separately).
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
@@ -40,6 +45,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     prioritySupport:     false,
     coverLettersPerMonth: 0,
     mockInterviews:      false,
+    coachBriefsPerMonth: 2,
   },
   premium: {
     maxCycles:           -1,
@@ -48,6 +54,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     prioritySupport:     false,
     coverLettersPerMonth: 2,
     mockInterviews:      true,
+    coachBriefsPerMonth: 5,
   },
   professional: {
     maxCycles:           -1,
@@ -56,6 +63,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     prioritySupport:     true,
     coverLettersPerMonth: 5,
     mockInterviews:      true,
+    coachBriefsPerMonth: -1,
   },
 };
 
