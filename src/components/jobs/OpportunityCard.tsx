@@ -40,8 +40,33 @@ function formatSalary(
 }
 
 export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardProps) {
+  const router = useRouter();
   const [showOutreach,     setShowOutreach]     = useState(false);
   const [showCoverLetter,  setShowCoverLetter]  = useState(false);
+
+  /**
+   * Hand off this job's description to Resume Advisor (/resumeadvisor) and
+   * navigate. The advisor page reads `resumeAdvisor:incomingJob` from
+   * sessionStorage on mount and pre-fills the JD field, so the user can
+   * immediately load their resume from profile / paste / upload and run
+   * the same fit-analysis pipeline. We don't reinvent — we hand off.
+   */
+  function handleAnalyzeFit() {
+    if (typeof window === "undefined") return;
+    try {
+      const payload = {
+        title:         opp.title || "",
+        company:       opp.company || "",
+        location:      opp.location || "",
+        description:   opp.description || "",
+        url:           opp.apply_url_company ?? opp.url ?? "",
+        opportunityId: typeof opp.id === "string" ? opp.id : null,
+      };
+      sessionStorage.setItem("resumeAdvisor:incomingJob", JSON.stringify(payload));
+    } catch { /* private-mode storage failure — page still works, just no prefill */ }
+    router.push("/resumeadvisor");
+  }
+
   const fit    = fitLabel(opp.fit_score);
   const salary = formatSalary(opp.salary_min ?? null, opp.salary_max ?? null, opp.salary_currency ?? null, opp.salary ?? null);
 
@@ -109,6 +134,16 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             <span />
           )}
           <div className="flex items-center gap-2">
+            {/* Analyze fit — hand off this JD to Resume Advisor */}
+            <button
+              onClick={handleAnalyzeFit}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs
+                         font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+              aria-label={`Analyze fit between your profile and ${opp.title} at ${opp.company}`}
+              title="Send this job description to Resume Advisor for a full fit analysis"
+            >
+              🎯 Analyze fit
+            </button>
             {/* Cover Letter button — only show if opportunity has an id */}
             {opp.id && (
               <button

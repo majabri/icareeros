@@ -157,6 +157,40 @@ export default function ResumeAdvisorPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Hand-off banner: when arriving from /jobs we show "From <Company> — <Title>"
+  // above the JD textarea so the user knows what they're analyzing.
+  const [incomingJob, setIncomingJob] = useState<{
+    title: string; company: string; location: string; url: string;
+  } | null>(null);
+
+  /**
+   * On mount: if /jobs handed off an opportunity via sessionStorage, hydrate
+   * the JD field from it and surface a banner. Once consumed we clear the
+   * key so a manual refresh starts clean.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("resumeAdvisor:incomingJob");
+      if (!raw) return;
+      const j = JSON.parse(raw) as {
+        title?: string; company?: string; location?: string;
+        description?: string; url?: string;
+      };
+      if (j?.description && j.description.trim().length > 0) {
+        setJobSource("paste");
+        setJobDescription(j.description);
+        setIncomingJob({
+          title:    j.title    || "",
+          company:  j.company  || "",
+          location: j.location || "",
+          url:      j.url      || "",
+        });
+      }
+      sessionStorage.removeItem("resumeAdvisor:incomingJob");
+    } catch { /* malformed payload — ignore */ }
+  }, []);
+
   const handleFile = useCallback((file: File) => {
     setUploadedFile(file);
     setResult(null); setRewriteResult(null); setError(null);
@@ -470,6 +504,33 @@ export default function ResumeAdvisorPage() {
           {/* Step 2: Job */}
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Step 2 — The Job</h2>
+
+            {/* Banner shown when /jobs handed off this opportunity */}
+            {incomingJob && (
+              <div className="mb-4 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <span aria-hidden="true">🎯</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">
+                    Analyzing fit for {incomingJob.title || "this role"}
+                    {incomingJob.company ? ` at ${incomingJob.company}` : ""}
+                  </div>
+                  <div className="text-xs text-emerald-800/80">
+                    Loaded from Opportunities{incomingJob.location ? ` · ${incomingJob.location}` : ""}.
+                    Edit the description below if you need to refine it.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setIncomingJob(null); setJobDescription(""); }}
+                  className="rounded-md p-1 text-emerald-700 hover:bg-emerald-100"
+                  aria-label="Dismiss handed-off job and start fresh"
+                  title="Clear and start fresh"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="mb-4 flex rounded-lg border border-gray-200 bg-gray-50 p-1">
               <button onClick={() => { setJobSource("paste"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${jobSource === "paste" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>✏️ Paste description</button>
               <button onClick={() => { setJobSource("url"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${jobSource === "url" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>🔗 Job URL</button>
