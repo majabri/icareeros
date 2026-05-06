@@ -8,6 +8,7 @@ import { CycleSummaryPanel } from "./CycleSummaryPanel";
 import {
   startCycle,
   listActiveCycles,
+  abandonCycle,
   getActiveCycle,
   advanceStage,
   completeCycle,
@@ -165,6 +166,27 @@ export function CareerOsDashboard() {
       setRunning(false);
     }
   }, [userId, goal, refreshCycle]);
+
+  /**
+   * Skip the current cycle without finishing it. Useful for roadmaps where
+   * a user planned several cycles and decides one no longer applies (e.g.
+   * already at that level, life pivot, market shift).
+   */
+  const handleSkipCycle = useCallback(async () => {
+    if (!userId || !cycle) return;
+    if (!window.confirm(
+      `Skip Cycle #${cycle.cycle_number}${cycle.goal ? ` ("${cycle.goal}")` : ""}? You can always start another one. This won't be marked as completed.`
+    )) return;
+    setRunning(true);
+    setError(null);
+    try {
+      await abandonCycle(userId, cycle.id, "user_skipped");
+      // Reload — cycle list will drop this one; view switches to next active
+      await refreshCycle(userId);
+    } finally {
+      setRunning(false);
+    }
+  }, [userId, cycle, refreshCycle]);
 
   /**
    * Start a parallel cycle WITHOUT closing the current one. The user may
@@ -444,6 +466,14 @@ export function CareerOsDashboard() {
                   className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   + New cycle
+                </button>
+                <button
+                  onClick={() => void handleSkipCycle()}
+                  disabled={running}
+                  title="Skip this cycle without finishing it. Useful for roadmaps with optional steps."
+                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+                >
+                  Skip
                 </button>
               </div>
             </div>
