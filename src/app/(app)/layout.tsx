@@ -33,7 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main
             id="main-content"
             tabIndex={-1}
-            className="flex-1 min-w-0 overflow-y-auto outline-none"
+            className="flex-1 min-w-0 outline-none"  /* Safari fix: removed overflow-y-auto so body scrolls, position:sticky on sidebar resolves correctly, click hit-tests align with rendered UI */
           >
             {children}
           </main>

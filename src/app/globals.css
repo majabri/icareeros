@@ -23,7 +23,9 @@ body {
   color: var(--neutral-900);
   background: var(--neutral-100);
   line-height: 1.6;
-  overflow-x: hidden;
+  /* overflow-x: clip is Safari/sticky-safe; legacy `hidden` breaks position: sticky
+     on aside in Safari, leading to mis-aligned click hit-tests on the sidebar. */
+  overflow-x: clip;
   /* Prevent content from hiding under iOS Safari address bar */
   -webkit-text-size-adjust: 100%;
 }

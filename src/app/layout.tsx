@@ -54,7 +54,23 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="min-h-screen text-gray-900 antialiased" style={{ background: "linear-gradient(135deg, #f5f7ff 0%, #e8f5ff 50%, #fff5e8 100%)", backgroundAttachment: "fixed" }}>
+      {/*
+          Safari fix: do NOT put `background-attachment: fixed` on <body> — in
+          WebKit it creates a containing block that breaks `position: sticky` on
+          the sidebar and causes clicks to misalign with rendered UI.
+          The gradient is rendered as a sibling fixed <div> below instead.
+        */}
+        <body className="min-h-screen text-gray-900 antialiased">
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: -1,
+            background: "linear-gradient(135deg, #f5f7ff 0%, #e8f5ff 50%, #fff5e8 100%)",
+            pointerEvents: "none",
+          }}
+        />
         {/* Skip navigation for keyboard / screen-reader users */}
         <a
           href="#main-content"
