@@ -91,8 +91,8 @@ export function CoachBriefPanel({ cycleId, initial, className }: CoachBriefPanel
           type="button"
           onClick={() => void generate()}
           disabled={loading}
-          className="shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold
-                     text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold
+                     text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading
             ? "Generating your coaching brief..."
@@ -104,7 +104,7 @@ export function CoachBriefPanel({ cycleId, initial, className }: CoachBriefPanel
 
       {rateLimited && (
         <div
-          className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          className="mt-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900"
           data-testid="coach-brief-rate-limit"
         >
           <p>
@@ -112,7 +112,7 @@ export function CoachBriefPanel({ cycleId, initial, className }: CoachBriefPanel
             <strong>{rateLimited.limit}</strong> coaching briefs this month.
           </p>
           <p className="mt-1">
-            <Link href="/settings/billing" className="font-semibold underline hover:text-amber-700">
+            <Link href="/settings/billing" className="font-semibold underline hover:text-brand-700">
               Upgrade for more
             </Link>
             {rateLimited.resetsAt && (

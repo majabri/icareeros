@@ -34,15 +34,15 @@ const STAGE_LABELS: Record<CareerOsStage, string> = {
 
 const STATUS_NODE_CLASS: Record<StageStatus, string> = {
   pending:     "fill-gray-100 stroke-gray-300",
-  in_progress: "fill-amber-100 stroke-amber-500",
-  completed:   "fill-emerald-100 stroke-emerald-600",
+  in_progress: "fill-brand-100 stroke-brand-500",
+  completed:   "fill-green-100 stroke-green-600",
   skipped:     "fill-gray-50 stroke-gray-200",
 };
 
 const STATUS_LABEL_CLASS: Record<StageStatus, string> = {
   pending:     "text-gray-500",
-  in_progress: "text-amber-700 font-semibold",
-  completed:   "text-emerald-700 font-semibold",
+  in_progress: "text-brand-700 font-semibold",
+  completed:   "text-green-700 font-semibold",
   skipped:     "text-gray-400",
 };
 
@@ -114,7 +114,7 @@ export function CareerOsRing({
                 fill="none" stroke="currentColor"
                 className="text-gray-200" strokeWidth={2} />
 
-        {/* Connector arcs between completed stages — emerald progress track */}
+        {/* Connector arcs between completed stages — green progress track */}
         {ordered.map((node, i) => {
           if (i > lastCompletedIdx) return null;
           const a1 = angleFor(i);
@@ -131,7 +131,7 @@ export function CareerOsRing({
               key={`arc-${node.stage}`}
               d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 0 ${sweep} ${x2} ${y2}`}
               fill="none"
-              className="stroke-emerald-500"
+              className="stroke-green-500"
               strokeWidth={3}
             />
           );
@@ -153,7 +153,7 @@ export function CareerOsRing({
               {/* Outer ring on the current stage to highlight it */}
               {isCurrent && (
                 <circle cx={x} cy={y} r={nodeR + 6}
-                        fill="none" className="stroke-amber-400 animate-pulse"
+                        fill="none" className="stroke-brand-400 animate-pulse"
                         strokeWidth={2} />
               )}
 
@@ -182,13 +182,13 @@ export function CareerOsRing({
                   <path
                     d={`M ${x - 10} ${y} l 7 7 l 14 -14`}
                     fill="none"
-                    className="stroke-emerald-700"
+                    className="stroke-green-700"
                     strokeWidth={3}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 ) : node.status === "in_progress" ? (
-                  <circle cx={x} cy={y} r={6} className="fill-amber-500" />
+                  <circle cx={x} cy={y} r={6} className="fill-brand-500" />
                 ) : (
                   <text
                     x={x} y={y} dy=".35em"
@@ -226,11 +226,11 @@ export function CareerOsRing({
       {/* Legend */}
       <div className="flex items-center gap-4 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
           completed
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+          <span className="h-2.5 w-2.5 rounded-full bg-brand-500" />
           in progress
         </span>
         <span className="flex items-center gap-1.5">
