@@ -66,6 +66,9 @@ type StageStatus = "pending" | "in_progress" | "completed" | "skipped";
 interface CycleStageCardProps {
   stage: CareerOsStage;
   status: StageStatus;
+  /** Phase 4 Item 2b — opens the SkillsAssessment modal when the Evaluate
+   *  card's CTA is clicked. Parent (CareerOsDashboard) wires it up. */
+  onAssessmentRequested?: () => void;
   isCurrentStage: boolean;
   onRun?: () => void;
   running?: boolean;
@@ -89,8 +92,7 @@ export function CycleStageCard({
   isCurrentStage,
   onRun,
   running = false,
-  notes,
-}: CycleStageCardProps) {
+  notes, onAssessmentRequested }: CycleStageCardProps) {
   const config = STAGE_CONFIG[stage];
 
   const statusBadge: Record<StageStatus, { label: string; class: string }> = {
@@ -221,6 +223,61 @@ export function CycleStageCard({
           {evalResult.summary && (
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
               {evalResult.summary}
+            </p>
+          )}
+
+          {/* ── LinkedIn gap analysis (Phase 4 Item 2a) ───────────────────────── */}
+          {evalResult.linkedinAnalysis && "gated" in evalResult.linkedinAnalysis && (
+            <div
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs"
+              data-testid="linkedin-analysis-gated"
+            >
+              <p className="font-semibold text-amber-800">LinkedIn analysis is on Starter</p>
+              <p className="mt-0.5 text-amber-700">{evalResult.linkedinAnalysis.upgradeMessage}</p>
+              <a href="/settings/billing" className="mt-1 inline-block text-amber-900 underline font-medium">Upgrade →</a>
+            </div>
+          )}
+          {evalResult.linkedinAnalysis && !("gated" in evalResult.linkedinAnalysis) && (
+            <div
+              className="space-y-1.5 rounded-lg border border-gray-200 bg-white/70 px-3 py-2"
+              data-testid="linkedin-analysis-block"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-gray-800">LinkedIn snapshot</p>
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                  {evalResult.linkedinAnalysis.strengthScore}/10
+                </span>
+              </div>
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Headline →</span> {evalResult.linkedinAnalysis.headlineSuggestion}
+              </p>
+              {(evalResult.linkedinAnalysis.skillsToAdd?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500">Skills to add</p>
+                  <div className="flex flex-wrap gap-1">
+                    {evalResult.linkedinAnalysis.skillsToAdd.slice(0, 5).map((s) => (
+                      <span key={s} className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Skills assessment CTA (Phase 4 Item 2b) ──────────────────────── */}
+          {!(notes && typeof notes === "object" && "assessment" in (notes as Record<string, unknown>)) && (
+            <button
+              type="button"
+              onClick={() => onAssessmentRequested?.()}
+              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+              data-testid="skills-assessment-cta"
+            >
+              Take 1-min skills assessment →
+            </button>
+          )}
+          {notes && typeof notes === "object" && "assessment" in (notes as Record<string, unknown>) && (
+            <p className="text-[11px] text-emerald-700" data-testid="skills-assessment-done">
+              ✓ Skills self-assessment complete
             </p>
           )}
         </div>

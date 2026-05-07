@@ -17,6 +17,7 @@ import {
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { CareerOsRing }    from "./CareerOsRing";
 import { CoachBriefPanel } from "./CoachBriefPanel";
+import { SkillsAssessment } from "@/components/evaluate/SkillsAssessment";
 import {
   STAGE_ORDER,
   buildStageStatus,
@@ -62,6 +63,17 @@ async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
   return map;
 }
 
+/** Phase 4 Item 2b — fetch the user's top 10 skills for the assessment modal. */
+async function loadTopSkillsForAssessment(userId: string): Promise<string[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("career_profiles")
+    .select("skills")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return Array.isArray(data?.skills) ? (data!.skills as string[]).slice(0, 10) : [];
+}
+
 /** Load completion signals for the dashboard's strict stage rules. */
 async function loadCompletionSignals(userId: string): Promise<CompletionSignals> {
   const supabase = createClient();
@@ -83,6 +95,10 @@ export function CareerOsDashboard() {
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
   const [stageNotes, setStageNotes]   = useState<StageNotesMap>(emptyNotesMap());
   const [signals, setSignals]         = useState<CompletionSignals>({ applicationsCount: 0, opportunitiesCount: 0 });
+  /** Phase 4 Item 2b — controls the skills-assessment modal visibility. */
+  const [assessmentOpen, setAssessmentOpen] = useState(false);
+  /** Top-10 skills passed to the assessment modal — sourced from career_profiles. */
+  const [assessmentSkills, setAssessmentSkills] = useState<string[]>([]);
   const [loading, setLoading]         = useState(true);
   const [running, setRunning]         = useState(false);
   const [plan, setPlan]               = useState<SubscriptionPlan>("free");
@@ -540,9 +556,33 @@ export function CareerOsDashboard() {
                 }
                 running={running}
                 notes={stageNotes[stage]}
+                onAssessmentRequested={
+                  stage === "evaluate" && userId
+                    ? async () => {
+                        const top = await loadTopSkillsForAssessment(userId);
+                        setAssessmentSkills(top);
+                        setAssessmentOpen(true);
+                      }
+                    : undefined
+                }
               />
             ))}
           </div>
+
+          {/* Phase 4 Item 2b — Skills assessment modal */}
+          {assessmentOpen && cycle && (
+            <SkillsAssessment
+              cycleId={cycle.id}
+              skills={assessmentSkills}
+              onClose={() => setAssessmentOpen(false)}
+              onSaved={() => {
+                // Re-load notes to reflect the new assessment block; once
+                // `notes.assessment` is present, the strict completion rule
+                // upgrades the Evaluate stage to `completed` automatically.
+                if (userId) void refreshCycle(userId, cycle.id);
+              }}
+            />
+          )}
 
           {/* Cycle complete — show summary panel */}
           {cycleComplete && (
