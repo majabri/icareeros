@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // Cap at 20 to keep prompt size reasonable
-    opportunityIds = (body.opportunity_ids as string[]).slice(0, 20);
+    // Cap at 15 to keep response size within max_tokens budget — see comment
+    // at the messages.create call below.
+    opportunityIds = (body.opportunity_ids as string[]).slice(0, 15);
     cycleId = body.cycle_id as string | undefined;
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -241,7 +242,12 @@ Example with real UUIDs:
   try {
     const msg = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      // Each score object is ~80-130 tokens of JSON. 1024 was too small for
+      // 20 jobs and Claude's output got truncated mid-JSON, parse failed,
+      // route returned {scores:{}} for full batches even though small batches
+      // worked. 4096 fits ~30 jobs comfortably; we cap input at 15 above so
+      // there's headroom. Phase 6 Item 3 (post-PR-#129).
+      max_tokens: 4096,
       messages: [{ role: "user", content: userMessage }],
       system: systemPrompt,
     });
