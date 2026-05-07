@@ -11,13 +11,50 @@
 
 import { eventLogger } from "@/orchestrator/eventLogger";
 
+// ── LinkedIn gap analysis (Phase 4 Item 2a) ─────────────────────────────────
+
+export interface LinkedInAnalysis {
+  headlineSuggestion: string;
+  aboutGaps:          string[];
+  skillsToAdd:        string[];
+  strengthScore:      number;  // 1-10
+}
+
+export interface LinkedInGated {
+  gated:          true;
+  plan:           "free";
+  upgradeMessage: string;
+}
+
 export interface EvaluationResult {
   skills: string[];
   gaps: string[];
-  marketFitScore: number;       // 0-100
+  marketFitScore: number;                          // 0-100
   careerLevel: string;
   recommendedNextStage: string;
   summary: string;
+  /** Optional — present when the user has enough profile data for analysis. */
+  linkedinAnalysis?: LinkedInAnalysis | LinkedInGated;
+}
+
+// ── Skills inventory assessment (Phase 4 Item 2b) ────────────────────────────
+
+export interface SkillsAssessmentResponse {
+  skill:      string;
+  confidence: 1 | 2 | 3 | 4 | 5;
+}
+
+export interface SkillsAssessmentReport {
+  strongSkills:     string[];   // confidence 4-5
+  developingSkills: string[];   // confidence 2-3
+  gapSkills:        string[];   // confidence 1
+  narrative:        string;     // ~200-word AI synthesis
+}
+
+export interface SkillsAssessmentNotes {
+  responses:   SkillsAssessmentResponse[];
+  report:      SkillsAssessmentReport;
+  completedAt: string;
 }
 
 export async function evaluateCareerProfile(
@@ -51,4 +88,25 @@ export async function evaluateCareerProfile(
   });
 
   return result;
+}
+
+
+// ── Skills assessment submission ────────────────────────────────────────────
+
+export async function submitSkillsAssessment(
+  cycleId:   string,
+  responses: SkillsAssessmentResponse[],
+): Promise<SkillsAssessmentReport> {
+  const res = await fetch("/api/career-os/evaluate/assessment", {
+    method:      "POST",
+    headers:     { "Content-Type": "application/json" },
+    credentials: "include",
+    body:        JSON.stringify({ cycle_id: cycleId, responses }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error("submitSkillsAssessment failed: " + (err.error ?? res.statusText));
+  }
+  const body = (await res.json()) as { report: SkillsAssessmentReport };
+  return body.report;
 }
