@@ -7,11 +7,13 @@ import {
   updateOfferStatus,
   deleteOffer,
   analyzeNegotiation,
+  acceptOffer,
   type JobOffer,
   type OfferStatus,
   type NegotiationResult,
   type CreateOfferInput,
 } from "@/services/ai/offerDeskService";
+import { AcceptedCelebration } from "@/components/achieve/AcceptedCelebration";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -361,6 +363,8 @@ export default function OffersPage() {
   const [loaded, setLoaded] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  /** Phase 4 Item 3 — celebration modal state when an offer is accepted */
+  const [celebration, setCelebration] = useState<{ totalXp: number; level: number } | null>(null);
 
   const [negotiatingOffer, setNegotiatingOffer] = useState<JobOffer | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
@@ -387,6 +391,24 @@ export default function OffersPage() {
     try {
       await updateOfferStatus(id, status);
       setOffers((prev) => prev.map((o) => o.id === id ? { ...o, status } : o));
+
+      // Phase 4 Item 3 — when status flips to "accepted", fire the
+      // atomic loop trigger (close cycle + open new one + +100 XP).
+      // Errors here are surfaced inline but do NOT roll back the
+      // status update — the user can retry the loop trigger later.
+      if (status === "accepted") {
+        try {
+          const result = await acceptOffer(id);
+          setCelebration({ totalXp: result.totalXp, level: result.level });
+        } catch (loopErr) {
+          // 409 ("Offer already processed") is benign — happens if the
+          // user already accepted this offer in a prior session.
+          const msg = loopErr instanceof Error ? loopErr.message : "Loop trigger failed";
+          if (!msg.includes("already processed")) {
+            setPageError(msg);
+          }
+        }
+      }
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "Update failed");
     }
@@ -500,6 +522,15 @@ export default function OffersPage() {
           onAnalyze={(targetSalary, priorities) =>
             void handleAnalyze(negotiatingOffer, targetSalary, priorities)
           }
+        />
+      )}
+
+      {/* Phase 4 Item 3 — Career OS loop celebration */}
+      {celebration && (
+        <AcceptedCelebration
+          totalXp={celebration.totalXp}
+          level={celebration.level}
+          onComplete={() => setCelebration(null)}
         />
       )}
     </div>

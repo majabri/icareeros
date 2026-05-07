@@ -18,6 +18,9 @@ import { PlanBadge } from "@/components/billing/PlanBadge";
 import { CareerOsRing }    from "./CareerOsRing";
 import { CoachBriefPanel } from "./CoachBriefPanel";
 import { SkillsAssessment } from "@/components/evaluate/SkillsAssessment";
+import { MilestoneList }  from "@/components/achieve/MilestoneList";
+import { CareerXpBadge }  from "@/components/achieve/CareerXpBadge";
+import { getCareerXp, type CareerXp } from "@/services/career-os/milestoneService";
 import {
   STAGE_ORDER,
   buildStageStatus,
@@ -99,6 +102,8 @@ export function CareerOsDashboard() {
   const [assessmentOpen, setAssessmentOpen] = useState(false);
   /** Top-10 skills passed to the assessment modal — sourced from career_profiles. */
   const [assessmentSkills, setAssessmentSkills] = useState<string[]>([]);
+  /** Phase 4 Item 3 — total XP + level + recent milestones for the Achieve card */
+  const [careerXp, setCareerXp] = useState<CareerXp>({ totalXp: 0, level: 1, recentMilestones: [] });
   const [loading, setLoading]         = useState(true);
   const [running, setRunning]         = useState(false);
   const [plan, setPlan]               = useState<SubscriptionPlan>("free");
@@ -116,10 +121,12 @@ export function CareerOsDashboard() {
       setUserId(uid);
       if (!uid) { setLoading(false); return; }
 
-      const [activeCycle, sub] = await Promise.all([
+      const [activeCycle, sub, xp] = await Promise.all([
         getActiveCycle(uid),
         getSubscription(),
+        getCareerXp().catch(() => ({ totalXp: 0, level: 1, recentMilestones: [] })),
       ]);
+      setCareerXp(xp);
 
       setCycle(activeCycle);
       setPlan(sub?.plan ?? "free");
@@ -303,14 +310,20 @@ export function CareerOsDashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Career OS</h2>
           <p className="mt-1 text-sm text-gray-500">
             Your AI-powered career operating system — Evaluate &rarr; Advise &rarr; Learn &rarr; Act &rarr; Coach &rarr; Achieve
           </p>
         </div>
-        <PlanBadge plan={plan} />
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Phase 4 Item 3 — XP badge, hidden when no XP yet */}
+          {careerXp.totalXp > 0 && (
+            <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} />
+          )}
+          <PlanBadge plan={plan} />
+        </div>
       </div>
 
       {error && (
@@ -491,6 +504,16 @@ export function CareerOsDashboard() {
                 </button>
               </div>
             </div>
+          )}
+
+          {careerXp.recentMilestones.length > 0 && (
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="dashboard-milestone-section">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900">Career milestones</h3>
+                <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} className="!py-0.5" />
+              </div>
+              <MilestoneList milestones={careerXp.recentMilestones} compact />
+            </section>
           )}
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
