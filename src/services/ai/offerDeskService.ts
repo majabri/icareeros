@@ -131,3 +131,36 @@ export async function analyzeNegotiation(opts: {
 
   return res.json() as Promise<NegotiationResult>;
 }
+
+
+// ── Phase 4 Item 3 — accept-offer loop trigger ──────────────────────────────
+
+export interface AcceptOfferResult {
+  newCycleId:  string;
+  totalXp:     number;
+  level:       number;
+  milestoneId: string;
+}
+
+/**
+ * POST /api/career-os/achieve/accept-offer.
+ *
+ * Atomic operation in a Postgres function: insert milestone (+100 XP) →
+ * close active cycle → open next cycle at 'evaluate'. Idempotent — calling
+ * a second time with the same offer_id returns 409.
+ *
+ * Returns { newCycleId, totalXp, level, milestoneId } for the celebration UI.
+ */
+export async function acceptOffer(offerId: string): Promise<AcceptOfferResult> {
+  const res = await fetch("/api/career-os/achieve/accept-offer", {
+    method:      "POST",
+    headers:     { "Content-Type": "application/json" },
+    credentials: "include",
+    body:        JSON.stringify({ offer_id: offerId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error("acceptOffer failed: " + (err.error ?? res.statusText));
+  }
+  return (await res.json()) as AcceptOfferResult;
+}
