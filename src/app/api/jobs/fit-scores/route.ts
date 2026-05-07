@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import { cache } from "@/lib/cache";
@@ -169,7 +170,19 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Fetch opportunity details ───────────────────────────────────────────────
-  const { data: opps, error: oppsErr } = await supabase
+  // RLS NOTE: opportunities only has policies for service_role. Reading
+  // through the user-session client returns 0 rows silently, which would
+  // cause the early-return {scores:{}} path. Same shape as PR #126 for
+  // /api/jobs/{agent,search} upserts. Phase 6 Item 3.
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const oppsClient = serviceKey
+    ? createServiceRoleClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceKey,
+        { auth: { persistSession: false } },
+      )
+    : supabase; // fallback — will return 0 rows but matches prior behaviour
+  const { data: opps, error: oppsErr } = await oppsClient
     .from("opportunities")
     .select("id,title,company,description,job_type,is_remote")
     .in("id", opportunityIds);
@@ -242,22 +255,10 @@ Example with real UUIDs:
 
   // ── Parse response ──────────────────────────────────────────────────────────
   let scores: Record<string, FitScore> = {};
-  // Phase 6 Item 3 debug — TEMPORARY logging to pinpoint why /jobs cards
-  // still show "No score" after the upsert pipeline + cache fixes. Will be
-  // reverted in the same PR after one production observation.
-  console.log("[fit-scores][debug] raw output (first 800 chars):",
-    JSON.stringify((raw ?? "").slice(0, 800)),
-    "| length:", (raw ?? "").length,
-    "| inputIds:", opportunityIds);
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("[fit-scores][debug] regex /\{[\s\S]*\}/ matched nothing — raw was:",
-        JSON.stringify((raw ?? "").slice(0, 800)));
-      throw new Error("No JSON found in response");
-    }
+    if (!jsonMatch) throw new Error("No JSON found in response");
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-    console.log("[fit-scores][debug] parsed JSON keys:", Object.keys(parsed));
 
     // Validate and sanitise each score entry.
     // Phase 6 Item 3 — accept three key shapes from Claude:
@@ -288,11 +289,7 @@ Example with real UUIDs:
         skill_gaps: Array.isArray(v.skill_gaps) ? (v.skill_gaps as string[]).slice(0, 3) : [],
       };
     }
-    console.log("[fit-scores][debug] final scores key count:",
-      Object.keys(scores).length, "of", opportunityIds.length, "input ids");
-  } catch (parseErr) {
-    console.error("[fit-scores][debug] parse threw:",
-      parseErr instanceof Error ? parseErr.message : String(parseErr));
+  } catch {
     // Return partial or empty scores rather than 500 — non-blocking feature
     return NextResponse.json({ scores: {} });
   }
