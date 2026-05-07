@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { OutreachCard } from "./OutreachCard";
+import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { CoverLetterModal } from "./CoverLetterModal";
 
 interface OpportunityCardProps {
@@ -66,6 +67,22 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
       sessionStorage.setItem("resumeAdvisor:incomingJob", JSON.stringify(payload));
     } catch { /* private-mode storage failure — page still works, just no prefill */ }
     router.push("/resumeadvisor");
+  }
+
+  /**
+   * Phase 5 Item 2/4 handoff — write the job summary to sessionStorage and
+   * navigate to /applications?track=1. The pipeline page reads the payload
+   * on mount, opens the add-form pre-filled, and clears the key.
+   */
+  function handleTrack() {
+    if (typeof window === "undefined") return;
+    writeIncomingTrack({
+      job_title:      opp.title || "",
+      company:        opp.company || "",
+      job_url:        opp.apply_url_company ?? opp.url ?? null,
+      opportunity_id: typeof opp.id === "string" ? opp.id : null,
+    });
+    router.push("/applications?track=1");
   }
 
   const fit    = fitLabel(opp.fit_score);
@@ -167,6 +184,15 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
                 ✉ Outreach
               </button>
             )}
+            <button
+              onClick={handleTrack}
+              data-testid="opportunity-track-btn"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs
+                         font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              aria-label={`Track ${opp.title} at ${opp.company} as an application`}
+            >
+              📋 Track
+            </button>
             {(opp.apply_url_company || opp.url) && (
               <a
                 href={opp.apply_url_company ?? opp.url ?? "#"}
