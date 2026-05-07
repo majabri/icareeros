@@ -53,7 +53,7 @@ async function requireAdmin(): Promise<{ id: string; email: string } | { error: 
 }
 
 export type UserRole = "user" | "moderator" | "admin";
-export type SubscriptionPlan = "free" | "pro" | "premium";
+export type SubscriptionPlan = "free" | "starter" | "standard" | "pro";
 
 /**
  * Set a user's subscription plan (upgrade or downgrade).

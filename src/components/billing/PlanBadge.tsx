@@ -18,14 +18,20 @@ const PLAN_CONFIG: Record<
     text: "text-gray-600",
     ring: "ring-gray-200",
   },
-  premium: {
-    label: "Premium",
+  starter: {
+    label: "Starter",
     bg: "bg-brand-50",
     text: "text-brand-700",
     ring: "ring-brand-200",
   },
-  professional: {
-    label: "Professional",
+  standard: {
+    label: "Standard",
+    bg: "bg-indigo-50",
+    text: "text-indigo-700",
+    ring: "ring-indigo-200",
+  },
+  pro: {
+    label: "Pro",
     bg: "bg-amber-50",
     text: "text-amber-700",
     ring: "ring-amber-200",

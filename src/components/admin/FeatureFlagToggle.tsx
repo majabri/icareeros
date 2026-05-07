@@ -12,7 +12,7 @@ const FLAG_LABELS: Record<string, { label: string; description: string }> = {
   monetization_enabled: {
     label: "Billing / Monetization",
     description:
-      "Show pricing UI, enforce plan limits, and gate premium features. Turn off for testing.",
+      "Show pricing UI, enforce plan limits, and gate paid features. Turn off for testing.",
   },
 };
 

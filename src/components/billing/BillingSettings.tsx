@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import { PlanBadge }  from "./PlanBadge";
 import { UpgradeCTA } from "./UpgradeCTA";
+import { FoundingLifetime } from "./FoundingLifetime";
 import {
   getSubscription,
   getBillingPortalUrl,
-  cancelSubscription,
 } from "@/services/billing/subscriptionService";
-import { PLAN_LIMITS, PLAN_PRICES } from "@/services/billing/types";
-import type { UserSubscription, SubscriptionPlan } from "@/services/billing/types";
+import { PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from "@/services/billing/types";
+import type { UserSubscription, SubscriptionPlan, BillingCycle } from "@/services/billing/types";
 
-// Read feature flag from env — set NEXT_PUBLIC_MONETIZATION_ENABLED=true when ready
 const MONETIZATION_ENABLED =
   process.env.NEXT_PUBLIC_MONETIZATION_ENABLED === "true";
 
@@ -43,8 +42,7 @@ export function BillingSettings() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading]           = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [cancelConfirm, setCancelConfirm] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cycle, setCycle]               = useState<BillingCycle>("monthly");
   const [error, setError]               = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,22 +63,6 @@ export function BillingSettings() {
     }
   }
 
-  async function handleCancel() {
-    if (!cancelConfirm) { setCancelConfirm(true); return; }
-    setCancelLoading(true);
-    try {
-      const ok = await cancelSubscription();
-      if (ok) {
-        setSubscription((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev);
-        setCancelConfirm(false);
-      } else {
-        setError("Cancellation failed. Please try again or use the billing portal.");
-      }
-    } finally {
-      setCancelLoading(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
@@ -90,20 +72,22 @@ export function BillingSettings() {
     );
   }
 
-  const plan    = subscription?.plan ?? "free";
+  const plan: SubscriptionPlan = subscription?.plan ?? "free";
   const status  = subscription?.status ?? "active";
-  const limits  = PLAN_LIMITS[plan as SubscriptionPlan];
+  const limits  = PLAN_LIMITS[plan];
   const isPaid  = plan !== "free";
   const isCanceled = subscription?.cancel_at_period_end;
 
   return (
     <div className="space-y-8">
-      {/* Error banner */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
+
+      {/* Founding Lifetime — prominent, only renders when seats remain */}
+      {!isPaid && <FoundingLifetime />}
 
       {/* Current plan card */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -111,7 +95,7 @@ export function BillingSettings() {
           <div>
             <h3 className="text-base font-semibold text-gray-900">Current plan</h3>
             <div className="mt-2 flex items-center gap-3">
-              <PlanBadge plan={plan as SubscriptionPlan} size="lg" />
+              <PlanBadge plan={plan} size="lg" />
               {status === "past_due" && (
                 <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
                   Payment past due
@@ -139,54 +123,64 @@ export function BillingSettings() {
               >
                 {portalLoading ? "Opening…" : "Manage billing"}
               </button>
-              {!isCanceled && (
-                <button
-                  onClick={handleCancel}
-                  disabled={cancelLoading}
-                  className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
-                >
-                  {cancelConfirm
-                    ? cancelLoading ? "Canceling…" : "Confirm cancel?"
-                    : "Cancel subscription"}
-                </button>
-              )}
+              <span className="text-xs text-gray-400">
+                Use the portal to cancel, swap card, or download invoices.
+              </span>
             </div>
           )}
         </div>
 
-        {/* Plan features */}
         <ul className="mt-4 border-t border-gray-100 pt-4">
           <PlanFeatureRow
             label={limits.maxCycles === -1 ? "Unlimited Career OS cycles" : `${limits.maxCycles} Career OS cycles`}
             included={true}
           />
-          <PlanFeatureRow label="AI Coach (interview prep + resume)" included={limits.aiCoach} />
-          <PlanFeatureRow label="Advanced match score insights"     included={limits.advancedMatch} />
-          <PlanFeatureRow label="Priority support"                  included={limits.prioritySupport} />
+          <PlanFeatureRow label="AI Coach (interview prep + resume)"            included={limits.aiCoach} />
+          <PlanFeatureRow label="Advanced match score insights"                 included={limits.advancedMatch} />
+          <PlanFeatureRow
+            label={limits.coverLettersPerMonth === -1
+              ? "Unlimited cover letters"
+              : `${limits.coverLettersPerMonth} cover letters / month`}
+            included={limits.coverLettersPerMonth !== 0}
+          />
+          <PlanFeatureRow label="Priority support"                              included={limits.prioritySupport} />
         </ul>
       </div>
 
-      {/* Upgrade options — only show if not on premium and monetization will be enabled */}
-      {plan !== "professional" && (
+      {/* Upgrade options */}
+      {plan !== "pro" && (
         <div className="space-y-4">
-          <h3 className="text-base font-semibold text-gray-900">
-            {MONETIZATION_ENABLED ? "Upgrade your plan" : "Plans — coming soon"}
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {plan === "free" && (
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-900">
+              {MONETIZATION_ENABLED ? "Upgrade your plan" : "Plans — coming soon"}
+            </h3>
+            <div className="flex rounded-lg border border-gray-200 p-0.5 text-xs">
+              <button
+                onClick={() => setCycle("monthly")}
+                className={`rounded px-3 py-1 transition-colors ${cycle === "monthly" ? "bg-brand-600 text-white" : "text-gray-600"}`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setCycle("annual")}
+                className={`rounded px-3 py-1 transition-colors ${cycle === "annual" ? "bg-brand-600 text-white" : "text-gray-600"}`}
+              >
+                Annual <span className="opacity-70">(35% off)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            {(["starter", "standard", "pro"] as Exclude<SubscriptionPlan, "free">[]).map((target) => (
               <UpgradeCTA
-                targetPlan="premium"
-                currentPlan={plan as SubscriptionPlan}
+                key={target}
+                targetPlan={target}
+                currentPlan={plan}
+                cycle={cycle}
                 disabled={!MONETIZATION_ENABLED}
                 variant="card"
               />
-            )}
-            <UpgradeCTA
-              targetPlan="professional"
-              currentPlan={plan as SubscriptionPlan}
-              disabled={!MONETIZATION_ENABLED}
-              variant="card"
-            />
+            ))}
           </div>
 
           {!MONETIZATION_ENABLED && (
@@ -205,25 +199,31 @@ export function BillingSettings() {
             <thead>
               <tr className="text-left text-gray-500">
                 <th className="pb-2 pr-4 font-medium">Plan</th>
-                <th className="pb-2 pr-4 font-medium">Price</th>
-                <th className="pb-2 pr-4 font-medium">Cycles</th>
-                <th className="pb-2 pr-4 font-medium">AI Coach</th>
+                <th className="pb-2 pr-4 font-medium">Monthly</th>
+                <th className="pb-2 pr-4 font-medium">Annual / mo</th>
+                <th className="pb-2 pr-4 font-medium">Coach sessions</th>
                 <th className="pb-2 font-medium">Support</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(["free", "premium", "professional"] as SubscriptionPlan[]).map((p) => (
+              {PLAN_ORDER.map((p) => (
                 <tr key={p} className={p === plan ? "font-semibold text-gray-900" : "text-gray-600"}>
                   <td className="py-2 pr-4 capitalize">
                     {p} {p === plan && <span className="ml-1 text-xs text-brand-600">(current)</span>}
                   </td>
                   <td className="py-2 pr-4">
-                    {PLAN_PRICES[p].monthly === 0 ? "Free" : `$${PLAN_PRICES[p].monthly}/mo`}
+                    {PLAN_PRICES[p].monthly === 0 ? "Free" : `$${PLAN_PRICES[p].monthly.toFixed(2)}/mo`}
                   </td>
                   <td className="py-2 pr-4">
-                    {PLAN_LIMITS[p].maxCycles === -1 ? "Unlimited" : PLAN_LIMITS[p].maxCycles}
+                    {PLAN_PRICES[p].annualPerMonth === 0 ? "—" : `$${PLAN_PRICES[p].annualPerMonth.toFixed(2)}/mo`}
                   </td>
-                  <td className="py-2 pr-4">{PLAN_LIMITS[p].aiCoach ? "✓" : "—"}</td>
+                  <td className="py-2 pr-4">
+                    {PLAN_LIMITS[p].coachSessionsPerMonth === -1
+                      ? "Unlimited"
+                      : PLAN_LIMITS[p].coachSessionsPerMonth === 0
+                      ? "—"
+                      : PLAN_LIMITS[p].coachSessionsPerMonth}
+                  </td>
                   <td className="py-2">{PLAN_LIMITS[p].prioritySupport ? "Priority" : "Standard"}</td>
                 </tr>
               ))}

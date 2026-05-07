@@ -62,7 +62,7 @@ export async function checkPlanLimit(
 
     const rawPlan = sub?.plan;
     const plan: SubscriptionPlan =
-      rawPlan && ["free", "premium", "professional"].includes(rawPlan)
+      rawPlan && ["free", "starter", "standard", "pro"].includes(rawPlan)
         ? (rawPlan as SubscriptionPlan)
         : "free";
 
@@ -77,7 +77,7 @@ export async function checkPlanLimit(
     const allowed = ((): boolean => {
       switch (feature) {
         case "aiCoach":        return limits.aiCoach;
-        case "coverLetters":   return limits.coverLettersPerMonth > 0;
+        case "coverLetters":   return limits.coverLettersPerMonth !== 0;
         case "mockInterviews": return limits.mockInterviews;
         case "advancedMatch":  return limits.advancedMatch;
         default:               return true;

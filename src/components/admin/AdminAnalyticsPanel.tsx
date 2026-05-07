@@ -13,7 +13,7 @@ interface KpiCard {
 interface AdminAnalyticsPanelProps {
   totalUsers: number;
   newUsersLast7Days: number;
-  planDist: { free: number; pro: number; premium: number };
+  planDist: { free: number; starter: number; standard: number; pro: number };
   totalAnalyses: number;
   analysesLast30Days: number;
   totalAgentRuns: number;
@@ -55,7 +55,8 @@ export function AdminAnalyticsPanel({
     { label: "Total users",       value: totalUsers,           sub: `+${newUsersLast7Days} this week`,    color: "blue" },
     { label: "Free plan",         value: planDist.free,        sub: `${Math.round((planDist.free / Math.max(totalUsers,1)) * 100)}% of users`, color: "gray" },
     { label: "Pro plan",          value: planDist.pro,         sub: "$19/mo subscribers",                  color: "green" },
-    { label: "Premium plan",      value: planDist.premium,     sub: "$129/mo subscribers",                 color: "purple" },
+    { label: "Starter plan",      value: planDist.starter,     sub: "$9.99/mo subscribers",                color: "purple" },
+    { label: "Standard plan",     value: planDist.standard,    sub: "$18.99/mo subscribers",               color: "indigo" },
     // Activity
     { label: "Career OS cycles",  value: totalCycles,          sub: `${activeCycles} active`,              color: "blue" },
     { label: "Resume analyses",   value: totalAnalyses,        sub: `${analysesLast30Days} last 30 days`,  color: "green" },

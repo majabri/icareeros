@@ -15,7 +15,8 @@ interface Props {
 const PLAN_OPTIONS: { value: SubscriptionPlan; label: string; color: string }[] = [
   { value: "free",    label: "Free",    color: "text-gray-600" },
   { value: "pro",     label: "Pro",     color: "text-blue-600" },
-  { value: "premium", label: "Premium", color: "text-purple-600" },
+  { value: "starter",  label: "Starter",  color: "text-purple-600" },
+  { value: "standard", label: "Standard", color: "text-indigo-600" },
 ];
 
 const ROLE_OPTIONS: { value: UserRole; label: string; color: string }[] = [

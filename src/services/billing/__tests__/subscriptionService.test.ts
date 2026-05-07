@@ -1,149 +1,176 @@
 /**
- * subscriptionService unit tests
+ * subscriptionService unit tests — Phase 5 (post-Stripe activation)
  *
- * Focus: NEXT_PUBLIC_MONETIZATION_ENABLED guard. Until monetization is live,
- * every billing-service call must short-circuit at the client without making
- * a network request, because the edge function is not deployed in the
- * icareeros Supabase project (kuneabeiwcxavvyyfjkx). Phase 0 P0 Fix 3 — see
- * docs/specs/COWORK-BRIEF-phase0-p0-bugs-v1.md.
+ * Phase 5 (2026-05-07) replaced Supabase edge-fn calls with direct fetch to
+ * the new /api/stripe/* routes. We mock global.fetch and the Supabase
+ * browser client; flip the NEXT_PUBLIC_MONETIZATION_ENABLED flag per test.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock supabase BEFORE importing the service so the mock is in place when
-// the service module evaluates its imports.
-const mockInvoke = vi.fn();
+// Supabase client mock — `getSubscription` reads directly from the table now,
+// not via an edge function.
+const mockMaybeSingle = vi.fn();
+const mockGetUser = vi.fn();
 vi.mock("@/lib/supabase", () => ({
-  createClient: () => ({ functions: { invoke: mockInvoke } }),
+  createClient: () => ({
+    auth: { getUser: mockGetUser },
+    from: (_table: string) => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: mockMaybeSingle }),
+      }),
+    }),
+  }),
 }));
 
-// Snapshot the env var so we can flip it per test and restore on teardown.
-const ORIGINAL_FLAG = process.env.NEXT_PUBLIC_MONETIZATION_ENABLED;
+const ORIGINAL_FLAG  = process.env.NEXT_PUBLIC_MONETIZATION_ENABLED;
+const ORIGINAL_FETCH = global.fetch;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockInvoke.mockReset();
+  mockMaybeSingle.mockReset();
+  mockGetUser.mockReset();
 });
 
 afterEach(() => {
-  if (ORIGINAL_FLAG === undefined) {
-    delete process.env.NEXT_PUBLIC_MONETIZATION_ENABLED;
-  } else {
-    process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = ORIGINAL_FLAG;
-  }
+  if (ORIGINAL_FLAG === undefined) delete process.env.NEXT_PUBLIC_MONETIZATION_ENABLED;
+  else                              process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = ORIGINAL_FLAG;
+  global.fetch = ORIGINAL_FETCH;
 });
 
-// Re-imports the service module fresh after the env-var change so the
-// `process.env.NEXT_PUBLIC_MONETIZATION_ENABLED` read inside the helper is
-// re-evaluated for each test. (Next.js inlines NEXT_PUBLIC_* at build time
-// in production, but at test runtime under Vitest these are read from
-// process.env on each call to isMonetizationEnabled().)
 async function loadService() {
   vi.resetModules();
   return await import("../subscriptionService");
 }
 
-describe("subscriptionService — monetization disabled (env var unset/false)", () => {
-  beforeEach(() => {
-    delete process.env.NEXT_PUBLIC_MONETIZATION_ENABLED;
+describe("subscriptionService — monetization disabled", () => {
+  beforeEach(() => { delete process.env.NEXT_PUBLIC_MONETIZATION_ENABLED; });
+
+  it("createCheckoutSession returns null and does NOT fetch", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.createCheckoutSession({ plan: "starter", cycle: "monthly" });
+    expect(url).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("getSubscription returns null without calling the edge function", async () => {
-    const { getSubscription } = await loadService();
-    const result = await getSubscription();
-    expect(result).toBeNull();
-    expect(mockInvoke).not.toHaveBeenCalled();
+  it("getBillingPortalUrl returns null and does NOT fetch", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.getBillingPortalUrl();
+    expect(url).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("createCheckoutSession returns null without calling the edge function", async () => {
-    const { createCheckoutSession } = await loadService();
-    const result = await createCheckoutSession("premium");
-    expect(result).toBeNull();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("getBillingPortalUrl returns null without calling the edge function", async () => {
-    const { getBillingPortalUrl } = await loadService();
-    const result = await getBillingPortalUrl();
-    expect(result).toBeNull();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("cancelSubscription returns false without calling the edge function", async () => {
-    const { cancelSubscription } = await loadService();
-    const result = await cancelSubscription();
-    expect(result).toBe(false);
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("canAccessFeature returns true (fail-open / gating disabled) without calling the edge function", async () => {
-    const { canAccessFeature } = await loadService();
-    const result = await canAccessFeature("ai_resume_rewrite" as never);
-    expect(result).toBe(true);
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("getCurrentPlan returns 'free' without calling the edge function", async () => {
-    const { getCurrentPlan } = await loadService();
-    const result = await getCurrentPlan();
-    expect(result).toBe("free");
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("isOnPaidPlan returns false without calling the edge function", async () => {
-    const { isOnPaidPlan } = await loadService();
-    const result = await isOnPaidPlan();
-    expect(result).toBe(false);
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("explicit 'false' string also short-circuits", async () => {
-    process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = "false";
-    const { getSubscription } = await loadService();
-    const result = await getSubscription();
-    expect(result).toBeNull();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("any non-'true' string short-circuits (only the literal 'true' opens the gate)", async () => {
-    process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = "1";
-    const { getSubscription } = await loadService();
-    const result = await getSubscription();
-    expect(result).toBeNull();
-    expect(mockInvoke).not.toHaveBeenCalled();
+  it("canAccessFeature fails-open to true", async () => {
+    const svc = await loadService();
+    const allowed = await svc.canAccessFeature("feature_ai_coach");
+    expect(allowed).toBe(true);
   });
 });
 
-describe("subscriptionService — monetization enabled (env var = 'true')", () => {
+describe("subscriptionService — monetization enabled", () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = "true";
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_MONTHLY = "price_starter_m";
+    process.env.NEXT_PUBLIC_BASE_URL = "https://icareeros.test";
   });
 
-  it("getSubscription DOES call the edge function when the flag is on", async () => {
-    mockInvoke.mockResolvedValueOnce({
-      data: { success: true, data: { plan: "premium", status: "active" } },
+  it("createCheckoutSession POSTs to /api/stripe/checkout with the resolved price id", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ checkoutUrl: "https://stripe.test/c_123" }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.createCheckoutSession({ plan: "starter", cycle: "monthly" });
+    expect(url).toBe("https://stripe.test/c_123");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/stripe/checkout",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const call = fetchSpy.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.priceId).toBe("price_starter_m");
+    expect(body.mode).toBe("subscription");
+  });
+
+  it("createCheckoutSession with addon switches mode to 'payment'", async () => {
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING_LIFETIME = "price_founding";
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ checkoutUrl: "https://stripe.test/p_1" }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.createCheckoutSession({ addon: "founding_lifetime" });
+    expect(url).toBe("https://stripe.test/p_1");
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.mode).toBe("payment");
+    expect(body.priceId).toBe("price_founding");
+  });
+
+  it("createCheckoutSession returns null when env var for the price is unset", async () => {
+    delete process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_MONTHLY;
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.createCheckoutSession({ plan: "starter", cycle: "monthly" });
+    expect(url).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("getBillingPortalUrl GETs /api/stripe/portal and returns the url", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ portalUrl: "https://stripe.test/portal_42" }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.getBillingPortalUrl();
+    expect(url).toBe("https://stripe.test/portal_42");
+    expect(fetchSpy).toHaveBeenCalledWith("/api/stripe/portal", { method: "GET" });
+  });
+
+  it("getBillingPortalUrl returns null on non-200", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: false, status: 404, text: async () => "no_customer",
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const svc = await loadService();
+    const url = await svc.getBillingPortalUrl();
+    expect(url).toBeNull();
+  });
+});
+
+describe("subscriptionService — getSubscription / getCurrentPlan", () => {
+  beforeEach(() => { process.env.NEXT_PUBLIC_MONETIZATION_ENABLED = "true"; });
+
+  it("returns null when no user", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const svc = await loadService();
+    const sub = await svc.getSubscription();
+    expect(sub).toBeNull();
+  });
+
+  it("reads the row from user_subscriptions for the signed-in user", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockMaybeSingle.mockResolvedValue({
+      data: { user_id: "u1", plan: "starter", status: "active" },
       error: null,
     });
-    const { getSubscription } = await loadService();
-    const result = await getSubscription();
-    expect(mockInvoke).toHaveBeenCalledTimes(1);
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "billing-service",
-      expect.objectContaining({ body: { action: "get_subscription" } })
-    );
-    expect(result).toEqual({ plan: "premium", status: "active" });
+    const svc = await loadService();
+    const sub = await svc.getSubscription();
+    expect(sub).toMatchObject({ plan: "starter", status: "active" });
   });
 
-  it("getSubscription returns null on edge function error (existing fail-safe)", async () => {
-    mockInvoke.mockResolvedValueOnce({
-      data: null,
-      error: { message: "boom" },
-    });
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { getSubscription } = await loadService();
-    const result = await getSubscription();
-    expect(result).toBeNull();
-    expect(mockInvoke).toHaveBeenCalledTimes(1);
-    consoleSpy.mockRestore();
+  it("getCurrentPlan defaults to 'free' when no row", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    const svc = await loadService();
+    const plan = await svc.getCurrentPlan();
+    expect(plan).toBe("free");
   });
 });

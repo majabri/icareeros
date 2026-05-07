@@ -21,9 +21,9 @@
  *               (an array of {generatedAt, plan} entries). No new schema —
  *               career_os_event_log is a VIEW with no event_type column,
  *               so we stay inside `notes` to honour the brief's "no
- *               schema change" preference. Limits: free=2/mo, premium=5/mo,
- *               professional=unlimited.
- * - Email: premium + professional plans get a transactional email via
+ *               schema change" preference. Limits: free=2/mo, starter=5/mo,
+ *               standard=10/mo, pro=unlimited.
+ * - Email: starter / standard / pro plans get a transactional email via
  *          /api/email/send (Bluehost SMTP). Free tier gets in-app only.
  * - Tracing: createTracedClient(...) for Langfuse (mandatory per brief).
  */
@@ -70,7 +70,7 @@ async function resolveEffectivePlan(
     .maybeSingle();
   const rawPlan = data?.plan;
   const plan: SubscriptionPlan =
-    rawPlan && ["free", "premium", "professional"].includes(rawPlan)
+    rawPlan && ["free", "starter", "standard", "pro"].includes(rawPlan)
       ? (rawPlan as SubscriptionPlan)
       : "free";
   const activeStatuses = ["active", "trialing"];
@@ -286,8 +286,8 @@ export async function POST(req: Request) {
       .update({ notes: newNotes, last_event_at: generatedAt })
       .eq("id", coachRow.id);
 
-    // 10. Email premium + professional users (best-effort, not gating)
-    if (plan === "premium" || plan === "professional") {
+    // 10. Email starter / standard / pro users (best-effort, not gating)
+    if (plan !== "free") {
       const userEmail = user.email;
       if (userEmail) {
         const origin = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://icareeros.com";
