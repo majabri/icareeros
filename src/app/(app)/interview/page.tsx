@@ -129,6 +129,10 @@ export default function InterviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<InterviewSession[]>([]);
   const [historySession, setHistorySession] = useState<InterviewSession | null>(null);
+  /** In-progress streamed assistant content (option b — token-by-token). */
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  /** In-progress streamed prep guide content. */
+  const [streamingPrep, setStreamingPrep] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -152,11 +156,14 @@ export default function InterviewPage() {
     setLoading(true);
     setError(null);
     try {
+      setStreamingPrep("");
       const content = await generateInterviewPrep({
         jobTitle: jobTitle.trim(),
         jobDescription: jobDescription.trim(),
         resume: resume.trim() || undefined,
+        onChunk: (_t, full) => setStreamingPrep(full),
       });
+      setStreamingPrep(null);
       setPrepContent(content);
       setPhase("prep");
     } catch (e) {
@@ -178,11 +185,14 @@ export default function InterviewPage() {
         { role: "user", content: INIT_PROMPT },
       ];
 
+      setStreamingContent("");
       const reply = await sendInterviewMessage({
         messages: initMessages,
         jobTitle: jobTitle.trim(),
         jobDescription: jobDescription.trim() || undefined,
+        onChunk: (_t, full) => setStreamingContent(full),
       });
+      setStreamingContent(null);
 
       const all: InterviewMessage[] = [...initMessages, { role: "assistant", content: reply }];
       setMessages(all);
@@ -209,11 +219,14 @@ export default function InterviewPage() {
     setMessages(withAnswer);
 
     try {
+      setStreamingContent("");
       const reply = await sendInterviewMessage({
         messages: withAnswer,
         jobTitle,
         jobDescription: jobDescription || undefined,
+        onChunk: (_t, full) => setStreamingContent(full),
       });
+      setStreamingContent(null);
 
       const all: InterviewMessage[] = [...withAnswer, { role: "assistant", content: reply }];
       setMessages(all);
@@ -254,6 +267,8 @@ export default function InterviewPage() {
     setFinalMessage("");
     setPrepContent("");
     setError(null);
+    setStreamingContent(null);
+    setStreamingPrep(null);
   }
 
   const displayMessages = messages.slice(1);
@@ -463,7 +478,7 @@ export default function InterviewPage() {
               <h2 className="font-bold text-gray-900">Interview Prep Guide</h2>
               <span className="text-sm text-gray-500">— {jobTitle}</span>
             </div>
-            <PrepContent content={prepContent} />
+            <PrepContent content={streamingPrep ?? prepContent} />
           </div>
 
           <div className="flex justify-center">
@@ -550,6 +565,9 @@ export default function InterviewPage() {
               {displayMessages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} />
               ))}
+                {streamingContent !== null && (
+                  <MessageBubble msg={{ role: "assistant", content: streamingContent || "…" }} />
+                )}
             </div>
           </div>
         </div>

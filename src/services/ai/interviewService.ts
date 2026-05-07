@@ -1,4 +1,18 @@
+/**
+ * Interview Simulator client helpers.
+ *
+ * Phase 4 (fix/interview-simulator) — replaces the previous edge-fn calls
+ * with streaming Next.js API routes:
+ *   POST /api/interview/session  — per-turn Q&A (token-by-token)
+ *   POST /api/interview/prep     — pre-session prep guide (token-by-token)
+ *
+ * The session-storage helpers (createInterviewSession / update / list)
+ * use the existing `interview_sessions` table via Supabase REST and are
+ * unchanged. Storage was never broken — only the LLM-call layer was.
+ */
+
 import { createClient } from "@/lib/supabase";
+import { readSseStream } from "@/lib/sseStreamReader";
 
 export type InterviewMessage = { role: "user" | "assistant"; content: string };
 
@@ -16,51 +30,114 @@ export interface SessionFeedback {
   areasToWork: string[];
 }
 
-/** Call the mock-interview edge function with the current conversation history. */
-export async function sendInterviewMessage(opts: {
-  messages: InterviewMessage[];
-  jobTitle: string;
-  jobDescription?: string;
-}): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.functions.invoke("mock-interview", {
-    body: {
-      messages: opts.messages,
-      jobTitle: opts.jobTitle,
-      ...(opts.jobDescription ? { jobDescription: opts.jobDescription } : {}),
-    },
-  });
-  if (error) throw new Error(error.message ?? "mock-interview failed");
-  const content = data?.content;
-  if (typeof content !== "string" || !content) {
-    throw new Error("No content returned from interview");
-  }
-  return content;
+// ── LLM-streaming helpers (NEW in Phase 4) ──────────────────────────────────
+
+export interface StreamingCallbacks {
+  /** Called for every text delta. */
+  onChunk?: (text: string, full: string) => void;
+  /** Called when the stream ends successfully. */
+  onDone?:  (fullText: string) => void;
+  /** Called on auth/upgrade/limit/HTTP errors. */
+  onError?: (message: string) => void;
 }
 
-/** Generate a pre-session interview prep guide via the generate-interview-prep edge fn. */
-export async function generateInterviewPrep(opts: {
-  jobTitle: string;
-  jobDescription: string;
-  resume?: string;
-}): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.functions.invoke("generate-interview-prep", {
+/**
+ * Per-turn interview message. Streams the assistant reply via
+ * /api/interview/session and resolves with the full text after the stream
+ * ends. Pass `onChunk` to render token-by-token (option b in the rebuild
+ * plan); omit it for the legacy all-or-nothing display.
+ */
+export async function sendInterviewMessage(opts: {
+  messages:        InterviewMessage[];
+  jobTitle:        string;
+  jobDescription?: string;
+} & StreamingCallbacks): Promise<string> {
+  let fullText = "";
+  const result = await readSseStream({
+    url:  "/api/interview/session",
     body: {
-      jobDescription: opts.jobDescription || `Position: ${opts.jobTitle}`,
-      resume:
-        opts.resume?.trim() ||
-        `Experienced professional applying for the ${opts.jobTitle} role.`,
-      matchedSkills: [],
-      gaps: [],
+      messages:       opts.messages,
+      jobTitle:       opts.jobTitle,
+      jobDescription: opts.jobDescription ?? null,
+    },
+    onEvent: ({ event, data }) => {
+      if (event === "message" && data && typeof data === "object" && "text" in data) {
+        const t = String((data as { text: string }).text);
+        fullText += t;
+        opts.onChunk?.(t, fullText);
+      } else if (event === "done") {
+        opts.onDone?.(fullText);
+      } else if (event === "error") {
+        const m = data && typeof data === "object" && "error" in data
+          ? String((data as { error: string }).error)
+          : "stream error";
+        opts.onError?.(m);
+      }
     },
   });
-  if (error) throw new Error(error.message ?? "generate-interview-prep failed");
-  if (typeof data?.content !== "string" || !data.content) {
-    throw new Error("No prep content returned");
+
+  if (result.status !== "ok") {
+    const reason =
+      result.status === "auth_required"    ? "Sign in required."
+      : result.status === "upgrade_required" ? "Interview is gated for your plan."
+      : result.status === "rate_limited"     ? "Rate limit reached."
+      : `Interview request failed (HTTP ${result.httpCode}).`;
+    opts.onError?.(reason);
+    throw new Error(reason);
   }
-  return data.content as string;
+  if (!fullText) {
+    throw new Error("No content returned from interview");
+  }
+  return fullText;
 }
+
+/**
+ * Pre-session prep guide. Same streaming shape as sendInterviewMessage.
+ * Returns the full markdown after stream completion.
+ */
+export async function generateInterviewPrep(opts: {
+  jobTitle:       string;
+  jobDescription: string;
+  resume?:        string;
+} & StreamingCallbacks): Promise<string> {
+  let fullText = "";
+  const result = await readSseStream({
+    url:  "/api/interview/prep",
+    body: {
+      jobTitle:       opts.jobTitle,
+      jobDescription: opts.jobDescription || `Position: ${opts.jobTitle}`,
+      resume:         opts.resume?.trim() ?? "",
+    },
+    onEvent: ({ event, data }) => {
+      if (event === "message" && data && typeof data === "object" && "text" in data) {
+        const t = String((data as { text: string }).text);
+        fullText += t;
+        opts.onChunk?.(t, fullText);
+      } else if (event === "done") {
+        opts.onDone?.(fullText);
+      } else if (event === "error") {
+        const m = data && typeof data === "object" && "error" in data
+          ? String((data as { error: string }).error)
+          : "stream error";
+        opts.onError?.(m);
+      }
+    },
+  });
+
+  if (result.status !== "ok") {
+    const reason =
+      result.status === "auth_required"    ? "Sign in required."
+      : result.status === "upgrade_required" ? "Interview prep is gated for your plan."
+      : result.status === "rate_limited"     ? "Rate limit reached."
+      : `Prep request failed (HTTP ${result.httpCode}).`;
+    opts.onError?.(reason);
+    throw new Error(reason);
+  }
+  if (!fullText) throw new Error("No prep content returned");
+  return fullText;
+}
+
+// ── Session storage (unchanged from prior implementation) ───────────────────
 
 /** Insert a new interview_sessions row and return its id. */
 export async function createInterviewSession(jobTitle: string): Promise<string> {
@@ -110,6 +187,8 @@ export async function listInterviewSessions(): Promise<InterviewSession[]> {
   if (error) throw new Error(error.message);
   return (data ?? []) as InterviewSession[];
 }
+
+// ── Score / feedback parsers (unchanged) ────────────────────────────────────
 
 /**
  * Parse the readiness score from the Claude summary line, e.g.

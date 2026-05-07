@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   extractReadinessScore,
   parseFinalFeedback,
-  InterviewMessage,
+  type InterviewMessage,
 } from "../interviewService";
 
-// ── extractReadinessScore ────────────────────────────────────────────────────
+// ── Pure parsers — no network, no mocks ─────────────────────────────────────
 describe("extractReadinessScore", () => {
   it("returns null when no readiness marker", () => {
     expect(extractReadinessScore("Great answer! Let's continue.")).toBeNull();
@@ -27,7 +27,6 @@ describe("extractReadinessScore", () => {
   });
 });
 
-// ── parseFinalFeedback ───────────────────────────────────────────────────────
 describe("parseFinalFeedback", () => {
   const sample = `**Overall Readiness: 78%**
 **Top strengths:**
@@ -64,15 +63,9 @@ describe("parseFinalFeedback", () => {
   });
 });
 
-// ── Network-bound functions (mocked) ────────────────────────────────────────
+// ── Storage helpers — mocked Supabase REST ──────────────────────────────────
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
-    functions: {
-      invoke: vi.fn().mockResolvedValue({
-        data: { content: "Tell me about yourself." },
-        error: null,
-      }),
-    },
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u1" } } }),
     },
@@ -80,9 +73,9 @@ vi.mock("@/lib/supabase", () => ({
       insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      eq:     vi.fn().mockReturnThis(),
+      order:  vi.fn().mockReturnThis(),
+      limit:  vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: { id: "session-1" }, error: null }),
     }),
   }),
@@ -96,22 +89,80 @@ import {
   listInterviewSessions,
 } from "../interviewService";
 
-describe("sendInterviewMessage", () => {
-  it("returns content string from edge function", async () => {
+// ── Network-bound LLM helpers — mock fetch with a fake SSE stream ───────────
+
+/** Build a Response whose body is an SSE stream of the given text chunks. */
+function makeSseResponse(parts: string[], status: number = 200): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      for (const p of parts) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: p })}\n\n`));
+      }
+      controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ ok: true })}\n\n`));
+      controller.close();
+    },
+  });
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+const originalFetch = globalThis.fetch;
+beforeEach(() => {
+  globalThis.fetch = vi.fn().mockResolvedValue(makeSseResponse(["Tell me about yourself."])) as unknown as typeof fetch;
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+import { afterEach } from "vitest";
+
+describe("sendInterviewMessage (Phase 4 SSE)", () => {
+  it("returns the concatenated text from the SSE stream", async () => {
     const msgs: InterviewMessage[] = [{ role: "user", content: "Start." }];
     const result = await sendInterviewMessage({ messages: msgs, jobTitle: "Engineer" });
     expect(result).toBe("Tell me about yourself.");
   });
+
+  it("invokes the onChunk callback with each delta", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeSseResponse(["A", "B", "C"])) as unknown as typeof fetch;
+    const chunks: string[] = [];
+    const result = await sendInterviewMessage({
+      messages: [{ role: "user", content: "Start." }],
+      jobTitle: "PM",
+      onChunk: (t) => chunks.push(t),
+    });
+    expect(chunks).toEqual(["A", "B", "C"]);
+    expect(result).toBe("ABC");
+  });
+
+  it("throws on 401 from /api/interview/session", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    ) as unknown as typeof fetch;
+    await expect(
+      sendInterviewMessage({
+        messages: [{ role: "user", content: "x" }],
+        jobTitle: "PM",
+      }),
+    ).rejects.toThrow(/Sign in/);
+  });
 });
 
-describe("generateInterviewPrep", () => {
+describe("generateInterviewPrep (Phase 4 SSE)", () => {
   it("returns prep content string", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      makeSseResponse(["## Likely behavioural questions\n", "- Tell me about..."]),
+    ) as unknown as typeof fetch;
     const result = await generateInterviewPrep({
       jobTitle: "PM",
       jobDescription: "Lead product initiatives.",
     });
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
+    expect(result).toContain("Likely behavioural questions");
   });
 });
 
