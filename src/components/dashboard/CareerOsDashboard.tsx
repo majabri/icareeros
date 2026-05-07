@@ -17,6 +17,14 @@ import {
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { CareerOsRing }    from "./CareerOsRing";
 import { CoachBriefPanel } from "./CoachBriefPanel";
+import {
+  STAGE_ORDER,
+  buildStageStatus,
+  emptyNotesMap,
+  type StageNotesMap,
+  type StageStatusMap,
+  type CompletionSignals,
+} from "./stageStatus";
 import { getSubscription } from "@/services/billing/subscriptionService";
 import type { SubscriptionPlan } from "@/services/billing/types";
 import type { AchieveResult } from "@/services/ai/achieveService";
@@ -30,64 +38,8 @@ interface ActiveCycle {
   current_stage: string;
 }
 
-const STAGE_ORDER: CareerOsStage[] = [
-  "evaluate", "advise", "learn", "act", "coach", "achieve",
-];
-
-type StageStatusMap = Record<CareerOsStage, "pending" | "in_progress" | "completed" | "skipped">;
-type StageNotesMap  = Record<CareerOsStage, Record<string, unknown> | null>;
-
-/**
- * Compute per-stage status with the strict completion rule from
- * COWORK-BRIEF-phase1-v1.md (Sub-item 2a):
- *
- *   A stage with NULL or empty notes is NEVER `completed`.
- *
- * Past stages whose notes are empty surface as "in_progress" (CTA to re-run),
- * not "completed" — fixing the prior UX lie where the dashboard claimed
- * stages were done with no real output behind them.
- */
-function buildStageStatus(
-  cycle: ActiveCycle | null,
-  notes: StageNotesMap = emptyNotesMap(),
-): StageStatusMap {
-  const current = cycle?.current_stage as CareerOsStage | undefined;
-  const status: StageStatusMap = {
-    evaluate: "pending", advise: "pending", learn: "pending",
-    act: "pending",      coach: "pending",  achieve: "pending",
-  };
-  if (!current) return status;
-
-  const hasContent = (s: CareerOsStage): boolean => {
-    const n = notes[s];
-    return n !== null && typeof n === "object" && Object.keys(n).length > 0;
-  };
-
-  const currentIdx = STAGE_ORDER.indexOf(current);
-  for (let i = 0; i < STAGE_ORDER.length; i++) {
-    const s = STAGE_ORDER[i];
-    if (i < currentIdx) {
-      // Past stage — completed only when notes are real, otherwise it's
-      // sitting unfinished and the user should be invited back.
-      status[s] = hasContent(s) ? "completed" : "in_progress";
-    } else if (i === currentIdx) {
-      // Current stage — for an inactive (completed/abandoned) cycle whose
-      // current_stage is the last stage, completion still requires notes.
-      const cycleDone = cycle?.status !== "active";
-      status[s] = cycleDone
-        ? (hasContent(s) ? "completed" : "in_progress")
-        : "in_progress";
-    }
-  }
-  return status;
-}
-
-function emptyNotesMap(): StageNotesMap {
-  return {
-    evaluate: null, advise: null, learn: null,
-    act: null,      coach: null,  achieve: null,
-  };
-}
+// Stage-status logic (STAGE_ORDER, buildStageStatus, emptyNotesMap, types)
+// is in ./stageStatus — extracted in Phase 2 Item 3 so it can be unit-tested.
 
 /** Load notes for all completed stages in a cycle */
 async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
@@ -110,6 +62,19 @@ async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
   return map;
 }
 
+/** Load completion signals for the dashboard's strict stage rules. */
+async function loadCompletionSignals(userId: string): Promise<CompletionSignals> {
+  const supabase = createClient();
+  const [appsRes, oppsRes] = await Promise.all([
+    supabase.from("applications").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("is_active", true),
+  ]);
+  return {
+    applicationsCount:  appsRes.count ?? 0,
+    opportunitiesCount: oppsRes.count ?? 0,
+  };
+}
+
 export function CareerOsDashboard() {
   const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
@@ -117,6 +82,7 @@ export function CareerOsDashboard() {
   const [activeCycles, setActiveCycles] = useState<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>>([]);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
   const [stageNotes, setStageNotes]   = useState<StageNotesMap>(emptyNotesMap());
+  const [signals, setSignals]         = useState<CompletionSignals>({ applicationsCount: 0, opportunitiesCount: 0 });
   const [loading, setLoading]         = useState(true);
   const [running, setRunning]         = useState(false);
   const [plan, setPlan]               = useState<SubscriptionPlan>("free");
@@ -142,11 +108,15 @@ export function CareerOsDashboard() {
       setCycle(activeCycle);
       setPlan(sub?.plan ?? "free");
 
-      // Load notes BEFORE computing stage status — completion is gated on notes
-      // per the strict rule in buildStageStatus.
-      const notes = activeCycle ? await loadStageNotes(activeCycle.id) : emptyNotesMap();
+      // Load notes + completion signals BEFORE computing stage status —
+      // completion is gated on notes (Phase 1) AND apps/opps counts (Phase 2 Item 3).
+      const [notes, fetchedSignals] = await Promise.all([
+        activeCycle ? loadStageNotes(activeCycle.id) : Promise.resolve(emptyNotesMap()),
+        loadCompletionSignals(uid),
+      ]);
       setStageNotes(notes);
-      setStageStatus(buildStageStatus(activeCycle, notes));
+      setSignals(fetchedSignals);
+      setStageStatus(buildStageStatus(activeCycle, notes, fetchedSignals));
 
       setLoading(false);
     }).catch(() => {
@@ -166,10 +136,14 @@ export function CareerOsDashboard() {
     const target = preferCycleId
       ? list.find(c => c.id === preferCycleId) ?? fresh
       : fresh;
-    const fetched = target ? await loadStageNotes(target.id) : emptyNotesMap();
+    const [fetched, fetchedSignals] = await Promise.all([
+      target ? loadStageNotes(target.id) : Promise.resolve(emptyNotesMap()),
+      loadCompletionSignals(uid),
+    ]);
     setCycle(target ?? null);
     setStageNotes(fetched);
-    setStageStatus(buildStageStatus(target ?? null, fetched));
+    setSignals(fetchedSignals);
+    setStageStatus(buildStageStatus(target ?? null, fetched, fetchedSignals));
   }, []);
 
   const handleStartCycle = useCallback(async () => {
@@ -279,7 +253,8 @@ export function CareerOsDashboard() {
         setCycle(null);
         setStageStatus(buildStageStatus(null));
         setStageNotes(emptyNotesMap());
-        // (buildStageStatus(null) returns all "pending" — notes irrelevant.)
+        setSignals({ applicationsCount: 0, opportunitiesCount: 0 });
+        // (buildStageStatus(null) returns all "pending" — notes + signals irrelevant.)
         setShowGoalInput(true);
       }
     } finally {
