@@ -30,11 +30,17 @@ export interface PlanLimits {
   prioritySupport: boolean;
   coverLettersPerMonth: number;  // 0 = none
   mockInterviews: boolean;
-  coachBriefsPerMonth: number;   // -1 = unlimited; 0 = none. The on-demand
-                                 // /api/career-os/coach-brief endpoint counts
-                                 // generations against this. Free has 2/mo
-                                 // even though aiCoach=false (the structured
-                                 // Sonnet coach is gated separately).
+  coachBriefsPerMonth: number;    // -1 = unlimited; 0 = none. The on-demand
+                                  // /api/career-os/coach-brief endpoint counts
+                                  // generations against this. Free has 2/mo
+                                  // even though aiCoach=false (the structured
+                                  // Sonnet coach is gated separately).
+  coachSessionsPerMonth: number;  // -1 = unlimited; 0 = no Mode B access.
+                                  // The interactive /api/career-os/coach-session
+                                  // endpoint counts NEW sessions (not messages)
+                                  // against this. Free=0 (renders upgrade gate),
+                                  // Premium=5/mo, Professional=unlimited.
+                                  // Phase 3 — see COWORK-BRIEF-phase3-v1.md.
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
@@ -46,6 +52,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     coverLettersPerMonth: 0,
     mockInterviews:      false,
     coachBriefsPerMonth: 2,
+    coachSessionsPerMonth: 0,
   },
   premium: {
     maxCycles:           -1,
@@ -55,6 +62,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     coverLettersPerMonth: 2,
     mockInterviews:      true,
     coachBriefsPerMonth: 5,
+    coachSessionsPerMonth: 5,
   },
   professional: {
     maxCycles:           -1,
@@ -64,6 +72,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     coverLettersPerMonth: 5,
     mockInterviews:      true,
     coachBriefsPerMonth: -1,
+    coachSessionsPerMonth: -1,
   },
 };
 

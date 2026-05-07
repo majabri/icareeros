@@ -425,11 +425,16 @@ export function CareerOsDashboard() {
               hasNotes: stageNotes[s] !== null && typeof stageNotes[s] === "object" && Object.keys(stageNotes[s] ?? {}).length > 0,
             }))}
             currentStage={cycle.current_stage as CareerOsStage}
+            onStageClick={(stage) => {
+              // Phase 3 Item 4 — route the Coach stage node to the new /coach page.
+              if (stage === "coach") router.push("/coach");
+            }}
           />
 
           {/* On-demand coaching brief (Phase 1 Item 2b) */}
           <CoachBriefPanel
             cycleId={cycle.id}
+            plan={plan}
             initial={
               stageNotes.coach && typeof stageNotes.coach === "object"
                 && (stageNotes.coach as Record<string, unknown>).brief
