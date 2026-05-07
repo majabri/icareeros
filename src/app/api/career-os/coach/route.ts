@@ -208,7 +208,13 @@ export async function POST(req: Request) {
       throw new Error("Claude response missing required fields");
     }
 
-    // 7. Log event (best-effort, non-blocking)
+    // 7. Log event (best-effort, non-blocking).
+    // NOTE (Phase 3 carry-forward — see AGENT_HANDOFF_20260506e.md): in
+    // kuneabeiwcxavvyyfjkx, `career_os_event_log` is currently a VIEW that
+    // joins cycles + stages, NOT a table — it has no event_type/event_data
+    // columns. The insert below silently fails. Langfuse remains the source
+    // of truth for AI-call telemetry. Cleanup options: drop this insert OR
+    // stand up a real event_log table.
     void supabase
       .from("career_os_event_log")
       .insert({

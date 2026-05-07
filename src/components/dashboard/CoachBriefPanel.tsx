@@ -29,9 +29,12 @@ interface CoachBriefPanelProps {
   /** Optional initial brief if it was cached and pre-loaded by the parent */
   initial?:   { content: string; generatedAt: string } | null;
   className?: string;
+  /** When passed and not "free", the panel renders a secondary CTA linking
+   * to the interactive /coach chat page. Phase 3 Item 4. */
+  plan?:      "free" | "premium" | "professional";
 }
 
-export function CoachBriefPanel({ cycleId, initial, className }: CoachBriefPanelProps) {
+export function CoachBriefPanel({ cycleId, initial, className, plan }: CoachBriefPanelProps) {
   const [brief,       setBrief]       = useState<{ content: string; generatedAt: string; source: "fresh" | "cache" } | null>(
     initial ? { content: initial.content, generatedAt: initial.generatedAt, source: "cache" } : null,
   );
@@ -145,6 +148,13 @@ export function CoachBriefPanel({ cycleId, initial, className }: CoachBriefPanel
             Generated {new Date(brief.generatedAt).toLocaleString()}
             {brief.source === "cache" && " · cached"}
           </p>
+          {plan && plan !== "free" && (
+            <p className="mt-3 text-sm">
+              <Link href="/coach" className="font-semibold text-brand-700 hover:text-brand-900" data-testid="coach-brief-cta-chat">
+                Or chat with your coach →
+              </Link>
+            </p>
+          )}
         </article>
       )}
     </section>
