@@ -17,6 +17,8 @@ import {
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { CareerOsRing }    from "./CareerOsRing";
 import { CoachBriefPanel } from "./CoachBriefPanel";
+import { OnboardingCta }  from "./OnboardingCta";
+import { emptyStateCta as computeEmptyStateCta } from "./emptyStateCta";
 import { SkillsAssessment } from "@/components/evaluate/SkillsAssessment";
 import { MilestoneList }  from "@/components/achieve/MilestoneList";
 import { CareerXpBadge }  from "@/components/achieve/CareerXpBadge";
@@ -90,6 +92,28 @@ async function loadCompletionSignals(userId: string): Promise<CompletionSignals>
   };
 }
 
+/**
+ * Phase 5 Item 2 — read just enough of career_profiles to decide whether
+ * the dashboard should run in onboarding mode. profileReady is true iff
+ * the user has both a non-empty headline AND skills.length >= 3.
+ *
+ * The same record drives the CoachBriefPanel gate: a brief generated
+ * against an empty profile is useless, so the panel is replaced with
+ * a "Complete your profile" link until both conditions are met.
+ */
+async function loadProfileReady(userId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("career_profiles")
+    .select("headline, skills")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data) return false;
+  const headline = typeof data.headline === "string" ? data.headline.trim() : "";
+  const skills   = Array.isArray(data.skills) ? data.skills : [];
+  return headline.length > 0 && skills.length >= 3;
+}
+
 export function CareerOsDashboard() {
   const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
@@ -104,6 +128,8 @@ export function CareerOsDashboard() {
   const [assessmentSkills, setAssessmentSkills] = useState<string[]>([]);
   /** Phase 4 Item 3 — total XP + level + recent milestones for the Achieve card */
   const [careerXp, setCareerXp] = useState<CareerXp>({ totalXp: 0, level: 1, recentMilestones: [] });
+  /** Phase 5 Item 2 — gates the onboarding banner + CoachBriefPanel + Evaluate CTA */
+  const [profileReady, setProfileReady] = useState<boolean>(true);
   const [loading, setLoading]         = useState(true);
   const [running, setRunning]         = useState(false);
   const [plan, setPlan]               = useState<SubscriptionPlan>("free");
@@ -121,12 +147,14 @@ export function CareerOsDashboard() {
       setUserId(uid);
       if (!uid) { setLoading(false); return; }
 
-      const [activeCycle, sub, xp] = await Promise.all([
+      const [activeCycle, sub, xp, ready] = await Promise.all([
         getActiveCycle(uid),
         getSubscription(),
         getCareerXp().catch(() => ({ totalXp: 0, level: 1, recentMilestones: [] })),
+        loadProfileReady(uid),
       ]);
       setCareerXp(xp);
+      setProfileReady(ready);
 
       setCycle(activeCycle);
       setPlan(sub?.plan ?? "free");
@@ -149,10 +177,12 @@ export function CareerOsDashboard() {
   }, []);
 
   const refreshCycle = useCallback(async (uid: string, preferCycleId?: string) => {
-    const [list, fresh] = await Promise.all([
+    const [list, fresh, ready] = await Promise.all([
       listActiveCycles(uid),
       getActiveCycle(uid),
+      loadProfileReady(uid),
     ]);
+    setProfileReady(ready);
     setActiveCycles(list);
     // If caller asked for a specific cycle (e.g. just-created), pick it.
     // Otherwise default to the freshest active cycle.
@@ -285,6 +315,18 @@ export function CareerOsDashboard() {
     }
   }, [userId, cycle, refreshCycle]);
 
+  // Phase 5 Item 2 — per-stage empty-state CTA. Logic lives in
+  // ./emptyStateCta.ts so it can be unit-tested independently.
+  function ctaForStage(stage: CareerOsStage) {
+    return computeEmptyStateCta({
+      stage,
+      stageStatus,
+      currentStage: cycle?.current_stage as CareerOsStage | undefined,
+      profileReady,
+      plan,
+    });
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -325,6 +367,9 @@ export function CareerOsDashboard() {
           <PlanBadge plan={plan} />
         </div>
       </div>
+
+      {/* Phase 5 Item 2 — onboarding banner; renders only when profileReady=false */}
+      <OnboardingCta profileReady={profileReady} hasActiveCycle={!!cycle} />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -464,6 +509,7 @@ export function CareerOsDashboard() {
           <CoachBriefPanel
             cycleId={cycle.id}
             plan={plan}
+            profileReady={profileReady}
             initial={
               stageNotes.coach && typeof stageNotes.coach === "object"
                 && (stageNotes.coach as Record<string, unknown>).brief
@@ -506,15 +552,28 @@ export function CareerOsDashboard() {
             </div>
           )}
 
-          {careerXp.recentMilestones.length > 0 && (
-            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="dashboard-milestone-section">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">Career milestones</h3>
+          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="dashboard-milestone-section">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900">Career milestones</h3>
+              {careerXp.totalXp > 0 && (
                 <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} className="!py-0.5" />
-              </div>
+              )}
+            </div>
+            {careerXp.recentMilestones.length > 0 ? (
               <MilestoneList milestones={careerXp.recentMilestones} compact />
-            </section>
-          )}
+            ) : (
+              <p
+                className="text-sm text-gray-500"
+                data-testid="milestone-empty-state"
+              >
+                Your achievements will appear here.{" "}
+                <a href="/offers" className="font-medium text-brand-700 hover:text-brand-900 underline">
+                  Accept an offer
+                </a>{" "}
+                to earn your first milestone.
+              </p>
+            )}
+          </section>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between text-sm">
@@ -579,6 +638,8 @@ export function CareerOsDashboard() {
                 }
                 running={running}
                 notes={stageNotes[stage]}
+                emptyStateCta={ctaForStage(stage)}
+                opportunitiesCount={signals.opportunitiesCount}
                 onAssessmentRequested={
                   stage === "evaluate" && userId
                     ? async () => {

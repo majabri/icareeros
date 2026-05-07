@@ -32,9 +32,16 @@ interface CoachBriefPanelProps {
   /** When passed and not "free", the panel renders a secondary CTA linking
    * to the interactive /coach chat page. Phase 3 Item 4. */
   plan?:      "free" | "starter" | "standard" | "pro";
+  /**
+   * Phase 5 Item 2 — gates the Generate button. False when the user's
+   * career_profiles row is empty (no headline OR fewer than 3 skills);
+   * the LLM call would be useless without that material, so we prompt
+   * the user to fill in their profile first.
+   */
+  profileReady?: boolean;
 }
 
-export function CoachBriefPanel({ cycleId, initial, className, plan }: CoachBriefPanelProps) {
+export function CoachBriefPanel({ cycleId, initial, className, plan, profileReady = true }: CoachBriefPanelProps) {
   const [brief,       setBrief]       = useState<{ content: string; generatedAt: string; source: "fresh" | "cache" } | null>(
     initial ? { content: initial.content, generatedAt: initial.generatedAt, source: "cache" } : null,
   );
@@ -90,19 +97,30 @@ export function CoachBriefPanel({ cycleId, initial, className, plan }: CoachBrie
             A concise read on where you are and what to do next, generated on demand.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void generate()}
-          disabled={loading}
-          className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold
-                     text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading
-            ? "Generating your coaching brief..."
-            : brief
-              ? "Refresh brief"
-              : "Get my coaching brief"}
-        </button>
+        {profileReady ? (
+          <button
+            type="button"
+            onClick={() => void generate()}
+            disabled={loading}
+            className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold
+                       text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading
+              ? "Generating your coaching brief..."
+              : brief
+                ? "Refresh brief"
+                : "Get my coaching brief"}
+          </button>
+        ) : (
+          <Link
+            href="/mycareer/profile"
+            className="shrink-0 rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700
+                       hover:bg-gray-300"
+            data-testid="coach-brief-profile-cta"
+          >
+            Complete your Career Profile first →
+          </Link>
+        )}
       </div>
 
       {rateLimited && (

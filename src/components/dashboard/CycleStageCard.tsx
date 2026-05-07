@@ -74,6 +74,23 @@ interface CycleStageCardProps {
   running?: boolean;
   /** Stage result notes persisted by stageRouter (only meaningful when completed) */
   notes?: Record<string, unknown> | null;
+  /**
+   * Phase 5 Item 2 — empty-state CTA shown when this stage has no notes
+   * and is NOT the current stage that gets the "Run" button. Parent
+   * computes the right copy/href per stage.
+   */
+  emptyStateCta?: {
+    label:    string;
+    href?:    string;
+    disabled?: boolean;
+    helper?:  string;   // small explainer line under the CTA when disabled
+  } | null;
+  /**
+   * Phase 5 Item 2 — global opportunity count from feature_flags-style
+   * cron (Adzuna pre-fetch). When 0 on Advise/Act, surface the
+   * "Job data is loading" callout.
+   */
+  opportunitiesCount?: number;
 }
 
 // Resource type label → short display label
@@ -92,7 +109,10 @@ export function CycleStageCard({
   isCurrentStage,
   onRun,
   running = false,
-  notes, onAssessmentRequested }: CycleStageCardProps) {
+  notes, onAssessmentRequested,
+  emptyStateCta = null,
+  opportunitiesCount,
+}: CycleStageCardProps) {
   const config = STAGE_CONFIG[stage];
 
   const statusBadge: Record<StageStatus, { label: string; class: string }> = {
@@ -588,6 +608,54 @@ export function CycleStageCard({
             <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
               {achieveResult.summary}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Phase 5 Item 2 — opportunities-loading callout (advise/act) ── */}
+      {(stage === "advise" || stage === "act") &&
+        opportunitiesCount === 0 && (
+          <div
+            data-testid={"opportunities-empty-" + stage}
+            className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          >
+            <p className="font-medium">Job data is loading.</p>
+            <p className="mt-0.5 text-amber-700">
+              We refresh listings every few hours. Check back soon
+              {stage === "act" && (
+                <>
+                  , or{" "}
+                  <a href="/jobs" className="underline font-medium">search jobs now →</a>
+                </>
+              )}
+              .
+            </p>
+          </div>
+        )}
+
+      {/* ── Phase 5 Item 2 — empty-state CTA (no notes, not the current run) ── */}
+      {emptyStateCta && !(isCurrentStage && onRun) && status !== "completed" && (
+        <div data-testid={"empty-cta-" + stage} className="mt-4">
+          {emptyStateCta.disabled || !emptyStateCta.href ? (
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2
+                         text-sm font-medium text-gray-400 cursor-not-allowed"
+            >
+              {emptyStateCta.label}
+            </button>
+          ) : (
+            <a
+              href={emptyStateCta.href}
+              className="block w-full rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold
+                         text-white hover:bg-brand-700 transition-colors"
+            >
+              {emptyStateCta.label}
+            </a>
+          )}
+          {emptyStateCta.helper && (
+            <p className="mt-1.5 text-xs text-gray-500">{emptyStateCta.helper}</p>
           )}
         </div>
       )}
