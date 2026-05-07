@@ -19,6 +19,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
@@ -174,6 +175,9 @@ export async function POST(req: Request) {
     const enriched  = await chaseApplyUrlsBatch(enriched0);
 
     // Upsert into the opportunities table so fit-scoring (which keys off the
+    // DB UUID via /api/jobs/fit-scores) can find them. ON CONFLICT (source,
+    // source_id) requires the non-partial UNIQUE constraint added by migration
+    // opportunities_source_source_id_unique_constraint_v1 (Phase 6 Item 3).
     // DB UUID) can match these listings. Conflict target is (source, source_id).
     let opportunitiesWithDbIds: typeof enriched = enriched;
     if (enriched.length > 0) {
@@ -194,7 +198,15 @@ export async function POST(req: Request) {
         is_active:        true,
       }));
 
-      const { data: upserted, error: upsertErr } = await supabase
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const upsertClient = serviceKey
+        ? createServiceRoleClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            serviceKey,
+            { auth: { persistSession: false } },
+          )
+        : supabase; // fallback — will fail RLS but matches prior behaviour
+      const { data: upserted, error: upsertErr } = await upsertClient
         .from("opportunities")
         .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: false })
         .select("id, source, source_id, title, company");
