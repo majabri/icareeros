@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import { cache } from "@/lib/cache";
@@ -169,7 +170,19 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Fetch opportunity details ───────────────────────────────────────────────
-  const { data: opps, error: oppsErr } = await supabase
+  // RLS NOTE: opportunities only has policies for service_role. Reading
+  // through the user-session client returns 0 rows silently, which would
+  // cause the early-return {scores:{}} path. Same shape as PR #126 for
+  // /api/jobs/{agent,search} upserts. Phase 6 Item 3.
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const oppsClient = serviceKey
+    ? createServiceRoleClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceKey,
+        { auth: { persistSession: false } },
+      )
+    : supabase; // fallback — will return 0 rows but matches prior behaviour
+  const { data: opps, error: oppsErr } = await oppsClient
     .from("opportunities")
     .select("id,title,company,description,job_type,is_remote")
     .in("id", opportunityIds);
