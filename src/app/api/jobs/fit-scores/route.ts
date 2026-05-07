@@ -209,11 +209,14 @@ For each opportunity, return a JSON object with:
 - strengths: array of 1-3 short strings (what the candidate brings)
 - skill_gaps: array of 0-2 short strings (what they may be missing)
 
-Return ONLY a valid JSON object mapping each opportunity ID to its score object.
-Example format:
+Return ONLY a valid JSON object mapping each opportunity's actual UUID
+(the value after "id:" in each OPPORTUNITY block above) to its score object.
+DO NOT use placeholders like "uuid-1" — use the exact UUID strings from the input.
+
+Example with real UUIDs:
 {
-  "uuid-1": { "fit_score": 82, "match_summary": "...", "strengths": ["..."], "skill_gaps": [] },
-  "uuid-2": { "fit_score": 45, "match_summary": "...", "strengths": ["..."], "skill_gaps": ["..."] }
+  "0043b853-7c80-437e-b406-f406fad078df": { "fit_score": 82, "match_summary": "...", "strengths": ["..."], "skill_gaps": [] },
+  "6a97f7fb-cc14-473c-911a-4eb967b06482": { "fit_score": 45, "match_summary": "...", "strengths": ["..."], "skill_gaps": ["..."] }
 }`;
 
   const userMessage = `CANDIDATE PROFILE:\n${userContext}\n\nOPPORTUNITIES TO SCORE:\n${opportunitiesText}\n\nReturn the JSON score map now.`;
@@ -244,11 +247,29 @@ Example format:
     if (!jsonMatch) throw new Error("No JSON found in response");
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
 
-    // Validate and sanitise each score entry
+    // Validate and sanitise each score entry.
+    // Phase 6 Item 3 — accept three key shapes from Claude:
+    //   1. real UUIDs (preferred, what the prompt asks for)
+    //   2. "uuid-N" / "OPPORTUNITY N" / "N" / "opp-N" placeholders that
+    //      we map back to the input UUID by 1-based index.
+    // The map below keys remap-target → input UUID for fallback lookups.
+    const idByIndex = new Map<string, string>();
+    opportunityIds.forEach((id, i) => {
+      const idx = String(i + 1);
+      idByIndex.set(idx, id);
+      idByIndex.set(`uuid-${idx}`, id);
+      idByIndex.set(`opp-${idx}`, id);
+      idByIndex.set(`OPPORTUNITY ${idx}`, id);
+      idByIndex.set(`OPP_${idx}`, id);
+    });
+    const validIdSet = new Set(opportunityIds);
+
     for (const [id, val] of Object.entries(parsed)) {
       if (typeof val !== "object" || val === null) continue;
       const v = val as Record<string, unknown>;
-      scores[id] = {
+      const finalId = validIdSet.has(id) ? id : idByIndex.get(id);
+      if (!finalId) continue; // unmappable key — skip, log only at scale
+      scores[finalId] = {
         fit_score: Math.min(100, Math.max(0, Number(v.fit_score ?? 0))),
         match_summary: String(v.match_summary ?? ""),
         strengths: Array.isArray(v.strengths) ? (v.strengths as string[]).slice(0, 3) : [],
@@ -260,7 +281,12 @@ Example format:
     return NextResponse.json({ scores: {} });
   }
 
-  // Cache fit scores for 6h — profile rarely changes that fast
-  await cache.set(cacheKey, scores, 6 * 60 * 60);
+  // Cache fit scores for 6h — profile rarely changes that fast.
+  // Do NOT cache empty score maps — they would lock the user into a
+  // permanent "No score" state if Claude ever returned mismatched keys.
+  // Phase 6 Item 3 — was a cache lockup that masked the real fix.
+  if (Object.keys(scores).length > 0) {
+    await cache.set(cacheKey, scores, 6 * 60 * 60);
+  }
   return NextResponse.json({ scores });
 }
