@@ -7,7 +7,7 @@ interface KpiCard {
   label: string;
   value: string | number;
   sub?: string;
-  color?: "blue" | "green" | "purple" | "amber" | "gray";
+  color?: "blue" | "green" | "purple" | "indigo" | "amber" | "gray";
 }
 
 interface AdminAnalyticsPanelProps {
@@ -30,6 +30,7 @@ function colorClasses(color: KpiCard["color"] = "gray") {
     blue:   "bg-blue-50 border-blue-100 text-blue-700",
     green:  "bg-green-50 border-green-100 text-green-700",
     purple: "bg-purple-50 border-purple-100 text-purple-700",
+    indigo: "bg-indigo-50 border-indigo-100 text-indigo-700",
     amber:  "bg-amber-50 border-amber-100 text-amber-700",
     gray:   "bg-gray-50 border-gray-100 text-gray-700",
   };

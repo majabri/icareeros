@@ -42,7 +42,7 @@ export default async function AdminCommandCenter() {
   const totalUsers = (profiles ?? []).length;
   const newUsersLast7Days = (profiles ?? []).filter(p => new Date(p.created_at) >= new Date(sevenDaysAgo)).length;
   const subMap = new Map((subscriptions ?? []).map(s => [s.user_id, s.plan as string]));
-  const planDist = { free: 0, pro: 0, premium: 0 };
+  const planDist = { free: 0, starter: 0, standard: 0, pro: 0 };
   for (const p of profiles ?? []) {
     const plan = (subMap.get(p.user_id) ?? "free") as keyof typeof planDist;
     planDist[plan in planDist ? plan : "free"]++;
