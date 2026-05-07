@@ -38,7 +38,10 @@
  *
  * Dedup
  * -----
- * Upsert with onConflict: "source,source_id" — same pattern as
+ * Upsert with onConflict: "source,source_id" — depends on the
+ * non-partial UNIQUE constraint added by migration
+ * opportunities_source_source_id_unique_constraint_v1 (Phase 6 Item 3).
+ * Same pattern as
  * /api/jobs/agent. A row that already exists at (source, source_id)
  * is updated, not duplicated.
  */

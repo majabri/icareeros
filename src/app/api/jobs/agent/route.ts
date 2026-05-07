@@ -18,6 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
@@ -262,6 +263,17 @@ QUALITY
     const enriched  = await chaseApplyUrlsBatch(enriched0);
 
     // ── Upsert into opportunities for fit-scoring ─────────────────────────
+    // NOTE: ON CONFLICT (source, source_id) requires the non-partial UNIQUE
+    // constraint added by migration opportunities_source_source_id_unique_constraint_v1
+    // (Phase 6 Item 3). The prior partial unique index did not match this
+    // form and the upsert silently failed.
+    //
+    // RLS NOTE: opportunities only has policies for service_role. Writing
+    // through the user-session client errors with "new row violates
+    // row-level security policy". We use a separate service-role client
+    // for the write, then return DB UUIDs to the caller so /api/jobs/fit-scores
+    // can look them up. If SUPABASE_SERVICE_ROLE_KEY is missing the upsert
+    // is skipped and raw Adzuna IDs flow through (degraded fit-scoring).
     let opportunitiesWithIds: typeof enriched = enriched;
     if (enriched.length > 0) {
       const rows = enriched.map(o => ({
@@ -284,7 +296,15 @@ QUALITY
         quality_score:    o.quality_score ?? null,
       }));
 
-      const { data: upserted, error: upsertErr } = await supabase
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const upsertClient = serviceKey
+        ? createServiceRoleClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            serviceKey,
+            { auth: { persistSession: false } },
+          )
+        : supabase; // fallback — will fail RLS but matches prior behaviour
+      const { data: upserted, error: upsertErr } = await upsertClient
         .from("opportunities")
         .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: false })
         .select("id, source, source_id");
