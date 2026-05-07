@@ -96,3 +96,45 @@ export function createTracedClient(userId: string, routeName: string): Anthropic
 
 /** Type alias for convenience */
 export type TracedAnthropicClient = Anthropic;
+
+
+// ── Streaming-route trace helper ──────────────────────────────────────────────
+//
+// createTracedClient only patches the non-streaming `messages.create` because
+// the SDK's `messages.stream()` returns an async iterable, not a Promise. For
+// streaming routes (Coach Mode B, Interview Simulator) we record token/cost
+// metadata via this small helper after the stream completes.
+//
+// Phase 5 Item 3 — see docs/specs/COWORK-BRIEF-phase5-v1.md.
+
+export interface CoachSessionTraceMetadata {
+  session_id:           string;
+  turn_input_tokens:    number;
+  turn_output_tokens:   number;
+  turn_cost_usd:        number;
+  total_input_tokens:   number;
+  total_output_tokens:  number;
+  cumulative_cost_usd:  number;
+  message_count:        number;
+}
+
+/**
+ * Record token + cost metadata for a streamed turn against a Langfuse trace.
+ * No-op when Langfuse env vars are unset (mirrors createTracedClient).
+ * Best-effort — never throws on telemetry failure.
+ */
+export async function recordCoachSessionTrace(
+  userId:    string,
+  routeName: string,
+  metadata:  CoachSessionTraceMetadata,
+): Promise<void> {
+  const lf = getLangfuse();
+  if (!lf) return;
+  try {
+    const trace = lf.trace({ name: routeName, userId });
+    trace.update({ metadata });
+    await lf.flushAsync().catch(() => {});
+  } catch {
+    /* best-effort */
+  }
+}

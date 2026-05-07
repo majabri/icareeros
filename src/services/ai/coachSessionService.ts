@@ -31,21 +31,24 @@ export interface StreamCoachMessageOpts {
   sessionId?:  string | null;
   onSession?:  (sessionId: string) => void;          // first frame
   onChunk?:    (text: string, full: string) => void; // each delta
-  onDone?:     (summary: { message_count: number }) => void;
+  onDone?:     (summary: { message_count: number; warning?: "long_session" }) => void;
   onError?:    (message: string) => void;
 }
 
 export interface StreamResult {
   sessionId: string;
   fullText:  string;
-  status:    "ok" | "rate_limited" | "upgrade_required" | "error" | "auth_required";
-  meta?:     { limit?: number; used?: number; resetsAt?: string | null };
+  status:    "ok" | "rate_limited" | "upgrade_required" | "error" | "auth_required" | "session_limit";
+  /** "long_session" when the soft-warning threshold (40 messages) was hit. */
+  warning?:  "long_session";
+  meta?:     { limit?: number; used?: number; resetsAt?: string | null; cap?: number };
 }
 
 /** POST /api/career-os/coach-session and stream the response. */
 export async function streamCoachMessage(opts: StreamCoachMessageOpts): Promise<StreamResult> {
   let resolvedSessionId = opts.sessionId ?? "";
   let fullText = "";
+  let sessionWarning: "long_session" | undefined;
 
   const result = await readSseStream({
     url:  "/api/career-os/coach-session",
@@ -64,7 +67,12 @@ export async function streamCoachMessage(opts: StreamCoachMessageOpts): Promise<
         opts.onChunk?.(t, fullText);
       } else if (event === "done" && data && typeof data === "object") {
         const mc = (data as { message_count?: number }).message_count;
-        opts.onDone?.({ message_count: typeof mc === "number" ? mc : 0 });
+        const w  = (data as { warning?: "long_session" }).warning;
+        if (w === "long_session") sessionWarning = w;
+        opts.onDone?.({
+          message_count: typeof mc === "number" ? mc : 0,
+          warning:       w,
+        });
       } else if (event === "error") {
         const m = data && typeof data === "object" && "error" in data
           ? String((data as { error: string }).error)
@@ -95,11 +103,32 @@ export async function streamCoachMessage(opts: StreamCoachMessageOpts): Promise<
     };
   }
   if (result.status === "error") {
+    // 409 with body { error: "session_limit", cap, message_count } — hard cap
+    // hit on the server side. Map to a distinct status so the UI can render
+    // a "Start new session" CTA.
+    if (result.httpCode === 409 && result.errorBody?.error === "session_limit") {
+      const msg = (result.errorBody?.message as string | undefined)
+        ?? "Session limit reached. Start a new conversation.";
+      opts.onError?.(msg);
+      return {
+        sessionId: resolvedSessionId,
+        fullText:  "",
+        status:    "session_limit",
+        meta: {
+          cap: result.errorBody?.cap as number | undefined,
+        },
+      };
+    }
     opts.onError?.(`HTTP ${result.httpCode}`);
     return { sessionId: resolvedSessionId, fullText, status: "error" };
   }
 
-  return { sessionId: resolvedSessionId, fullText, status: "ok" };
+  return {
+    sessionId: resolvedSessionId,
+    fullText,
+    status: "ok",
+    warning: sessionWarning,
+  };
 }
 
 /** GET /api/career-os/coach-session — list the user's recent sessions. */
