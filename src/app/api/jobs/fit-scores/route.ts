@@ -242,10 +242,22 @@ Example with real UUIDs:
 
   // ── Parse response ──────────────────────────────────────────────────────────
   let scores: Record<string, FitScore> = {};
+  // Phase 6 Item 3 debug — TEMPORARY logging to pinpoint why /jobs cards
+  // still show "No score" after the upsert pipeline + cache fixes. Will be
+  // reverted in the same PR after one production observation.
+  console.log("[fit-scores][debug] raw output (first 800 chars):",
+    JSON.stringify((raw ?? "").slice(0, 800)),
+    "| length:", (raw ?? "").length,
+    "| inputIds:", opportunityIds);
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found in response");
+    if (!jsonMatch) {
+      console.error("[fit-scores][debug] regex /\{[\s\S]*\}/ matched nothing — raw was:",
+        JSON.stringify((raw ?? "").slice(0, 800)));
+      throw new Error("No JSON found in response");
+    }
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+    console.log("[fit-scores][debug] parsed JSON keys:", Object.keys(parsed));
 
     // Validate and sanitise each score entry.
     // Phase 6 Item 3 — accept three key shapes from Claude:
@@ -276,7 +288,11 @@ Example with real UUIDs:
         skill_gaps: Array.isArray(v.skill_gaps) ? (v.skill_gaps as string[]).slice(0, 3) : [],
       };
     }
-  } catch {
+    console.log("[fit-scores][debug] final scores key count:",
+      Object.keys(scores).length, "of", opportunityIds.length, "input ids");
+  } catch (parseErr) {
+    console.error("[fit-scores][debug] parse threw:",
+      parseErr instanceof Error ? parseErr.message : String(parseErr));
     // Return partial or empty scores rather than 500 — non-blocking feature
     return NextResponse.json({ scores: {} });
   }
