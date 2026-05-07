@@ -141,7 +141,7 @@ describe("/api/career-os/evaluate — LinkedIn analysis (Phase 4 Item 2a)", () =
       },
       error: null,
     });
-    pushFromResult("user_subscriptions", { data: { plan: "premium", status: "active" }, error: null });
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
 
     stubMainEvaluation();
     stubLinkedInAnalysis();
@@ -229,7 +229,7 @@ describe("/api/career-os/evaluate — LinkedIn analysis (Phase 4 Item 2a)", () =
       data: { headline: "PM", summary: "x", skills: ["TS", "PM", "OKRs"], target_skills: [], work_experience: [], linkedin_url: null },
       error: null,
     });
-    pushFromResult("user_subscriptions", { data: { plan: "premium", status: "active" }, error: null });
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
 
     stubMainEvaluation();
     // LinkedIn call throws — main evaluation should still succeed

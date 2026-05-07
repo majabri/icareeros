@@ -28,7 +28,8 @@ interface Props {
 type Tab = "users" | "admins";
 
 function planBadgeClass(plan: string) {
-  if (plan === "premium") return "bg-purple-100 text-purple-700";
+  if (plan === "starter")  return "bg-purple-100 text-purple-700";
+  if (plan === "standard") return "bg-indigo-100 text-indigo-700";
   if (plan === "pro") return "bg-blue-100 text-blue-700";
   return "bg-gray-100 text-gray-600";
 }
@@ -438,7 +439,7 @@ function PlanDropdown({
       </button>
       {open && (
         <div className="absolute left-0 z-20 mt-1 w-32 rounded-md border border-gray-200 bg-white shadow-lg">
-          {(["free", "pro", "premium"] as SubscriptionPlan[]).map((p) => (
+          {(["free", "starter", "standard", "pro"] as SubscriptionPlan[]).map((p) => (
             <button
               key={p}
               onClick={() => {

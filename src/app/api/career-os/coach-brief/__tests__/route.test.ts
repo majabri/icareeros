@@ -112,7 +112,7 @@ function makeReq(body: Record<string, unknown> = {}, headers: Record<string, str
 // ── Helpers to queue a "happy-path" sequence of Supabase calls ──────────────
 function queueHappyPath(opts: {
   cycleId:   string;
-  plan:      "free" | "premium" | "professional";
+  plan:      "free" | "starter" | "standard" | "pro";
   monetizationOn: boolean;
   briefHistoryCount: number;
   cacheHit:  boolean;
@@ -215,18 +215,18 @@ describe("/api/career-os/coach-brief — rate limiting", () => {
     expect(body).toMatchObject({ error: "rate_limited", limit: 2, used: 2, plan: "free" });
   });
 
-  it("premium plan blocked at 5/month when monetization is on", async () => {
-    queueHappyPath({ cycleId: "c1", plan: "premium", monetizationOn: true, briefHistoryCount: 5, cacheHit: false });
+  it("starter plan blocked at 5/month when monetization is on", async () => {
+    queueHappyPath({ cycleId: "c1", plan: "starter", monetizationOn: true, briefHistoryCount: 5, cacheHit: false });
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1" }));
     expect(res.status).toBe(429);
     const body = await res.json();
-    expect(body).toMatchObject({ error: "rate_limited", limit: 5, used: 5, plan: "premium" });
+    expect(body).toMatchObject({ error: "rate_limited", limit: 5, used: 5, plan: "starter" });
   });
 
-  it("professional plan never blocked (unlimited = -1)", async () => {
+  it("pro plan never blocked (unlimited = -1)", async () => {
     queueHappyPath({
-      cycleId: "c1", plan: "professional", monetizationOn: true,
+      cycleId: "c1", plan: "pro", monetizationOn: true,
       briefHistoryCount: 100, cacheHit: false,
     });
     mockAnthropicCreate.mockResolvedValue({ content: [{ type: "text", text: "Pro brief" }] });
@@ -252,7 +252,7 @@ describe("/api/career-os/coach-brief — cache behaviour", () => {
 
   it("returns cache when signals match — no Anthropic call", async () => {
     queueHappyPath({
-      cycleId: "c1", plan: "premium", monetizationOn: false,
+      cycleId: "c1", plan: "starter", monetizationOn: false,
       briefHistoryCount: 1, cacheHit: true,
       currentStage: "coach", evaluateLastEventAt: "2026-05-01T00:00:00Z", applicationsCount: 0,
     });
@@ -268,7 +268,7 @@ describe("/api/career-os/coach-brief — cache behaviour", () => {
   it("regenerates when current_stage has changed", async () => {
     // Cache was generated when current_stage was 'coach', now it's 'achieve'.
     queueHappyPath({
-      cycleId: "c1", plan: "premium", monetizationOn: false,
+      cycleId: "c1", plan: "starter", monetizationOn: false,
       briefHistoryCount: 1, cacheHit: true,
       currentStage: "achieve", evaluateLastEventAt: "2026-05-01T00:00:00Z", applicationsCount: 0,
     });
@@ -278,7 +278,7 @@ describe("/api/career-os/coach-brief — cache behaviour", () => {
     // Simpler: mutate the queued coach_stage data to have stale signals.
     // Reset and re-queue manually:
     Object.keys(fromQueue).forEach(k => delete fromQueue[k]);
-    pushFromResult("user_subscriptions", { data: { plan: "premium", status: "active" }, error: null });
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
     pushFromResult("feature_flags",     { data: { enabled: false }, error: null });
     pushFromResult("career_os_stages", {
       data: {
@@ -289,7 +289,7 @@ describe("/api/career-os/coach-brief — cache behaviour", () => {
             generatedAt: "2026-04-15T00:00:00Z",
             signals:     { currentStage: "coach", evaluateLastEventAt: "2026-05-01T00:00:00Z", applicationsCount: 0 },
           },
-          briefHistory: [{ generatedAt: "2026-04-15T00:00:00Z", plan: "premium" }],
+          briefHistory: [{ generatedAt: "2026-04-15T00:00:00Z", plan: "starter" }],
         },
       },
       error: null,

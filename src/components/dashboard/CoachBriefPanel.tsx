@@ -31,7 +31,7 @@ interface CoachBriefPanelProps {
   className?: string;
   /** When passed and not "free", the panel renders a secondary CTA linking
    * to the interactive /coach chat page. Phase 3 Item 4. */
-  plan?:      "free" | "premium" | "professional";
+  plan?:      "free" | "starter" | "standard" | "pro";
 }
 
 export function CoachBriefPanel({ cycleId, initial, className, plan }: CoachBriefPanelProps) {

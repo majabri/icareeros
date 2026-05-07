@@ -64,7 +64,7 @@ async function resolveEffectivePlan(
     .maybeSingle();
   const rawPlan = data?.plan;
   const plan: SubscriptionPlan =
-    rawPlan && ["free", "premium", "professional"].includes(rawPlan)
+    rawPlan && ["free", "starter", "standard", "pro"].includes(rawPlan)
       ? (rawPlan as SubscriptionPlan)
       : "free";
   const activeStatuses = ["active", "trialing"];

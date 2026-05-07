@@ -41,13 +41,13 @@ describe("checkPlanLimit", () => {
     expect(await checkPlanLimit(sb, USER_ID, "aiCoach")).toBeNull();
   });
 
-  it("allows aiCoach for active premium user", async () => {
-    const sb = makeSupabaseMock(true, { plan: "premium", status: "active" });
+  it("allows aiCoach for active starter user", async () => {
+    const sb = makeSupabaseMock(true, { plan: "starter", status: "active" });
     expect(await checkPlanLimit(sb, USER_ID, "aiCoach")).toBeNull();
   });
 
-  it("allows aiCoach for active professional user", async () => {
-    const sb = makeSupabaseMock(true, { plan: "professional", status: "active" });
+  it("allows aiCoach for active pro user", async () => {
+    const sb = makeSupabaseMock(true, { plan: "pro", status: "active" });
     expect(await checkPlanLimit(sb, USER_ID, "aiCoach")).toBeNull();
   });
 
@@ -68,13 +68,13 @@ describe("checkPlanLimit", () => {
     expect(res!.status).toBe(402);
   });
 
-  it("allows coverLetters for premium user", async () => {
-    const sb = makeSupabaseMock(true, { plan: "premium", status: "active" });
+  it("allows coverLetters for starter user", async () => {
+    const sb = makeSupabaseMock(true, { plan: "starter", status: "active" });
     expect(await checkPlanLimit(sb, USER_ID, "coverLetters")).toBeNull();
   });
 
   it("treats canceled subscription as free — blocks aiCoach", async () => {
-    const sb = makeSupabaseMock(true, { plan: "premium", status: "canceled" });
+    const sb = makeSupabaseMock(true, { plan: "starter", status: "canceled" });
     const res = await checkPlanLimit(sb, USER_ID, "aiCoach");
     expect(res).not.toBeNull();
     const json = await res!.json();
@@ -82,7 +82,7 @@ describe("checkPlanLimit", () => {
   });
 
   it("treats past_due subscription as free — blocks aiCoach", async () => {
-    const sb = makeSupabaseMock(true, { plan: "premium", status: "past_due" });
+    const sb = makeSupabaseMock(true, { plan: "starter", status: "past_due" });
     const res = await checkPlanLimit(sb, USER_ID, "aiCoach");
     expect(res).not.toBeNull();
   });
@@ -93,7 +93,7 @@ describe("checkPlanLimit", () => {
   });
 
   it("professional allows all four feature types", async () => {
-    const sb = makeSupabaseMock(true, { plan: "professional", status: "active" });
+    const sb = makeSupabaseMock(true, { plan: "pro", status: "active" });
     const features: PlanFeature[] = ["aiCoach", "coverLetters", "mockInterviews", "advancedMatch"];
     for (const f of features) {
       expect(await checkPlanLimit(sb, USER_ID, f)).toBeNull();

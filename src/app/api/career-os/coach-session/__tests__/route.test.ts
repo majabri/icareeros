@@ -161,7 +161,7 @@ function stubAnthropicStreamWithText(parts: string[]): void {
  *   6. coach_sessions update (post-stream persistence)
  */
 function queueHappyPathNewSession(opts: {
-  plan: "free" | "premium" | "professional";
+  plan: "free" | "starter" | "standard" | "pro";
   monetizationOn: boolean;
   recentSessionCount?: number;
 }) {
@@ -169,7 +169,7 @@ function queueHappyPathNewSession(opts: {
   pushFromResult("feature_flags",     { data: { enabled: opts.monetizationOn }, error: null });
   // Premium has a finite limit (5/mo) → route runs the count query.
   // Professional is unlimited → route skips the count query.
-  if (opts.plan === "premium" && opts.monetizationOn) {
+  if (opts.plan === "starter" && opts.monetizationOn) {
     pushFromResult("coach_sessions", { count: opts.recentSessionCount ?? 0, error: null }); // count
   }
   // INSERT new row
@@ -220,20 +220,20 @@ describe("/api/career-os/coach-session — plan gates", () => {
     expect(mockAnthropicStream).not.toHaveBeenCalled();
   });
 
-  it("premium at 5/month with monetization on → 429 rate_limited", async () => {
-    queueHappyPathNewSession({ plan: "premium", monetizationOn: true, recentSessionCount: 5 });
+  it("starter at 5/month with monetization on → 429 rate_limited", async () => {
+    queueHappyPathNewSession({ plan: "starter", monetizationOn: true, recentSessionCount: 5 });
     // Once limit hits, route also reads oldest for resetsAt computation:
     pushFromResult("coach_sessions", { data: { created_at: "2026-04-15T00:00:00Z" }, error: null });
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
     expect(res.status).toBe(429);
     const body = await res.json();
-    expect(body).toMatchObject({ error: "rate_limited", limit: 5, used: 5, plan: "premium" });
+    expect(body).toMatchObject({ error: "rate_limited", limit: 5, used: 5, plan: "starter" });
     expect(mockAnthropicStream).not.toHaveBeenCalled();
   });
 
   it("monetization OFF — no rate limit (fail open)", async () => {
-    queueHappyPathNewSession({ plan: "premium", monetizationOn: false, recentSessionCount: 100 });
+    queueHappyPathNewSession({ plan: "starter", monetizationOn: false, recentSessionCount: 100 });
     stubAnthropicStreamWithText(["Hi.", " How can I help?"]);
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
@@ -245,8 +245,8 @@ describe("/api/career-os/coach-session — plan gates", () => {
     expect(out.chunks.join("")).toBe("Hi. How can I help?");
   });
 
-  it("professional unlimited (no block at high session count)", async () => {
-    queueHappyPathNewSession({ plan: "professional", monetizationOn: true, recentSessionCount: 100 });
+  it("pro unlimited (no block at high session count)", async () => {
+    queueHappyPathNewSession({ plan: "pro", monetizationOn: true, recentSessionCount: 100 });
     stubAnthropicStreamWithText(["Sure thing."]);
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
@@ -262,7 +262,7 @@ describe("/api/career-os/coach-session — happy path streaming", () => {
   });
 
   it("emits a 'session' event first, then text deltas, then 'done'", async () => {
-    queueHappyPathNewSession({ plan: "premium", monetizationOn: false });
+    queueHappyPathNewSession({ plan: "starter", monetizationOn: false });
     stubAnthropicStreamWithText(["Hello", " there."]);
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
@@ -274,7 +274,7 @@ describe("/api/career-os/coach-session — happy path streaming", () => {
   });
 
   it("continuation (existing session_id) does NOT count toward the limit", async () => {
-    pushFromResult("user_subscriptions", { data: { plan: "premium", status: "active" }, error: null });
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
     pushFromResult("feature_flags",     { data: { enabled: true }, error: null });
     // No `coach_sessions` count query — continuation skips the limit gate
     pushFromResult("coach_sessions", {
@@ -304,7 +304,7 @@ describe("/api/career-os/coach-session — context assembly", () => {
   });
 
   it("injects career context into the system prompt sent to Anthropic", async () => {
-    queueHappyPathNewSession({ plan: "professional", monetizationOn: false });
+    queueHappyPathNewSession({ plan: "pro", monetizationOn: false });
     stubAnthropicStreamWithText(["k"]);
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
@@ -319,7 +319,7 @@ describe("/api/career-os/coach-session — context assembly", () => {
   });
 
   it("uses prompt caching with cache_control: ephemeral on the system block", async () => {
-    queueHappyPathNewSession({ plan: "professional", monetizationOn: false });
+    queueHappyPathNewSession({ plan: "pro", monetizationOn: false });
     stubAnthropicStreamWithText([""]);
     const { POST } = await loadRoute();
     const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
