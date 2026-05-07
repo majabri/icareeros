@@ -3,7 +3,11 @@
  * route so the UI doesn't have to deal with SSE parsing inline.
  *
  * Phase 3 Item 2 — see docs/specs/COWORK-BRIEF-phase3-v1.md.
+ * Phase 4: SSE-reader logic extracted to src/lib/sseStreamReader.ts so
+ * Interview Mode B and other future surfaces can share it.
  */
+
+import { readSseStream } from "@/lib/sseStreamReader";
 
 export type CoachRole = "user" | "assistant";
 export interface CoachMessage { role: CoachRole; content: string; ts: string; }
@@ -40,83 +44,59 @@ export interface StreamResult {
 
 /** POST /api/career-os/coach-session and stream the response. */
 export async function streamCoachMessage(opts: StreamCoachMessageOpts): Promise<StreamResult> {
-  const res = await fetch("/api/career-os/coach-session", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({
+  let resolvedSessionId = opts.sessionId ?? "";
+  let fullText = "";
+
+  const result = await readSseStream({
+    url:  "/api/career-os/coach-session",
+    body: {
       cycle_id:   opts.cycleId,
       message:    opts.message,
       session_id: opts.sessionId ?? null,
-    }),
-  });
-
-  if (res.status === 401) {
-    opts.onError?.("Sign in required.");
-    return { sessionId: opts.sessionId ?? "", fullText: "", status: "auth_required" };
-  }
-  if (res.status === 403) {
-    const body = await res.json().catch(() => ({}));
-    opts.onError?.(body?.message ?? "Upgrade required.");
-    return { sessionId: opts.sessionId ?? "", fullText: "", status: "upgrade_required" };
-  }
-  if (res.status === 429) {
-    const body = await res.json().catch(() => ({}));
-    opts.onError?.("You've used all your sessions for this month.");
-    return {
-      sessionId: opts.sessionId ?? "", fullText: "", status: "rate_limited",
-      meta: { limit: body.limit, used: body.used, resetsAt: body.resetsAt },
-    };
-  }
-  if (!res.ok || !res.body) {
-    const body = await res.text().catch(() => "");
-    opts.onError?.(body || `HTTP ${res.status}`);
-    return { sessionId: opts.sessionId ?? "", fullText: "", status: "error" };
-  }
-
-  const reader  = res.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer    = "";
-  let fullText  = "";
-  let resolvedSessionId = opts.sessionId ?? "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    // SSE frames end with a blank line. Split on \n\n, keep partial in buffer.
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
-    for (const frame of frames) {
-      const lines = frame.split("\n").filter(Boolean);
-      let event = "message";
-      const data: string[] = [];
-      for (const line of lines) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data.push(line.slice(5).trim());
-      }
-      if (data.length === 0) continue;
-      let parsed: unknown;
-      try { parsed = JSON.parse(data.join("\n")); } catch { continue; }
-
-      if (event === "session" && parsed && typeof parsed === "object" && "session_id" in parsed) {
-        resolvedSessionId = String((parsed as { session_id: string }).session_id);
+    },
+    onEvent: ({ event, data }) => {
+      if (event === "session" && data && typeof data === "object" && "session_id" in data) {
+        resolvedSessionId = String((data as { session_id: string }).session_id);
         opts.onSession?.(resolvedSessionId);
-      } else if (event === "message" && parsed && typeof parsed === "object" && "text" in parsed) {
-        const t = String((parsed as { text: string }).text);
+      } else if (event === "message" && data && typeof data === "object" && "text" in data) {
+        const t = String((data as { text: string }).text);
         fullText += t;
         opts.onChunk?.(t, fullText);
-      } else if (event === "done" && parsed && typeof parsed === "object") {
-        const mc = (parsed as { message_count?: number }).message_count;
+      } else if (event === "done" && data && typeof data === "object") {
+        const mc = (data as { message_count?: number }).message_count;
         opts.onDone?.({ message_count: typeof mc === "number" ? mc : 0 });
       } else if (event === "error") {
-        const m = parsed && typeof parsed === "object" && "error" in parsed
-          ? String((parsed as { error: string }).error)
+        const m = data && typeof data === "object" && "error" in data
+          ? String((data as { error: string }).error)
           : "stream error";
         opts.onError?.(m);
-        return { sessionId: resolvedSessionId, fullText, status: "error" };
       }
-    }
+    },
+  });
+
+  if (result.status === "auth_required") {
+    opts.onError?.("Sign in required.");
+    return { sessionId: resolvedSessionId, fullText: "", status: "auth_required" };
+  }
+  if (result.status === "upgrade_required") {
+    const msg = (result.errorBody?.message as string | undefined) ?? "Upgrade required.";
+    opts.onError?.(msg);
+    return { sessionId: resolvedSessionId, fullText: "", status: "upgrade_required" };
+  }
+  if (result.status === "rate_limited") {
+    opts.onError?.("You've used all your sessions for this month.");
+    return {
+      sessionId: resolvedSessionId, fullText: "", status: "rate_limited",
+      meta: {
+        limit:    result.errorBody?.limit    as number | undefined,
+        used:     result.errorBody?.used     as number | undefined,
+        resetsAt: result.errorBody?.resetsAt as string | null | undefined,
+      },
+    };
+  }
+  if (result.status === "error") {
+    opts.onError?.(`HTTP ${result.httpCode}`);
+    return { sessionId: resolvedSessionId, fullText, status: "error" };
   }
 
   return { sessionId: resolvedSessionId, fullText, status: "ok" };
