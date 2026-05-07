@@ -79,6 +79,7 @@ vi.mock("@/lib/observability/langfuse", () => ({
       create: (...args: unknown[]) => mockAnthropicCreate(...args),
     },
   })),
+  recordCoachSessionTrace: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -351,5 +352,211 @@ describe("/api/career-os/coach-session — GET (list sessions)", () => {
     const body = await res.json();
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0].id).toBe("s1");
+  });
+});
+
+// ── Phase 5 Item 3 — observability / token tracking / session caps ──────────
+
+describe("/api/career-os/coach-session — soft warning at message_count >= 40", () => {
+  it("done frame includes warning: 'long_session' when newCount crosses 40", async () => {
+    // Existing session at 38 messages — this turn lands at 40.
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
+    pushFromResult("feature_flags",     { data: { enabled: false }, error: null });
+    pushFromResult("coach_sessions", {
+      data: {
+        id: "session-soft", messages: [], message_count: 38,
+        summary: null, total_input_tokens: 0, total_output_tokens: 0,
+      },
+      error: null,
+    });
+    pushFromResult("career_profiles",  { data: { headline: "PM", skills: [] }, error: null });
+    pushFromResult("career_os_cycles", { data: { current_stage: "coach" }, error: null });
+    pushFromResult("career_os_stages", { data: [], error: null });
+    pushFromResult("applications",     { count: 0, error: null });
+    pushFromResult("opportunities",    { count: 0, error: null });
+    pushFromResult("coach_sessions",   { data: null, error: null });
+
+    stubAnthropicStreamWithText(["Reply"]);
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "hi", session_id: "session-soft" }));
+    const out = await drainStream(res);
+    // Find the done frame and assert warning flag
+    const doneIdx = out.events.lastIndexOf("done");
+    expect(doneIdx).toBeGreaterThan(-1);
+    expect(out.raw).toContain('"warning":"long_session"');
+    expect(out.raw).toContain('"message_count":40');
+  });
+
+  it("done frame omits warning when newCount stays below 40", async () => {
+    queueHappyPathNewSession({ plan: "pro", monetizationOn: false });
+    // Override the inserted session to start at 0 (already the default),
+    // newCount becomes 2 — well below 40.
+    stubAnthropicStreamWithText(["ok"]);
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "first" }));
+    const out = await drainStream(res);
+    expect(out.raw).not.toContain("long_session");
+    expect(out.raw).toContain('"message_count":2');
+  });
+});
+
+describe("/api/career-os/coach-session — hard cap at message_count >= 60", () => {
+  it("returns 409 session_limit when continuing a session at the cap", async () => {
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
+    pushFromResult("feature_flags",     { data: { enabled: false }, error: null });
+    pushFromResult("coach_sessions", {
+      data: {
+        id: "session-capped", messages: [], message_count: 60,
+        summary: null, total_input_tokens: 0, total_output_tokens: 0,
+      },
+      error: null,
+    });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "more please", session_id: "session-capped" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      error: "session_limit",
+      cap:   60,
+      message_count: 60,
+    });
+    // No Anthropic stream call made.
+    expect(mockAnthropicStream).not.toHaveBeenCalled();
+  });
+
+  it("hits the cap exactly at 60 (>=, not >)", async () => {
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
+    pushFromResult("feature_flags",     { data: { enabled: false }, error: null });
+    pushFromResult("coach_sessions", {
+      data: {
+        id: "session-edge", messages: [], message_count: 59,
+        summary: null, total_input_tokens: 0, total_output_tokens: 0,
+      },
+      error: null,
+    });
+    pushFromResult("career_profiles",  { data: { headline: "PM", skills: [] }, error: null });
+    pushFromResult("career_os_cycles", { data: { current_stage: "coach" }, error: null });
+    pushFromResult("career_os_stages", { data: [], error: null });
+    pushFromResult("applications",     { count: 0, error: null });
+    pushFromResult("opportunities",    { count: 0, error: null });
+    pushFromResult("coach_sessions",   { data: null, error: null });
+    stubAnthropicStreamWithText(["x"]);
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    // 59 messages → +2 (user+assistant) = 61, but cap is checked BEFORE the
+    // turn runs. 59 < 60, so this turn proceeds and persists newCount=61.
+    const res = await POST(makeReq({ cycle_id: "c1", message: "hello", session_id: "session-edge" }));
+    const out = await drainStream(res);
+    expect(out.events).toContain("done");
+    // The NEXT call would be blocked because count is now 61 >= 60.
+    expect(out.raw).toContain('"warning":"long_session"'); // 61 > 40
+  });
+
+  it("does NOT consume a new-session credit for rate limiting (uses existing session)", async () => {
+    // The check happens AFTER the row is loaded; rate-limit gate is upstream
+    // and is ONLY invoked for sessionId === null. Continuing an existing
+    // session never runs countRecentSessions.
+    pushFromResult("user_subscriptions", { data: { plan: "starter", status: "active" }, error: null });
+    pushFromResult("feature_flags",     { data: { enabled: true }, error: null });
+    pushFromResult("coach_sessions", {
+      data: {
+        id: "session-ratelimit-edge", messages: [], message_count: 60,
+        summary: null, total_input_tokens: 0, total_output_tokens: 0,
+      },
+      error: null,
+    });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "hi", session_id: "session-ratelimit-edge" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("session_limit");
+    // NOT 429
+    expect(body.error).not.toBe("rate_limited");
+  });
+});
+
+describe("/api/career-os/coach-session — token usage tracking", () => {
+  it("aggregates input/output tokens onto the session row in the post-stream UPDATE", async () => {
+    pushFromResult("user_subscriptions", { data: { plan: "pro", status: "active" }, error: null });
+    pushFromResult("feature_flags",     { data: { enabled: false }, error: null });
+    pushFromResult("coach_sessions", {
+      data: {
+        id: "session-tok", messages: [], message_count: 0,
+        summary: null, total_input_tokens: 100, total_output_tokens: 50,
+      },
+      error: null,
+    });
+    pushFromResult("career_profiles",  { data: { headline: "PM", skills: [] }, error: null });
+    pushFromResult("career_os_cycles", { data: { current_stage: "coach" }, error: null });
+    pushFromResult("career_os_stages", { data: [], error: null });
+    pushFromResult("applications",     { count: 0, error: null });
+    pushFromResult("opportunities",    { count: 0, error: null });
+
+    // Capture the update payload via a special queued shape that simply
+    // resolves; we'll assert via the recorded mock chain calls instead.
+    pushFromResult("coach_sessions",   { data: null, error: null });
+
+    // Anthropic stream emits a message_start with usage, then text, then a
+    // message_delta with cumulative output_tokens.
+    mockAnthropicStream.mockImplementation(() => (async function* () {
+      yield { type: "message_start", message: { usage: { input_tokens: 23, output_tokens: 0 } } };
+      yield { type: "content_block_delta", delta: { type: "text_delta", text: "Hi" } };
+      yield { type: "message_delta", usage: { input_tokens: 23, output_tokens: 7 } };
+    })());
+
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "yo", session_id: "session-tok" }));
+    const out = await drainStream(res);
+    expect(out.events).toContain("done");
+
+    // Find the most-recent .update() call on coach_sessions.
+    const calls = mockFrom.mock.calls.filter(([t]) => t === "coach_sessions");
+    expect(calls.length).toBeGreaterThan(0);
+    // The chain object held by the route stores its update payload via the
+    // .update() spy we configured in makeChain. Walk results to find one with
+    // total_input_tokens incremented to 100 + 23 = 123 and output 50 + 7 = 57.
+    // (Mock is structural so we just assert the SQL-ready shape was sent.)
+    const updateSpies = mockFrom.mock.results
+      .map(r => (r.value as Record<string, unknown>)?.update)
+      .filter(Boolean) as unknown as Array<ReturnType<typeof vi.fn>>;
+    const allUpdates = updateSpies.flatMap(s => s.mock.calls.map(c => c[0])).filter(Boolean);
+    const matching = allUpdates.find((p: Record<string, unknown>) =>
+      p && typeof p === "object" &&
+      p.total_input_tokens === 123 && p.total_output_tokens === 57,
+    );
+    expect(matching).toBeTruthy();
+    expect((matching as Record<string, unknown>).message_count).toBe(2);
+  });
+
+  it("falls back gracefully when the stream emits no usage events", async () => {
+    queueHappyPathNewSession({ plan: "pro", monetizationOn: false });
+    // No usage events at all
+    stubAnthropicStreamWithText(["Reply"]);
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const { POST } = await loadRoute();
+    const res = await POST(makeReq({ cycle_id: "c1", message: "hi" }));
+    const out = await drainStream(res);
+    expect(out.events).toContain("done");
+    // Token columns should still update — to 0 input + 0 output (no double-count).
+    const updateSpies = mockFrom.mock.results
+      .map(r => (r.value as Record<string, unknown>)?.update)
+      .filter(Boolean) as unknown as Array<ReturnType<typeof vi.fn>>;
+    const allUpdates = updateSpies.flatMap(s => s.mock.calls.map(c => c[0])).filter(Boolean);
+    const matching = allUpdates.find((p: Record<string, unknown>) =>
+      p && typeof p === "object" &&
+      "total_input_tokens" in p && "total_output_tokens" in p,
+    );
+    expect(matching).toBeTruthy();
   });
 });

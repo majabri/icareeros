@@ -24,11 +24,22 @@
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createTracedClient } from "@/lib/observability/langfuse";
+import { createTracedClient, recordCoachSessionTrace } from "@/lib/observability/langfuse";
 import { PLAN_LIMITS, type SubscriptionPlan } from "@/services/billing/types";
 
 const MAX_HISTORY_TURNS = 24; // last 12 user/assistant pairs
 const SUMMARY_REGEN_EVERY = 10; // messages
+// Phase 5 Item 3 — session-length thresholds.
+//   SOFT_WARN_AT triggers a `warning: "long_session"` flag in the SSE done frame.
+//   HARD_CAP     blocks new turns with code: "session_limit" (does NOT count
+//                as a new session for rate-limit purposes).
+const SESSION_SOFT_WARN_AT = 40;
+const SESSION_HARD_CAP     = 60;
+// Sonnet 4.6 USD per token — public list price (input $3/M, output $15/M).
+// Used for Langfuse trace metadata; never written to the DB so the rate
+// can change without a migration.
+const COST_PER_INPUT_TOKEN  = 0.000003;
+const COST_PER_OUTPUT_TOKEN = 0.000015;
 
 // ── Supabase server client ──────────────────────────────────────────────────
 
@@ -258,12 +269,12 @@ export async function POST(req: Request) {
   }
 
   // 5. Load (or create) the session row
-  type SessionRow = { id: string; messages: ChatMessage[]; message_count: number; summary: string | null };
+  type SessionRow = { id: string; messages: ChatMessage[]; message_count: number; summary: string | null; total_input_tokens: number; total_output_tokens: number };
   let sessionRow: SessionRow | null = null;
   if (sessionId) {
     const { data } = await supabase
       .from("coach_sessions")
-      .select("id, messages, message_count, summary")
+      .select("id, messages, message_count, summary, total_input_tokens, total_output_tokens")
       .eq("id", sessionId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -275,12 +286,26 @@ export async function POST(req: Request) {
     const { data, error: insErr } = await supabase
       .from("coach_sessions")
       .insert({ user_id: user.id, cycle_id: cycleId })
-      .select("id, messages, message_count, summary")
+      .select("id, messages, message_count, summary, total_input_tokens, total_output_tokens")
       .single();
     if (insErr || !data) {
       return NextResponse.json({ error: insErr?.message ?? "Failed to create session" }, { status: 500 });
     }
     sessionRow = data as SessionRow;
+  }
+
+  // 5b. Hard cap on session length — does NOT count as a new session for
+  //     rate-limit purposes. Phase 5 Item 3.
+  if ((sessionRow!.message_count ?? 0) >= SESSION_HARD_CAP) {
+    return NextResponse.json(
+      {
+        error:        "session_limit",
+        message:      "Session limit reached. Start a new conversation.",
+        message_count: sessionRow!.message_count,
+        cap:          SESSION_HARD_CAP,
+      },
+      { status: 409 },
+    );
   }
 
   // 6. Assemble career context for the system prompt
@@ -334,13 +359,39 @@ export async function POST(req: Request) {
           messages: apiMessages,
         });
 
+        // Capture usage from the Anthropic stream so we can credit token
+        // counts to coach_sessions (Phase 5 Item 3) and surface cost on the
+        // Langfuse trace for the route call.
+        let usageInput  = 0;
+        let usageOutput = 0;
+
         for await (const event of stream) {
           if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
             const t = event.delta.text as string;
             fullText += t;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: t })}\n\n`));
+            continue;
+          }
+          // message_start carries an initial usage with input tokens; message_delta
+          // carries cumulative output tokens. Read whichever is present so we
+          // don't depend on a single event shape.
+          if (event.type === "message_start" && event.message?.usage) {
+            usageInput  = (event.message.usage.input_tokens  as number) ?? usageInput;
+            usageOutput = (event.message.usage.output_tokens as number) ?? usageOutput;
+          } else if (event.type === "message_delta" && event.usage) {
+            usageInput  = (event.usage.input_tokens  as number) ?? usageInput;
+            usageOutput = (event.usage.output_tokens as number) ?? usageOutput;
           }
         }
+
+        // Phase 5 Item 3 — accumulate token totals on the session row.
+        const newInputTotal  = (sessionRow!.total_input_tokens  ?? 0) + usageInput;
+        const newOutputTotal = (sessionRow!.total_output_tokens ?? 0) + usageOutput;
+        const turnCostUsd    = usageInput * COST_PER_INPUT_TOKEN
+                              + usageOutput * COST_PER_OUTPUT_TOKEN;
+        const cumulativeCostUsd =
+            newInputTotal  * COST_PER_INPUT_TOKEN
+          + newOutputTotal * COST_PER_OUTPUT_TOKEN;
 
         // Persist the turn
         const assistantMsg: ChatMessage = { role: "assistant", content: fullText, ts: new Date().toISOString() };
@@ -350,12 +401,28 @@ export async function POST(req: Request) {
         await supabase
           .from("coach_sessions")
           .update({
-            messages:        newMessages,
-            message_count:   newCount,
-            last_message_at: new Date().toISOString(),
+            messages:            newMessages,
+            message_count:       newCount,
+            last_message_at:     new Date().toISOString(),
+            total_input_tokens:  newInputTotal,
+            total_output_tokens: newOutputTotal,
           })
           .eq("id", sessionRow!.id)
           .eq("user_id", user.id);
+
+        // Surface token + cost data on the Langfuse trace for this route call.
+        // recordCoachSessionTrace is a no-op when Langfuse env vars aren't set,
+        // and never throws on telemetry failure.
+        void recordCoachSessionTrace(user.id, "career-os/coach-session", {
+          session_id:           sessionRow!.id,
+          turn_input_tokens:    usageInput,
+          turn_output_tokens:   usageOutput,
+          turn_cost_usd:        turnCostUsd,
+          total_input_tokens:   newInputTotal,
+          total_output_tokens:  newOutputTotal,
+          cumulative_cost_usd:  cumulativeCostUsd,
+          message_count:        newCount,
+        });
 
         // Optional rolling summary regen — fire-and-forget (best-effort)
         if (newCount > 0 && newCount % SUMMARY_REGEN_EVERY === 0) {
@@ -363,7 +430,15 @@ export async function POST(req: Request) {
           regenSummary(supabase, anthropic, user.id, sessionRow!.id, newMessages).catch(() => {});
         }
 
-        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ message_count: newCount })}\n\n`));
+        // Phase 5 Item 3 — soft warning at SOFT_WARN_AT messages. Client renders
+        // a banner suggesting the user start a fresh conversation. Non-blocking.
+        const donePayload: { message_count: number; warning?: "long_session" } = {
+          message_count: newCount,
+        };
+        if (newCount >= SESSION_SOFT_WARN_AT) {
+          donePayload.warning = "long_session";
+        }
+        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify(donePayload)}\n\n`));
         controller.close();
       } catch (err) {
         const m = err instanceof Error ? err.message : "Internal error";

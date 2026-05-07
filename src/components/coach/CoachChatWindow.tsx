@@ -34,6 +34,10 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
   const [draft, setDraft]             = useState("");
   const [busy, setBusy]               = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  /** Phase 5 Item 3 — soft warning at 40 messages. */
+  const [longSession, setLongSession] = useState<boolean>(false);
+  /** Phase 5 Item 3 — hard cap at 60. Locks the input + shows Start-new CTA. */
+  const [sessionLimitReached, setSessionLimitReached] = useState<boolean>(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Initial load — fetch session list, optionally hydrate the most recent
@@ -61,6 +65,8 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
       setMessages([]);
       setStreaming(null);
       setError(null);
+      setLongSession(false);
+      setSessionLimitReached(false);
       return;
     }
     const detail = await getCoachSession(id);
@@ -69,6 +75,20 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
     setMessages(detail.messages ?? []);
     setStreaming(null);
     setError(null);
+    // Re-derive caps from the loaded message_count so a resumed session that
+    // is already long surfaces the right banner immediately.
+    const count = detail.message_count ?? (detail.messages?.length ?? 0);
+    setLongSession(count >= 40);
+    setSessionLimitReached(count >= 60);
+  }
+
+  function startNewSession() {
+    setActiveId(null);
+    setMessages([]);
+    setStreaming(null);
+    setError(null);
+    setLongSession(false);
+    setSessionLimitReached(false);
   }
 
   async function send() {
@@ -87,7 +107,7 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
       sessionId: activeId,
       onSession: (id) => { if (!activeId) setActiveId(id); },
       onChunk:   (_chunk, full) => setStreaming(full),
-      onDone:    () => { /* finalize after loop */ },
+      onDone:    (s) => { if (s.warning === "long_session") setLongSession(true); },
       onError:   (m) => setError(m),
     });
 
@@ -96,9 +116,15 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
         ...prev,
         { role: "assistant", content: result.fullText, ts: new Date().toISOString() },
       ]);
+      if (result.warning === "long_session") setLongSession(true);
       // refresh session list (count + last_message_at probably bumped)
       const list = await listCoachSessions();
       setSessions(list);
+    } else if (result.status === "session_limit") {
+      // Hard cap on the server side — strip the just-appended user message,
+      // lock the input, and surface the "Start new session" CTA.
+      setMessages(prev => prev.filter(m => m !== userMsg));
+      setSessionLimitReached(true);
     } else {
       // remove the just-appended user message on hard failure so the user can retry
       setMessages(prev => prev.filter(m => m !== userMsg));
@@ -145,9 +171,44 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
       </div>
 
       {/* Error banner */}
-      {error && (
+      {error && !sessionLimitReached && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {/* Phase 5 Item 3 — soft warning banner (long_session). */}
+      {longSession && !sessionLimitReached && (
+        <div
+          data-testid="coach-long-session-banner"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          This is a long session — consider{" "}
+          <button
+            type="button"
+            onClick={startNewSession}
+            className="font-semibold underline hover:text-amber-900"
+          >
+            starting a fresh conversation
+          </button>
+          .
+        </div>
+      )}
+
+      {/* Phase 5 Item 3 — hard cap banner (session_limit). Input is locked. */}
+      {sessionLimitReached && (
+        <div
+          data-testid="coach-session-limit-banner"
+          className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          <span>Session limit reached. Start a new conversation.</span>
+          <button
+            type="button"
+            onClick={startNewSession}
+            className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+          >
+            Start new session
+          </button>
         </div>
       )}
 
@@ -157,15 +218,19 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Ask your coach… (⌘/Ctrl+Enter to send)"
+          placeholder={
+            sessionLimitReached
+              ? "Session limit reached — start a new session"
+              : "Ask your coach… (⌘/Ctrl+Enter to send)"
+          }
           rows={2}
-          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          disabled={busy}
+          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-gray-100"
+          disabled={busy || sessionLimitReached}
         />
         <button
           type="button"
           onClick={() => void send()}
-          disabled={busy || !draft.trim()}
+          disabled={busy || !draft.trim() || sessionLimitReached}
           className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {busy ? "…" : "Send"}
