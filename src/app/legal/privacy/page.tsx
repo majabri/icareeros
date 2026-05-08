@@ -27,13 +27,11 @@ export default function PrivacyPolicyPage() {
           </p>
           <ul className="list-none ml-4 mt-2 space-y-1">
             <li><strong>Privacy Officer:</strong> Amir Jabri</li>
-            <li><strong>Email:</strong> privacy@icareeros.com</li>
             <li>
-              <strong>Postal correspondence:</strong>{" "}
+              <strong>Contact:</strong>{" "}
               <a href="/legal/contact" className="text-brand-700 underline">
-                Use our secure contact form
-              </a>{" "}
-              — submissions are routed to info@icareeros.com.
+                Use our contact form
+              </a>
             </li>
           </ul>
         </div>
@@ -97,7 +95,7 @@ export default function PrivacyPolicyPage() {
           <p className="mt-2">
             <strong>Canadian Residents (PIPEDA):</strong> You have the right to know your
             information is used in automated decision-making and to withdraw consent at any
-            time. To exercise these rights, contact privacy@icareeros.com.
+            time. To exercise these rights, please <a href="/legal/contact" className="text-brand-700 underline">contact us through our contact form</a>.
           </p>
         </div>
 
@@ -161,7 +159,7 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-lg font-semibold mt-6 mb-2">10. Your Privacy Rights</h2>
           <p><strong>California Residents (CCPA/CPRA):</strong> You have the right to know,
           access, delete, correct, and opt out of the sale of your personal information. We
-          respond to verified requests within 45 days. Contact: privacy@icareeros.com.</p>
+          respond to verified requests within 45 days. <a href="/legal/contact" className="text-brand-700 underline">Contact us through our contact form</a>.</p>
           <p className="mt-2"><strong>Canadian Residents (PIPEDA):</strong> You have the right
           to access, correct, and request deletion of your personal information, and to
           withdraw consent at any time. We respond within 30 days. You may also contact the
@@ -198,7 +196,11 @@ export default function PrivacyPolicyPage() {
         <div>
           <h2 className="text-lg font-semibold mt-6 mb-2">14. Contact Us</h2>
           <p>
-            <strong>Email:</strong> privacy@icareeros.com<br />
+            <strong>Contact us:</strong>{" "}
+            <a href="/legal/contact" className="text-brand-700 underline">
+              Use our contact form
+            </a>
+            <br />
             <strong>Website:</strong> icareeros.com/legal/privacy
           </p>
         </div>

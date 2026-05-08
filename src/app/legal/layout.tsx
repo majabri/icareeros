@@ -14,9 +14,6 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
           Legal
         </h1>
         <LegalSidenav />
-        <p className="mt-6 text-xs text-gray-500">
-          Questions? <a href="mailto:privacy@icareeros.com" className="text-brand-700 underline">privacy@icareeros.com</a>
-        </p>
       </aside>
       <main id="main-content" className="flex-1 max-w-3xl">
         {children}

@@ -17,9 +17,7 @@ iCareerOS ("**iCareerOS**", "**we**", "**us**", "**our**") is a career operating
 
 Contact us about this policy:
 
-- Privacy questions and data subject requests: **privacy@icareeros.com**
-- Legal notices: **legal@icareeros.com**
-- EU GDPR contact: **dpo@icareeros.com**
+- All privacy and legal communications: please [contact us through our contact form](/legal/contact).
 
 For the purposes of EU/UK GDPR, **iCareerOS LLC is the data controller** for personal data we process about you when you use iCareerOS as an end user. When iCareerOS is used by an employer or recruiter to evaluate you (B2B customers, when launched), we may act as a processor on the employer's instructions; in that case the employer is the controller and you should also consult their privacy notice.
 
@@ -73,7 +71,7 @@ We **do not** collect biometric identifiers (face geometry, voiceprints, fingerp
 
 ### 3.5 Children's data
 
-iCareerOS is not intended for users under **16 years of age** (or the higher digital-consent age in your country). We do not knowingly collect data from children. If you believe a child has provided us data, contact privacy@icareeros.com and we will delete it.
+iCareerOS is not intended for users under **16 years of age** (or the higher digital-consent age in your country). We do not knowingly collect data from children. [contact us through our contact form](/legal/contact)
 
 ---
 
@@ -101,7 +99,7 @@ iCareerOS uses AI extensively. **You have a right to know how it works and to as
 - Where AI is involved: résumé parsing, fit-score generation, cover-letter drafting, interview simulation, career-path advice, recruiter screening assistance, support-ticket classification.
 - **No fully automated decision has legal or similarly significant effects on you within iCareerOS.** Fit scores and recommendations are advisory; they do not auto-reject candidates or auto-accept job applications.
 - When iCareerOS is used by employer customers (B2B, future), the employer remains responsible for human review of any hiring decision. We will require this contractually.
-- You can request a human review of any AI output that materially affects you (e.g., a fit score) by emailing privacy@icareeros.com.
+- You can request a human review of any AI output that materially affects you (e.g., a fit score) [contact us through our contact form](/legal/contact)
 
 We treat hiring/career AI as **high-risk under EU AI Act Annex III §4** and design accordingly.
 
@@ -155,7 +153,7 @@ We rely on the following transfer safeguards under GDPR Chapter V:
 - **Supplementary measures** including encryption in transit (TLS 1.3) and at rest (AES-256), and minimum-necessary access controls.
 - **Transfer Impact Assessments (TIAs)** completed prior to onboarding each US sub-processor and revisited periodically.
 
-You may request a copy of the relevant SCCs by emailing privacy@icareeros.com.
+You may request a copy of the relevant SCCs [contact us through our contact form](/legal/contact)
 
 ---
 
@@ -184,13 +182,13 @@ Subject to local law, you have the following rights regarding your personal data
 
 | Right | What it means | How to exercise |
 |---|---|---|
-| **Access** | Get a copy of the personal data we hold about you | Use the export tool at `/settings/account` or email privacy@icareeros.com |
+| **Access** | Get a copy of the personal data we hold about you | Use the export tool at `/settings/account` or [contact us through our contact form](/legal/contact) |
 | **Rectification** | Correct inaccurate or incomplete data | Edit on `/settings/account` and `/mycareer/profile`; or email us |
 | **Erasure ("right to be forgotten")** | Delete your account and personal data | Use "Delete account" at `/settings/account` or `/settings/security`; or email us |
-| **Restriction** | Limit processing in certain cases | Email privacy@icareeros.com |
-| **Objection** | Object to processing based on legitimate interests, including profiling | Email privacy@icareeros.com |
+| **Restriction** | Limit processing in certain cases | [contact us through our contact form](/legal/contact) |
+| **Objection** | Object to processing based on legitimate interests, including profiling | [contact us through our contact form](/legal/contact) |
 | **Portability** | Receive your data in a portable format (JSON) | Use `/settings/account` data export, or email us |
-| **Withdraw consent** | Withdraw any consent you previously gave (e.g., marketing) | Email link in every marketing email; banner re-prompt for cookies; email privacy@icareeros.com |
+| **Withdraw consent** | Withdraw any consent you previously gave (e.g., marketing) | Email link in every marketing email; banner re-prompt for cookies; [contact us through our contact form](/legal/contact) |
 | **Lodge a complaint** | Complain to a supervisory authority | EU/UK: your local DPA. US: your state Attorney General. We'd appreciate a chance to resolve first. |
 
 **California-specific rights (CCPA/CPRA, when threshold is met):** in addition to the above, you may request to know the specific pieces of personal information collected about you in the past 12 months, the categories of sources, the purposes, and the categories of third parties to whom we disclosed it; you may opt out of "sale" or "sharing" (we do not sell or share, but the toggle is provided at `/settings/account` for completeness); you may not be discriminated against for exercising any right. Designated agents may submit requests on your behalf with verifiable proof of authorization.
@@ -232,7 +230,7 @@ We may update this policy from time to time. Material changes (those that meanin
 
 ### 13.1 European Economic Area, United Kingdom
 
-The iCareerOS LLC contact above acts as the GDPR controller. Until we appoint a formal EU representative under Art. 27 (required when we have substantial EU users or systematic monitoring), `dpo@icareeros.com` is the contact for EU residents. Your local supervisory authority list is at `edpb.europa.eu`.
+The iCareerOS LLC contact above acts as the GDPR controller. Until we appoint a formal EU representative under Art. 27 (required when we have substantial EU users or systematic monitoring), [contact us through our contact form](/legal/contact) Your local supervisory authority list is at `edpb.europa.eu`.
 
 ### 13.2 United Kingdom
 
@@ -244,7 +242,7 @@ In the past 12 months, we collected the categories of personal data listed in §
 
 ### 13.4 Other US states
 
-If you reside in Colorado, Connecticut, Virginia, Utah, Texas, or another state with a comprehensive privacy law that grants you rights, those rights are honored equivalently to the CCPA rights described above. Email privacy@icareeros.com to exercise them.
+If you reside in Colorado, Connecticut, Virginia, Utah, Texas, or another state with a comprehensive privacy law that grants you rights, those rights are honored equivalently to the CCPA rights described above. [contact us through our contact form](/legal/contact) to exercise them.
 
 ### 13.5 Canada (PIPEDA / Quebec Law 25)
 
@@ -256,7 +254,7 @@ Your privacy commissioner is the Office of the Privacy Commissioner of Canada (`
 
 Privacy questions, data requests, or anything that touches this policy:
 
-**privacy@icareeros.com**
+[contact us through our contact form](/legal/contact)
 iCareerOS LLC
 
 We aim to acknowledge requests within 5 business days and resolve within the legally-mandated window for your jurisdiction.

@@ -13,7 +13,7 @@ const INITIAL: ContactInput = {
 
 /**
  * Privacy / legal contact form. Used in place of a published mailing address.
- * Submission emails info@icareeros.com via Bluehost SMTP (server action).
+ * Submission is delivered to the iCareerOS legal mailbox via Bluehost SMTP (server action).
  *
  * Honeypot: hidden `website` field — bots fill it; the action silently
  * "succeeds" without sending. Also enforces server-side zod validation.
@@ -42,7 +42,7 @@ export function PrivacyContactForm() {
         setStatus({ kind: "err", text: res.error });
       }
     } catch {
-      setStatus({ kind: "err", text: "Could not send your message. Please try again or email info@icareeros.com directly." });
+      setStatus({ kind: "err", text: "Could not send your message. Please try again later." });
     } finally {
       setLoading(false);
     }
@@ -161,8 +161,8 @@ export function PrivacyContactForm() {
       )}
 
       <p className="text-xs text-gray-500">
-        Submissions are sent to <strong>info@icareeros.com</strong>. We do not retain your
-        submission beyond what is needed to respond and meet our legal obligations.
+        We do not retain your submission beyond what is needed to respond and meet our
+        legal obligations.
       </p>
     </form>
   );

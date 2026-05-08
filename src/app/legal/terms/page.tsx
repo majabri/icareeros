@@ -42,7 +42,7 @@ export default function TermsOfServicePage() {
             To use iCareerOS you must create an account with your full name, email address,
             phone number, and password. You are responsible for maintaining the confidentiality
             of your credentials and for all activity under your account. Notify us immediately
-            at support@icareeros.com if you suspect unauthorized access.
+            by <a href="/legal/contact" className="text-brand-700 underline">contacting us through the contact form</a> if you suspect unauthorized access.
           </p>
         </div>
 
@@ -63,7 +63,7 @@ export default function TermsOfServicePage() {
           </p>
           <p className="mt-2">
             <strong>(c) Human Review:</strong> You may request human review of any
-            AI-generated recommendation by contacting support@icareeros.com.
+            AI-generated recommendation by <a href="/legal/contact" className="text-brand-700 underline">contacting us through the contact form</a>.
           </p>
         </div>
 
@@ -153,7 +153,7 @@ export default function TermsOfServicePage() {
           <p className="mt-2">
             <strong>Canadian Residents:</strong> Your subscription continues and
             automatically renews unless cancelled through Account Settings or by
-            contacting support@icareeros.com. Cancellation takes effect at the end of
+            <a href="/legal/contact" className="text-brand-700 underline">contacting us through the contact form</a>. Cancellation takes effect at the end of
             the current billing period.
           </p>
         </div>
@@ -218,8 +218,10 @@ export default function TermsOfServicePage() {
         <div>
           <h2 className="text-lg font-semibold mt-6 mb-2">13. Contact</h2>
           <p>
-            <strong>Legal inquiries:</strong> legal@icareeros.com<br />
-            <strong>Support:</strong> support@icareeros.com
+            <strong>Contact us:</strong>{" "}
+            <a href="/legal/contact" className="text-brand-700 underline">
+              Use our contact form
+            </a>
           </p>
         </div>
       </section>
