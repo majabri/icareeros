@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { SocialLogins } from "@/components/auth/SocialLogins";
 import { createClient } from "@/lib/supabase";
-import { readConsent } from "@/lib/consent/storage";
-import { postConsent } from "@/lib/consent/api";
+import { ConsentCheckboxes, type ConsentState } from "@/components/legal/ConsentCheckboxes";
+import { recordSignupConsent } from "@/app/actions/consentActions";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -15,10 +15,17 @@ const USERNAME_MAP: Record<string, string> = {
   azadmin: "azadmin@icareeros.com",
 };
 
+const INITIAL_CONSENT: ConsentState = {
+  privacyTerms: false,
+  aiProcessing: false,
+  marketingEmail: false,
+};
+
 export function AuthForm({ mode }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
-  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [consentState, setConsentState] = useState<ConsentState>(INITIAL_CONSENT);
+  const [allRequiredConsent, setAllRequiredConsent] = useState(false);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [success, setSuccess]       = useState<string | null>(null);
@@ -58,8 +65,8 @@ export function AuthForm({ mode }: AuthFormProps) {
     setError(null);
     setSuccess(null);
 
-    if (mode === "signup" && !acceptTerms) {
-      setError("Please accept the Terms of Service and Privacy Policy to continue.");
+    if (mode === "signup" && !allRequiredConsent) {
+      setError("Please accept the Privacy Policy + Terms and the AI processing disclosure to continue.");
       return;
     }
 
@@ -67,8 +74,9 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === "signup") {
+        const email = identifier.trim();
         const { data, error } = await supabase.auth.signUp({
-          email: identifier,
+          email,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -76,41 +84,35 @@ export function AuthForm({ mode }: AuthFormProps) {
         });
         if (error) throw error;
 
-        // Record ToS+Privacy acceptance:
-        // 1) accepted_terms_at on user_profiles (handled by row's INSERT trigger
-        //    on first profile creation; we also POST a consent_records row for
-        //    audit trail purposes — it's append-only and survives profile edits).
-        // 2) consent_records row (kind = 'tos').
+        // Audit trail. Non-blocking on UX — failures are logged server-side.
         try {
           if (data?.user?.id) {
+            // Keep user_profiles.accepted_terms_at for back-compat with any
+            // code that quick-checks "did this user accept the ToS?". The
+            // canonical record now lives in consent_records (3 rows: privacy_terms,
+            // ai_processing, marketing_email) written by the server action below.
             await supabase
               .from("user_profiles")
               .upsert(
                 { user_id: data.user.id, accepted_terms_at: new Date().toISOString() },
                 { onConflict: "user_id", ignoreDuplicates: false }
               );
+
+            await recordSignupConsent({
+              userId: data.user.id,
+              email,
+              privacyTerms: consentState.privacyTerms,
+              aiProcessing: consentState.aiProcessing,
+              marketingEmail: consentState.marketingEmail,
+            });
           }
-          const cookieConsent = readConsent();
-          await postConsent(
-            cookieConsent ?? {
-              version: 1,
-              timestamp: new Date().toISOString(),
-              necessary: true,
-              functional: false,
-              analytics: false,
-              marketing: false,
-              gpcDetected: false,
-            },
-            "tos",
-          );
         } catch {
           // Don't block signup if the audit trail write fails.
         }
 
-        // Confirmation email is sent by Supabase Auth using the branded
-        // template configured in dashboard → Authentication → Emails.
+        // Confirmation email sent by Supabase Auth (Bluehost SMTP, branded template).
         setSuccess(
-          `Check your inbox at ${identifier.trim()} — we sent you a link from bugs@icareeros.com to confirm your account. ` +
+          `Check your inbox at ${email} — we sent you a link from bugs@icareeros.com to confirm your account. ` +
           `If you don't see it within a minute, check your Spam or Promotions folder.`
         );
         setNeedsConfirmation(true);
@@ -134,20 +136,13 @@ export function AuthForm({ mode }: AuthFormProps) {
             .maybeSingle();
           isAdmin = profile?.role === "admin";
         }
-        // Decide landing page based on ROLE only — never on email or hint params.
-        // If a ?redirect=… is present, honor it ONLY if the role allows it:
-        //   - admin trying to go to a /admin page → allowed
-        //   - admin trying to go to a non-admin page → still goto /admin (admins
-        //     are not supposed to use the user-facing app)
-        //   - non-admin trying to go to a /admin page → reject; goto /dashboard
-        //   - non-admin trying to go anywhere else → honor the redirect
         const requested = new URLSearchParams(window.location.search).get("redirect") ?? "";
         const wantsAdmin = requested.startsWith("/admin");
         let dest: string;
         if (isAdmin) {
-          dest = "/admin"; // admins always land on /admin regardless of redirect
+          dest = "/admin";
         } else if (wantsAdmin) {
-          dest = "/dashboard"; // non-admin asked for /admin — refuse, send home
+          dest = "/dashboard";
         } else {
           dest = requested || "/dashboard";
         }
@@ -156,7 +151,6 @@ export function AuthForm({ mode }: AuthFormProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setError(msg);
-      // Surface the resend button when login fails because email isn't confirmed
       if (mode === "login" && /email[\s_-]?not[\s_-]?confirmed|email link|otp|confirm/i.test(msg)) {
         setNeedsConfirmation(true);
       }
@@ -165,7 +159,7 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
-  const submitDisabled = loading || !!success || (mode === "signup" && !acceptTerms);
+  const submitDisabled = loading || !!success || (mode === "signup" && !allRequiredConsent);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -239,28 +233,12 @@ export function AuthForm({ mode }: AuthFormProps) {
       </div>
 
       {mode === "signup" && (
-        <label className="flex items-start gap-2 text-sm text-gray-700">
-          <input
-            id="accept-terms"
-            data-testid="accept-terms"
-            type="checkbox"
-            checked={acceptTerms}
-            onChange={(e) => setAcceptTerms(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-            required
-          />
-          <span>
-            I agree to the{" "}
-            <a href="/legal/terms" className="font-medium text-brand-700 underline hover:text-brand-800">
-              Terms of Service
-            </a>{" "}
-            and{" "}
-            <a href="/legal/privacy" className="font-medium text-brand-700 underline hover:text-brand-800">
-              Privacy Policy
-            </a>
-            .
-          </span>
-        </label>
+        <ConsentCheckboxes
+          onChange={(state, allRequiredMet) => {
+            setConsentState(state);
+            setAllRequiredConsent(allRequiredMet);
+          }}
+        />
       )}
 
       <button
