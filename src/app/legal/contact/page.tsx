@@ -13,13 +13,9 @@ export default function LegalContactPage() {
       <h1 className="mb-2 text-3xl font-bold">Contact iCareerOS Legal</h1>
       <p className="mb-6 text-sm text-gray-600">
         Use this form for privacy questions, data subject access requests (DSARs),
-        legal notices, or any formal correspondence. Submissions are routed to{" "}
-        <a href="mailto:info@icareeros.com" className="text-brand-700 underline">
-          info@icareeros.com
-        </a>
-        . We aim to acknowledge within 5 business days and resolve within the
-        legally-mandated window for your jurisdiction (30 days under PIPEDA,
-        45 days under CCPA/CPRA).
+        legal notices, or any formal correspondence. We aim to acknowledge within 5
+        business days and resolve within the legally-mandated window for your
+        jurisdiction (30 days under PIPEDA, 45 days under CCPA/CPRA).
       </p>
       <PrivacyContactForm />
     </article>

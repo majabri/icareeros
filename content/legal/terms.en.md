@@ -66,7 +66,7 @@ We may label some features as "beta," "preview," "experimental," or similar. The
 
 ### 4.1 Account security
 
-You are responsible for keeping your account secure. Notify us immediately at security@icareeros.com if you believe your account has been compromised. We are not liable for losses caused by unauthorized use of your account where you failed to protect your credentials.
+You are responsible for keeping your account secure. [contact us through our contact form](/legal/contact) We are not liable for losses caused by unauthorized use of your account where you failed to protect your credentials.
 
 ### 4.2 One person per account
 
@@ -78,7 +78,7 @@ We may suspend or terminate your account if you violate these Terms, attempt to 
 
 ### 4.4 Termination by you
 
-You may delete your account at any time at `/settings/account` or `/settings/security`, or by emailing privacy@icareeros.com. Once deletion is finalized (after a 30-day soft-delete period), your data is hard-deleted, subject to limited retention required by law (see Privacy Policy §8).
+You may delete your account at any time at `/settings/account` or `/settings/security`, or [contact us through our contact form](/legal/contact) Once deletion is finalized (after a 30-day soft-delete period), your data is hard-deleted, subject to limited retention required by law (see Privacy Policy §8).
 
 ---
 
@@ -91,7 +91,7 @@ You agree not to:
 - upload résumé content for someone other than yourself without their consent;
 - scrape, crawl, or otherwise extract data from the Service in bulk;
 - reverse-engineer, decompile, or attempt to derive the source code of the Service except to the extent applicable law permits;
-- introduce malware, attempt to bypass authentication, probe for vulnerabilities (except via a coordinated disclosure to security@icareeros.com), or interfere with the Service's operation;
+- introduce malware, attempt to bypass authentication, probe for vulnerabilities [contact us through our contact form](/legal/contact), or interfere with the Service's operation;
 - use the Service to send spam, phishing, harassment, or unsolicited bulk messages;
 - use the Service to generate content that is defamatory, harassing, sexually explicit involving minors, threatening, hateful, or that violates a third party's rights;
 - use AI features to generate content for academic dishonesty, fraud, or misrepresentation in employment processes;
@@ -216,7 +216,7 @@ These Terms are governed by the laws of the **State of Michigan**, USA, without 
 
 ### 15.1 Informal resolution first
 
-Before filing a formal claim, you agree to contact us at legal@icareeros.com and attempt to resolve the dispute informally for at least **30 days**.
+Before filing a formal claim, [contact us through our contact form](/legal/contact) informally for at least **30 days**.
 
 ### 15.2 Binding arbitration (US users)
 
@@ -247,12 +247,12 @@ Any claim must be brought within **one year** of the event giving rise to it, or
 - **No waiver.** Our failure to enforce a provision is not a waiver of our right to enforce it later.
 - **Assignment.** You may not assign these Terms without our consent. We may assign them to an affiliate or in connection with a merger, acquisition, or sale of assets.
 - **Force majeure.** We are not liable for failures caused by events beyond our reasonable control (natural disasters, war, infrastructure outages of upstream providers, etc.).
-- **Notices.** We send legal notices to the email associated with your account; you should keep it current. Send notices to us at legal@icareeros.com.
+- **Notices.** We send legal notices to the email associated with your account; you should keep it current. [contact us through our contact form](/legal/contact)
 - **Survival.** Sections 6 (Your content), 7 (IP), 11 (Disclaimers), 12 (Limitation), 13 (Indemnification), 15 (Governing law), and 16 (Miscellaneous) survive termination.
 
 ---
 
 ## 17. Contact
 
-**legal@icareeros.com**
+[contact us through our contact form](/legal/contact)
 iCareerOS LLC

@@ -102,4 +102,4 @@ We update this policy when our cookie usage changes. Material changes are commun
 
 ## 7. Contact
 
-Questions about this policy: **privacy@icareeros.com**.
+Questions about this policy: please [contact us through our contact form](/legal/contact).

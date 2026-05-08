@@ -26,9 +26,10 @@ test.describe("Legal contact form", () => {
     await expect(page.getByTestId("legal-contact-submit")).toBeVisible();
   });
 
-  test("page references info@icareeros.com as the routing destination", async ({ page }) => {
+  test("/legal/contact does NOT surface any iCareerOS email address", async ({ page }) => {
     await page.goto(`${BASE_URL}/legal/contact`);
-    await expect(page.getByText(/info@icareeros\.com/)).toBeVisible();
+    const html = await page.content();
+    expect(html).not.toMatch(/[\w.+-]+@icareeros\.com/);
   });
 
   test("/legal/privacy does NOT show DRAFT banner or [INSERT] placeholders", async ({ page }) => {

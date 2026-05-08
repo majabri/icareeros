@@ -108,7 +108,7 @@ For deployers (employers/recruiters using iCareerOS, when B2B is live): **you ar
 
 If an AI-generated output in iCareerOS materially affects you — for example, a fit score that contributed to your decision not to apply for a role, or an interview-simulator score you want challenged — you can:
 
-1. **Request human review** by emailing **privacy@icareeros.com** with the subject line "Human review request" and a description of the output and why you are challenging it.
+1. **Request human review** by [contacting us through our contact form](/legal/contact) with the subject "Human review request" and a description of the output and why you are challenging it.
 2. We will respond within **30 days** (sooner where required by local law) with: a plain-language explanation of the relevant factors, an option to correct any input data we used, and where appropriate, a corrected output.
 3. You may also use this channel to contest any decision that you believe was based on protected characteristics (race, gender, age, religion, disability, or other category protected by law).
 
@@ -125,7 +125,7 @@ You can use the following parts of iCareerOS without engaging any AI feature:
 - searching jobs and saving listings (the search itself doesn't require AI; fit scores do);
 - exporting your data (`/settings/account`).
 
-If you want a complete AI-off mode, email privacy@icareeros.com and we will disable AI feature toggles on your account. Some features will simply not be available; no other consequence.
+If you want a complete AI-off mode, [contact us through our contact form](/legal/contact) and we will disable AI feature toggles on your account. Some features will simply not be available; no other consequence.
 
 ---
 
@@ -152,6 +152,6 @@ We monitor internally for systematic miss patterns by aggregated demographic-fre
 
 ## 10. Contact
 
-Questions, human-review requests, or bias concerns: **privacy@icareeros.com**.
+Questions, human-review requests, or bias concerns: please [contact us through our contact form](/legal/contact).
 
 We aim to acknowledge within 5 business days and resolve within 30 days (sooner where law requires).
