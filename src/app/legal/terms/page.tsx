@@ -12,17 +12,9 @@ export default function TermsOfServicePage() {
       <HashScroll />
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>
       <p className="text-sm text-gray-500 mb-4">
-        {/* TODO: replace [INSERT LAUNCH DATE] with the real launch date once known */}
-        Effective Date: <strong>[INSERT LAUNCH DATE]</strong>
+        Effective Date: <strong>June 1, 2026</strong>
         {" | "}Last Updated: May 7, 2026
       </p>
-
-      {/* DRAFT NOTICE — remove or update after lawyer approves */}
-      <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <strong>Notice:</strong> These Terms of Service are in effect. They may be updated
-        following legal review. Material changes will be communicated by email with 30 days
-        advance notice.
-      </div>
 
       <section className="space-y-6">
         <div>

@@ -12,17 +12,10 @@ export default function PrivacyPolicyPage() {
       <HashScroll />
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm text-gray-500 mb-4">
-        {/* TODO: replace [INSERT LAUNCH DATE] with the real launch date once known */}
-        Effective Date: <strong>[INSERT LAUNCH DATE]</strong>
+        Effective Date: <strong>June 1, 2026</strong>
         {" | "}Last Updated: May 7, 2026
         {" | "}Jurisdiction: United States and Canada
       </p>
-
-      {/* DRAFT NOTICE — remove after lawyer approves the final text */}
-      <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <strong>Notice:</strong> This Privacy Policy is in effect. It may be updated following
-        legal review. Material changes will be communicated by email.
-      </div>
 
       <section className="space-y-6">
         <div>
@@ -35,8 +28,13 @@ export default function PrivacyPolicyPage() {
           <ul className="list-none ml-4 mt-2 space-y-1">
             <li><strong>Privacy Officer:</strong> Amir Jabri</li>
             <li><strong>Email:</strong> privacy@icareeros.com</li>
-            {/* TODO: replace [INSERT BUSINESS ADDRESS] with the real address before launch */}
-            <li><strong>Mailing Address:</strong> [INSERT BUSINESS ADDRESS]</li>
+            <li>
+              <strong>Postal correspondence:</strong>{" "}
+              <a href="/legal/contact" className="text-brand-700 underline">
+                Use our secure contact form
+              </a>{" "}
+              — submissions are routed to info@icareeros.com.
+            </li>
           </ul>
         </div>
 
