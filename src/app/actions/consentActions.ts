@@ -65,3 +65,43 @@ export async function recordSignupConsent(args: SignupConsentArgs): Promise<{ ok
     return { ok: false };
   }
 }
+
+interface ResumeUploadConsentArgs {
+  userId: string;
+  /** Optional — caller convenience; not persisted to consent_records. */
+  email?: string;
+}
+
+/**
+ * Records a 'resume_upload' consent_records row after a successful resume
+ * upload. Called by the resume upload UI components (mycareer/profile and
+ * resumeadvisor) once the file is parsed and saved.
+ *
+ * Captures one row per upload event so the audit trail can show exactly
+ * which uploads the user explicitly consented to.
+ *
+ * Non-blocking — returns { ok: false } on error rather than throwing so
+ * the caller's success path is never interrupted.
+ */
+export async function recordResumeUploadConsent(args: ResumeUploadConsentArgs): Promise<{ ok: boolean }> {
+  try {
+    const h = await headers();
+    const ipAddress = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    const userAgent = h.get("user-agent") ?? null;
+
+    await recordConsent([
+      {
+        userId: args.userId,
+        email: args.email ?? "",
+        consentType: "resume_upload",
+        consented: true, // upload consent is binary — modal accept implies true
+        ipAddress,
+        userAgent,
+      },
+    ]);
+    return { ok: true };
+  } catch (err) {
+    console.error("[recordResumeUploadConsent] failed:", err);
+    return { ok: false };
+  }
+}

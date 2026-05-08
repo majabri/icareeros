@@ -27,6 +27,8 @@ import {
 import { createClient } from "@/lib/supabase";
 import { exportProfile, type ExportFormat, type ExportableProfile } from "@/lib/profile-export";
 import type { ParsedResume } from "@/lib/parseResumeLocally";
+import { ResumeUploadConsent } from "@/components/legal/ResumeUploadConsent";
+import { recordResumeUploadConsent } from "@/app/actions/consentActions";
 
 interface FitCheckResult {
   fitScore: number;
@@ -196,13 +198,42 @@ export default function ResumeAdvisorPage() {
     setResult(null); setRewriteResult(null); setError(null);
     setParsedFromUpload(null); setShowProfileUpdatePrompt(false);
     setCritique(null); setCoverLetter(null);
+    // Phase 3: record resume_upload consent (audit trail row per upload event)
+    if (userId) {
+      void recordResumeUploadConsent({ userId });
+    }
+  }, [userId]);
+
+  // ── Phase 3: Resume upload consent gating ──────────────────────────
+  const [showResumeConsent, setShowResumeConsent] = useState(false);
+  const [pendingDroppedFile, setPendingDroppedFile] = useState<File | null>(null);
+
+  const requestUpload = useCallback((file?: File) => {
+    setPendingDroppedFile(file ?? null);
+    setShowResumeConsent(true);
+  }, []);
+
+  const onResumeConsentAccept = useCallback(() => {
+    setShowResumeConsent(false);
+    if (pendingDroppedFile) {
+      handleFile(pendingDroppedFile);
+      setPendingDroppedFile(null);
+    } else {
+      fileInputRef.current?.click();
+    }
+  }, [pendingDroppedFile, handleFile]);
+
+  const onResumeConsentDecline = useCallback(() => {
+    setShowResumeConsent(false);
+    setPendingDroppedFile(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+    if (file) requestUpload(file);
+  }, [requestUpload]);
+
 
   const effectiveJob = jobSource === "paste" ? jobDescription.trim() : jobUrl.trim();
   const hasResume = resumeSource === "upload" ? !!uploadedFile : !!selectedVersion;
@@ -462,6 +493,10 @@ export default function ResumeAdvisorPage() {
   }
 
   return (
+    <>
+      {showResumeConsent && (
+        <ResumeUploadConsent onAccept={onResumeConsentAccept} onDecline={onResumeConsentDecline} />
+      )}
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
@@ -487,7 +522,7 @@ export default function ResumeAdvisorPage() {
               <button onClick={() => { setResumeSource("vault"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${resumeSource === "vault" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>📚 Saved versions {versionsLoaded && versions.length > 0 && `(${versions.length})`}</button>
             </div>
             {resumeSource === "upload" ? (
-              <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()} className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 ${dragOver ? "border-brand-400 bg-brand-50" : uploadedFile ? "border-emerald-300 bg-emerald-50" : "border-gray-300 bg-gray-50 hover:border-brand-300"}`}>
+              <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => requestUpload()} className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 ${dragOver ? "border-brand-400 bg-brand-50" : uploadedFile ? "border-emerald-300 bg-emerald-50" : "border-gray-300 bg-gray-50 hover:border-brand-300"}`}>
                 <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
                 {uploadedFile ? <p className="font-medium text-gray-800">{uploadedFile.name}</p> : <><p className="font-medium text-gray-700">Drop your resume here</p><p className="mt-1 text-xs text-gray-400">PDF, Word (.doc, .docx), or TXT · click to browse</p></>}
                 <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
@@ -700,5 +735,6 @@ export default function ResumeAdvisorPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

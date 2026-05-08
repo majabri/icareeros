@@ -101,3 +101,35 @@ describe("recordSignupConsent", () => {
     }
   });
 });
+
+import { recordResumeUploadConsent } from "../consentActions";
+
+describe("recordResumeUploadConsent", () => {
+  it("writes exactly 1 row of kind resume_upload with consented=true", async () => {
+    recordSpy.mockClear();
+    const res = await recordResumeUploadConsent({ userId: "user-99", email: "u99@example.com" });
+    expect(res.ok).toBe(true);
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].consentType).toBe("resume_upload");
+    expect(rows[0].consented).toBe(true);
+    expect(rows[0].userId).toBe("user-99");
+  });
+
+  it("works without an email argument", async () => {
+    recordSpy.mockClear();
+    const res = await recordResumeUploadConsent({ userId: "user-100" });
+    expect(res.ok).toBe(true);
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows[0].email).toBe("");
+    expect(rows[0].userId).toBe("user-100");
+  });
+
+  it("captures IP and user-agent from headers", async () => {
+    recordSpy.mockClear();
+    await recordResumeUploadConsent({ userId: "user-101" });
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows[0].ipAddress).toBe("10.20.30.40");
+    expect(rows[0].userAgent).toBe("TestAgent/1.0");
+  });
+});
