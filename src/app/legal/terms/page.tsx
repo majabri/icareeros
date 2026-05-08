@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HashScroll } from "@/components/legal/HashScroll";
 
 export const metadata: Metadata = {
   title: "Terms of Service | iCareerOS",
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 export default function TermsOfServicePage() {
   return (
     <article className="text-gray-800">
+      <HashScroll />
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>
       <p className="text-sm text-gray-500 mb-4">
         {/* TODO: replace [INSERT LAUNCH DATE] with the real launch date once known */}

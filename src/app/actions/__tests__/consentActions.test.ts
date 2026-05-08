@@ -133,3 +133,34 @@ describe("recordResumeUploadConsent", () => {
     expect(rows[0].userAgent).toBe("TestAgent/1.0");
   });
 });
+
+import { recordFoundingConsent } from "../consentActions";
+
+describe("recordFoundingConsent", () => {
+  it("writes 1 row of kind founding_nonrefundable with consented=true", async () => {
+    recordSpy.mockClear();
+    const res = await recordFoundingConsent({ userId: "user-200", email: "u200@example.com" });
+    expect(res.ok).toBe(true);
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].consentType).toBe("founding_nonrefundable");
+    expect(rows[0].consented).toBe(true);
+    expect(rows[0].userId).toBe("user-200");
+  });
+
+  it("works without an email argument", async () => {
+    recordSpy.mockClear();
+    const res = await recordFoundingConsent({ userId: "user-201" });
+    expect(res.ok).toBe(true);
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows[0].email).toBe("");
+  });
+
+  it("captures IP and UA from headers", async () => {
+    recordSpy.mockClear();
+    await recordFoundingConsent({ userId: "user-202" });
+    const rows = recordSpy.mock.calls[0][0];
+    expect(rows[0].ipAddress).toBe("10.20.30.40");
+    expect(rows[0].userAgent).toBe("TestAgent/1.0");
+  });
+});

@@ -105,3 +105,42 @@ export async function recordResumeUploadConsent(args: ResumeUploadConsentArgs): 
     return { ok: false };
   }
 }
+
+interface FoundingConsentArgs {
+  userId: string;
+  email?: string;
+}
+
+/**
+ * Records a 'founding_nonrefundable' consent_records row after a successful
+ * Founding offer purchase. Per COWORK-BRIEF-legal-deploy-v1 Phase 4.
+ *
+ * NOTE: Currently called from the stubbed payment flow on /founding. When
+ * Stripe goes live (target: 2026-05-31), the call moves to the post-payment
+ * callback (payment_intent.succeeded webhook handler) so consent is only
+ * recorded for actual successful payments.
+ *
+ * Non-blocking — returns { ok: false } on error rather than throwing.
+ */
+export async function recordFoundingConsent(args: FoundingConsentArgs): Promise<{ ok: boolean }> {
+  try {
+    const h = await headers();
+    const ipAddress = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    const userAgent = h.get("user-agent") ?? null;
+
+    await recordConsent([
+      {
+        userId: args.userId,
+        email: args.email ?? "",
+        consentType: "founding_nonrefundable",
+        consented: true,
+        ipAddress,
+        userAgent,
+      },
+    ]);
+    return { ok: true };
+  } catch (err) {
+    console.error("[recordFoundingConsent] failed:", err);
+    return { ok: false };
+  }
+}
