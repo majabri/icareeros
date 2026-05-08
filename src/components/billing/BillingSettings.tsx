@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { PlanBadge }  from "./PlanBadge";
-import { UpgradeCTA } from "./UpgradeCTA";
+import { PlanCard }   from "./PlanCard";
 import { FoundingLifetime } from "./FoundingLifetime";
 import {
   getSubscription,
   getBillingPortalUrl,
 } from "@/services/billing/subscriptionService";
-import { PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from "@/services/billing/types";
+import { PLAN_ORDER } from "@/services/billing/types";
 import type { UserSubscription, SubscriptionPlan, BillingCycle } from "@/services/billing/types";
 
 const MONETIZATION_ENABLED =
@@ -19,23 +19,6 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
-}
-
-function PlanFeatureRow({ label, included }: { label: string; included: boolean }) {
-  return (
-    <li className="flex items-center gap-3 py-1.5 text-sm">
-      {included ? (
-        <svg className="h-4 w-4 flex-shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-      ) : (
-        <svg className="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      )}
-      <span className={included ? "text-gray-800" : "text-gray-400"}>{label}</span>
-    </li>
-  );
 }
 
 export function BillingSettings() {
@@ -74,7 +57,6 @@ export function BillingSettings() {
 
   const plan: SubscriptionPlan = subscription?.plan ?? "free";
   const status  = subscription?.status ?? "active";
-  const limits  = PLAN_LIMITS[plan];
   const isPaid  = plan !== "free";
   const isCanceled = subscription?.cancel_at_period_end;
 
@@ -86,10 +68,10 @@ export function BillingSettings() {
         </div>
       )}
 
-      {/* Founding Lifetime — prominent, only renders when seats remain */}
+      {/* Founding Lifetime — prominent for free users while seats remain */}
       {!isPaid && <FoundingLifetime />}
 
-      {/* Current plan card */}
+      {/* Current plan + manage billing */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between">
           <div>
@@ -129,106 +111,62 @@ export function BillingSettings() {
             </div>
           )}
         </div>
-
-        <ul className="mt-4 border-t border-gray-100 pt-4">
-          <PlanFeatureRow
-            label={limits.maxCycles === -1 ? "Unlimited Career OS cycles" : `${limits.maxCycles} Career OS cycles`}
-            included={true}
-          />
-          <PlanFeatureRow label="AI Coach (interview prep + resume)"            included={limits.aiCoach} />
-          <PlanFeatureRow label="Advanced match score insights"                 included={limits.advancedMatch} />
-          <PlanFeatureRow
-            label={limits.coverLettersPerMonth === -1
-              ? "Unlimited cover letters"
-              : `${limits.coverLettersPerMonth} cover letters / month`}
-            included={limits.coverLettersPerMonth !== 0}
-          />
-          <PlanFeatureRow label="Priority support"                              included={limits.prioritySupport} />
-        </ul>
       </div>
 
-      {/* Upgrade options */}
-      {plan !== "pro" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Plan grid header + cycle toggle */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
             <h3 className="text-base font-semibold text-gray-900">
-              {MONETIZATION_ENABLED ? "Upgrade your plan" : "Plans — coming soon"}
+              {MONETIZATION_ENABLED ? "Compare plans" : "Plans — coming soon"}
             </h3>
-            <div className="flex rounded-lg border border-gray-200 p-0.5 text-xs">
-              <button
-                onClick={() => setCycle("monthly")}
-                className={`rounded px-3 py-1 transition-colors ${cycle === "monthly" ? "bg-brand-600 text-white" : "text-gray-600"}`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setCycle("annual")}
-                className={`rounded px-3 py-1 transition-colors ${cycle === "annual" ? "bg-brand-600 text-white" : "text-gray-600"}`}
-              >
-                Annual <span className="opacity-70">(35% off)</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            {(["starter", "standard", "pro"] as Exclude<SubscriptionPlan, "free">[]).map((target) => (
-              <UpgradeCTA
-                key={target}
-                targetPlan={target}
-                currentPlan={plan}
-                cycle={cycle}
-                disabled={!MONETIZATION_ENABLED}
-                variant="card"
-              />
-            ))}
-          </div>
-
-          {!MONETIZATION_ENABLED && (
-            <p className="text-xs text-gray-400">
-              Paid plans are not yet active. All features are available for free during the preview period.
+            <p className="mt-1 text-xs text-gray-500">
+              {MONETIZATION_ENABLED
+                ? "Pick the tier that fits where you are in your career."
+                : "Paid plans aren't active yet — every feature below is free during the preview period. The cards show what each tier will include at launch."}
             </p>
-          )}
+          </div>
+          <div className="flex rounded-lg border border-gray-200 p-0.5 text-xs">
+            <button
+              onClick={() => setCycle("monthly")}
+              data-testid="cycle-toggle-monthly"
+              className={`rounded px-3 py-1 transition-colors ${cycle === "monthly" ? "bg-brand-600 text-white" : "text-gray-600"}`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setCycle("annual")}
+              data-testid="cycle-toggle-annual"
+              className={`rounded px-3 py-1 transition-colors ${cycle === "annual" ? "bg-brand-600 text-white" : "text-gray-600"}`}
+            >
+              Annual <span className="opacity-70">(35% off)</span>
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Pricing summary */}
-      <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-        <h4 className="mb-3 text-sm font-semibold text-gray-700">Plan comparison</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="pb-2 pr-4 font-medium">Plan</th>
-                <th className="pb-2 pr-4 font-medium">Monthly</th>
-                <th className="pb-2 pr-4 font-medium">Annual / mo</th>
-                <th className="pb-2 pr-4 font-medium">Coach sessions</th>
-                <th className="pb-2 font-medium">Support</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {PLAN_ORDER.map((p) => (
-                <tr key={p} className={p === plan ? "font-semibold text-gray-900" : "text-gray-600"}>
-                  <td className="py-2 pr-4 capitalize">
-                    {p} {p === plan && <span className="ml-1 text-xs text-brand-600">(current)</span>}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {PLAN_PRICES[p].monthly === 0 ? "Free" : `$${PLAN_PRICES[p].monthly.toFixed(2)}/mo`}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {PLAN_PRICES[p].annualPerMonth === 0 ? "—" : `$${PLAN_PRICES[p].annualPerMonth.toFixed(2)}/mo`}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {PLAN_LIMITS[p].coachSessionsPerMonth === -1
-                      ? "Unlimited"
-                      : PLAN_LIMITS[p].coachSessionsPerMonth === 0
-                      ? "—"
-                      : PLAN_LIMITS[p].coachSessionsPerMonth}
-                  </td>
-                  <td className="py-2">{PLAN_LIMITS[p].prioritySupport ? "Priority" : "Standard"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Plan grid — 4 cards including Free for context */}
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4" data-testid="plan-grid">
+          {PLAN_ORDER.map((tier) => (
+            <PlanCard
+              key={tier}
+              tier={tier}
+              currentPlan={plan}
+              cycle={cycle}
+              monetizationEnabled={MONETIZATION_ENABLED}
+            />
+          ))}
+        </div>
+
+        {/* One-time add-ons footer */}
+        <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Available on every tier — one-time add-ons
+          </p>
+          <ul className="space-y-1 text-xs text-gray-600">
+            <li>• <span className="font-semibold text-gray-700">Career Sprint</span> ($29) — 30-day intensive coaching push, AI-only at launch.</li>
+            <li>• <span className="font-semibold text-gray-700">Interview Week</span> ($19) — focused interview-prep boost.</li>
+            <li>• <span className="font-semibold text-gray-700">Negotiation Pack</span> ($19) — offer-negotiation toolkit and email templates.</li>
+          </ul>
         </div>
       </div>
     </div>
