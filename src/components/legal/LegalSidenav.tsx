@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/legal/terms", label: "Terms of Service" },
   { href: "/legal/cookies", label: "Cookie Policy" },
   { href: "/legal/ai-disclosure", label: "AI Disclosure" },
+  { href: "/legal/contact", label: "Contact Legal" },
 ];
 
 export function LegalSidenav() {

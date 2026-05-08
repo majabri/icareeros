@@ -16,6 +16,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { recordDSRRequest } from "@/lib/dsr/record-dsr";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -76,6 +77,19 @@ export async function POST(req: NextRequest) {
 
   const svc = makeServiceClient();
   const uid = user.id;
+
+  // Phase 6: DSR audit-trail row — captured BEFORE the purge so the
+  // record persists even if subsequent steps fail. user_id will be
+  // NULL'd by ON DELETE SET NULL when the auth user is deleted below,
+  // which anonymizes the row per privacy policy.
+  void recordDSRRequest({
+    userId: uid,
+    email: user.email ?? "",
+    requestType: "deletion",
+    status: "completed",
+    completedNow: true,
+    notes: "Self-service deletion via /api/settings/delete-account",
+  });
 
   // Purge user-owned rows from all tables
   for (const table of USER_TABLES) {

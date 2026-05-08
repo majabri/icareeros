@@ -19,6 +19,8 @@ import {
 import type { ParsedResume } from "@/lib/parseResumeLocally";
 import { getActiveCycle, advanceStage } from "@/orchestrator/careerOsOrchestrator";
 import { exportProfile, type ExportFormat } from "@/lib/profile-export";
+import { ResumeUploadConsent } from "@/components/legal/ResumeUploadConsent";
+import { recordResumeUploadConsent } from "@/app/actions/consentActions";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -343,6 +345,11 @@ export default function CareerProfilePage() {
       setUploadedFile(null);
       setParseMsg({ type: "success", text: `"${versionName}" imported and saved.` });
       await loadVersions();
+
+      // Phase 3: record resume_upload consent (audit trail row per upload)
+      if (userId) {
+        void recordResumeUploadConsent({ userId, email: userEmail });
+      }
     } catch (err) {
       setParseMsg({ type: "error", text: (err as Error).message });
       setUploadedFile(null);
@@ -352,10 +359,35 @@ export default function CareerProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullName, phone, linkedinUrl, contactEmail, location, headline, summary, skills, workExp, education, certifications, portfolioItems, userId, supabase, loadVersions]);
 
+  // ── Phase 3: Resume upload consent gating ──────────────────────────
+  const [showResumeConsent, setShowResumeConsent] = useState(false);
+  const [pendingDroppedFile, setPendingDroppedFile] = useState<File | null>(null);
+
+  const requestUpload = useCallback((file?: File) => {
+    if (parsing) return;
+    setPendingDroppedFile(file ?? null);
+    setShowResumeConsent(true);
+  }, [parsing]);
+
+  const onResumeConsentAccept = useCallback(() => {
+    setShowResumeConsent(false);
+    if (pendingDroppedFile) {
+      void handleFile(pendingDroppedFile);
+      setPendingDroppedFile(null);
+    } else {
+      fileInputRef.current?.click();
+    }
+  }, [pendingDroppedFile, handleFile]);
+
+  const onResumeConsentDecline = useCallback(() => {
+    setShowResumeConsent(false);
+    setPendingDroppedFile(null);
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
-    const file = e.dataTransfer.files[0]; if (file) void handleFile(file);
-  }, [handleFile]);
+    const file = e.dataTransfer.files[0]; if (file) requestUpload(file);
+  }, [requestUpload]);
 
   async function handleRenameVersion(id: string, newName: string) {
     const trimmed = newName.trim();
@@ -462,6 +494,9 @@ export default function CareerProfilePage() {
 
   return (
     <>
+      {showResumeConsent && (
+        <ResumeUploadConsent onAccept={onResumeConsentAccept} onDecline={onResumeConsentDecline} />
+      )}
       <form onSubmit={e => void handleSaveProfile(e)}>
         {/* ── Page header with completeness ──────────────────────────── */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -498,7 +533,7 @@ export default function CareerProfilePage() {
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
-              onClick={() => { if (!parsing) fileInputRef.current?.click(); }}
+              onClick={() => requestUpload()}
               className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
                 dragOver ? "border-brand-400 bg-brand-50" :
                 parsing ? "border-brand-300 bg-brand-50/60 cursor-default" :
