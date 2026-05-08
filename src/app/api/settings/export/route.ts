@@ -9,6 +9,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { recordDSRRequest } from "@/lib/dsr/record-dsr";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -71,6 +72,17 @@ export async function GET() {
       tables[table] = data ?? [];
     }),
   );
+
+  // Phase 6: DSR audit-trail row — completed synchronously since the
+  // export downloads inline. Non-blocking: failure does not break the export.
+  void recordDSRRequest({
+    userId: uid,
+    email: user.email ?? "",
+    requestType: "access",
+    status: "completed",
+    completedNow: true,
+    notes: "Self-service export via /api/settings/export",
+  });
 
   const payload = {
     exported_at: new Date().toISOString(),
