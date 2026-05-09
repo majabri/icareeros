@@ -1,6 +1,10 @@
 /**
  * /admin/tickets — Support inbox with status management.
  * Uses service-role client to bypass RLS — sees ALL tickets regardless of owner.
+ *
+ * 2026-04-30: extended to surface support-resolver output
+ *   (classification, devops_tier, classifier_confidence, suggested_response).
+ *   See docs/Audit_Support_Autonomous_Loop_2026-04-30.md.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -11,6 +15,17 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Support Inbox — iCareerOS Admin" };
 
+type Classification =
+  | "ACCOUNT_ACCESS"
+  | "STALE_DATA"
+  | "EMAIL_DELIVERY"
+  | "BILLING_DISPUTE"
+  | "BUG_REPORT"
+  | "FEATURE_REQUEST"
+  | "OTHER";
+
+type DevopsTier = "L0" | "L1" | "L2" | "L3";
+
 interface AdminTicket {
   id: string;
   subject: string;
@@ -20,6 +35,11 @@ interface AdminTicket {
   created_at: string;
   updated_at: string;
   user_id: string;
+  classification: Classification | null;
+  classifier_confidence: number | null;
+  devops_tier: DevopsTier | null;
+  suggested_response: string | null;
+  admin_notes: string | null;
 }
 
 function makeSvc() {
@@ -44,12 +64,47 @@ function sectionStyle(status: TicketStatus): { header: string; border: string } 
   }[status];
 }
 
+// ── AI panel helpers ────────────────────────────────────────────────────────
+
+function classificationStyle(c: Classification | null): string {
+  if (!c) return "bg-gray-100 text-gray-500";
+  return ({
+    ACCOUNT_ACCESS:   "bg-purple-50 text-purple-700",
+    STALE_DATA:       "bg-cyan-50 text-cyan-700",
+    EMAIL_DELIVERY:   "bg-indigo-50 text-indigo-700",
+    BILLING_DISPUTE:  "bg-orange-50 text-orange-700",
+    BUG_REPORT:       "bg-red-50 text-red-700",
+    FEATURE_REQUEST:  "bg-amber-50 text-amber-700",
+    OTHER:            "bg-gray-50 text-gray-600",
+  } satisfies Record<Classification, string>)[c];
+}
+
+function tierStyle(t: DevopsTier | null): { class: string; note: string } {
+  if (!t) return { class: "bg-gray-100 text-gray-500", note: "" };
+  return ({
+    L0: { class: "bg-emerald-100 text-emerald-800", note: "single-bug debug — auto-action eligible" },
+    L1: { class: "bg-emerald-100 text-emerald-800", note: "live-ops — auto-action eligible" },
+    L2: { class: "bg-amber-100 text-amber-800",     note: "feature/build — human review" },
+    L3: { class: "bg-rose-100 text-rose-800",       note: "architecture — human review" },
+  } satisfies Record<DevopsTier, { class: string; note: string }>)[t];
+}
+
+function confidenceLabel(c: number | null): string {
+  if (c == null) return "";
+  if (c >= 0.85) return "high";
+  if (c >= 0.6)  return "medium";
+  return "low";
+}
+
 export default async function AdminTicketsPage() {
   const svc = makeSvc();
 
   const { data: tickets, error } = await svc
     .from("support_tickets")
-    .select("id, subject, body, priority, status, created_at, updated_at, user_id")
+    .select(
+      "id, subject, body, priority, status, created_at, updated_at, user_id, " +
+      "classification, classifier_confidence, devops_tier, suggested_response, admin_notes"
+    )
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -66,16 +121,15 @@ export default async function AdminTicketsPage() {
 
   const all = (tickets ?? []) as AdminTicket[];
 
-  // Group by status
   const byStatus = STATUS_ORDER.reduce<Record<TicketStatus, AdminTicket[]>>((acc, s) => {
     acc[s] = all.filter(t => t.status === s);
     return acc;
   }, { open: [], in_progress: [], resolved: [], closed: [] });
 
-  // Tickets with unexpected status values
   const unknown = all.filter(t => !STATUS_ORDER.includes(t.status as TicketStatus));
 
   const openCount = byStatus.open.length + byStatus.in_progress.length;
+  const aiClassified = all.filter(t => t.classification != null).length;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 space-y-8">
@@ -84,6 +138,7 @@ export default async function AdminTicketsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Support Inbox</h1>
         <p className="mt-1 text-sm text-gray-500">
           {openCount} active · {byStatus.resolved.length + byStatus.closed.length} closed · {all.length} total
+          {aiClassified > 0 && <> · <span className="text-emerald-700">{aiClassified} AI-classified</span></>}
         </p>
       </div>
 
@@ -93,7 +148,6 @@ export default async function AdminTicketsPage() {
         </div>
       )}
 
-      {/* Active statuses first */}
       {(["open", "in_progress"] as TicketStatus[]).map(s => {
         const tickets = byStatus[s];
         if (tickets.length === 0) return null;
@@ -112,7 +166,6 @@ export default async function AdminTicketsPage() {
         );
       })}
 
-      {/* Resolved / Closed — collapsible-feel via opacity */}
       {(["resolved", "closed"] as TicketStatus[]).map(s => {
         const tickets = byStatus[s];
         if (tickets.length === 0) return null;
@@ -131,7 +184,6 @@ export default async function AdminTicketsPage() {
         );
       })}
 
-      {/* Unknown statuses — debug only */}
       {unknown.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-3">
@@ -151,10 +203,12 @@ export default async function AdminTicketsPage() {
 }
 
 function TicketCard({ ticket, compact = false }: { ticket: AdminTicket; compact?: boolean }) {
+  const tier = tierStyle(ticket.devops_tier);
+  const hasAi = ticket.classification != null;
+
   return (
     <li className={`rounded-xl border border-gray-200 bg-white shadow-sm ${compact ? "px-4 py-3" : "p-4"}`}>
       <div className="flex flex-wrap items-start gap-3">
-        {/* Left: content */}
         <div className="flex-1 min-w-0">
           <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-sm"}`}>
             {ticket.subject}
@@ -171,11 +225,62 @@ function TicketCard({ ticket, compact = false }: { ticket: AdminTicket; compact?
           </div>
         </div>
 
-        {/* Right: status selector */}
         <div className="flex-shrink-0 pt-0.5">
           <TicketStatusSelect ticketId={ticket.id} currentStatus={ticket.status as TicketStatus} />
         </div>
       </div>
+
+      {/* AI Analysis panel — only renders when the resolver has classified this ticket */}
+      {hasAi && !compact && (
+        <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="font-semibold uppercase tracking-wider text-gray-500">AI</span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${classificationStyle(ticket.classification)}`}>
+              {ticket.classification}
+            </span>
+            {ticket.devops_tier && (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold ${tier.class}`}
+                title={tier.note}
+              >
+                {ticket.devops_tier}
+              </span>
+            )}
+            {ticket.classifier_confidence != null && (
+              <span className="text-gray-500">
+                {(ticket.classifier_confidence * 100).toFixed(0)}% ({confidenceLabel(ticket.classifier_confidence)})
+              </span>
+            )}
+            {ticket.devops_tier && (
+              <span className="text-gray-400 italic">{tier.note}</span>
+            )}
+          </div>
+
+          {ticket.suggested_response && (
+            <details className="text-xs text-gray-600">
+              <summary className="cursor-pointer text-gray-700 hover:text-gray-900 select-none">
+                Suggested response (review before sending)
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap rounded bg-white border border-gray-100 px-3 py-2 leading-relaxed">
+                {ticket.suggested_response}
+              </p>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* Compact AI badge for resolved/closed view */}
+      {hasAi && compact && (
+        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400">
+          <span>AI:</span>
+          <span className={`rounded px-1.5 py-px ${classificationStyle(ticket.classification)}`}>
+            {ticket.classification}
+          </span>
+          {ticket.devops_tier && (
+            <span className={`rounded px-1.5 py-px ${tier.class}`}>{ticket.devops_tier}</span>
+          )}
+        </div>
+      )}
     </li>
   );
 }
