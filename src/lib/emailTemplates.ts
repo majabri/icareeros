@@ -1,7 +1,7 @@
 /**
  * iCareerOS — Email Templates
  * Returns HTML strings for transactional emails.
- * Brand: blue-950 (#0a1628) headers, blue-600 (#2563eb) CTAs.
+ * Brand: navy (#0F1B2D) header with iCareerOS dark-mode wordmark; coral/teal CTAs (logo system 2026-05-09).
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://icareeros.vercel.app";
@@ -21,13 +21,38 @@ function wrap(content: string): string {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" role="presentation"
              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
-        <!-- Header -->
+        <!-- Header — iCareerOS dark-mode wordmark from docs/specs/logo-final-system.html.
+             Inline SVG renders in Apple Mail / iOS Mail / Gmail web; the alt
+             text + "iCareerOS — AI Career Operating System" plain-text wrapper
+             cover Outlook + clients that strip <svg>. -->
         <tr>
-          <td style="background:#0a1628;padding:24px 32px;">
-            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-.5px;">
-              iCareerOS
+          <td style="background:#0F1B2D;padding:20px 32px;">
+            <span aria-hidden="true" style="display:inline-block;line-height:0;">
+              <svg width="225" height="48" viewBox="0 0 340 72" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iCareerOS — Your AI Career Operating System">
+                <title>iCareerOS — Your AI Career Operating System</title>
+                <line x1="24" y1="4"  x2="43" y2="15" stroke="hsl(172,70%,72%)" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="43" y1="15" x2="43" y2="37" stroke="#fca5a5" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="43" y1="37" x2="24" y2="48" stroke="#fcd34d" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="24" y1="48" x2="5"  y2="37" stroke="#6ee7b7" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="5"  y1="37" x2="5"  y2="15" stroke="hsl(220,55%,75%)" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="5"  y1="15" x2="24" y2="4"  stroke="hsl(172,70%,75%)" stroke-width="2.5" stroke-linecap="round"/>
+                <text x="24" y="31" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="12" font-weight="800" fill="white">OS</text>
+                <circle cx="24" cy="4"  r="3.8" fill="hsl(172,70%,72%)"/>
+                <circle cx="43" cy="15" r="3.2" fill="#fca5a5"/>
+                <circle cx="43" cy="37" r="3.2" fill="#fcd34d"/>
+                <circle cx="24" cy="48" r="3.8" fill="#6ee7b7"/>
+                <circle cx="5"  cy="37" r="3.2" fill="hsl(220,55%,75%)"/>
+                <circle cx="5"  cy="15" r="3.2" fill="hsl(172,70%,75%)"/>
+                <text x="62" y="38" font-family="Inter,system-ui,sans-serif" font-size="30" font-weight="800">
+                  <tspan fill="hsl(172,70%,72%)">i</tspan><tspan fill="hsl(220,55%,80%)">C</tspan><tspan fill="hsl(172,70%,75%)">a</tspan><tspan fill="#fca5a5">r</tspan><tspan fill="#fcd34d">e</tspan><tspan fill="#6ee7b7">e</tspan><tspan fill="hsl(220,55%,75%)">r</tspan><tspan fill="#fca5a5">O</tspan><tspan fill="hsl(172,70%,72%)">S</tspan>
+                </text>
+                <text x="62" y="56" font-family="Inter,system-ui,sans-serif" font-size="8.5" fill="hsl(220,50%,55%)" letter-spacing="0.13em">YOUR AI CAREER OPERATING SYSTEM</text>
+              </svg>
             </span>
-            <span style="color:#93c5fd;font-size:12px;margin-left:8px;">AI Career Operating System</span>
+            <!--[if mso]>
+            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-.5px;">iCareerOS</span>
+            <span style="color:hsl(220,55%,75%);font-size:12px;margin-left:8px;">Your AI Career Operating System</span>
+            <![endif]-->
           </td>
         </tr>
         <!-- Body -->

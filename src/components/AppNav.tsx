@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { Logo } from "@/components/brand/Logo";
 
 export function AppNav() {
   const pathname = usePathname();
@@ -34,8 +35,8 @@ export function AppNav() {
       <nav className="hidden sm:block border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo */}
-          <a href="/dashboard" className="flex items-center gap-2 font-bold text-gray-900 shrink-0">
-            <span className="text-brand-600">iCareerOS</span>
+          <a href="/dashboard" className="flex items-center gap-2 font-bold text-gray-900 shrink-0" aria-label="iCareerOS — go to dashboard">
+            <Logo variant="horizontal" width={170} ariaLabel="iCareerOS" />
           </a>
 
           {/* Nav links */}
