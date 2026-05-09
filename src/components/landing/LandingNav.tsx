@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/brand/Logo";
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -39,12 +40,9 @@ export function LandingNav() {
         maxWidth: "1200px", margin: "0 auto",
       }}>
         {/* Logo */}
-        <div style={{
-          fontSize: "1.5rem", fontWeight: 800,
-          background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--tertiary) 100%)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          backgroundClip: "text", letterSpacing: "-0.5px",
-        }}>iCareerOS</div>
+        <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
+          <Logo variant="horizontal" width={180} ariaLabel="iCareerOS" />
+        </a>
 
         {/* Desktop nav links */}
         <ul style={{

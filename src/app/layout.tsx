@@ -9,7 +9,15 @@ export const metadata: Metadata = {
   description:
     "Evaluate, advise, learn, act, coach, and achieve your career goals with AI-powered guidance.",
   metadataBase: new URL("https://icareeros.com"),
-  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/icon-32.png",
+  },
   openGraph: {
     title: "iCareerOS — Your AI Career Operating System",
     description:
@@ -18,12 +26,21 @@ export const metadata: Metadata = {
     siteName: "iCareerOS",
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "iCareerOS — Your AI Career Operating System",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "iCareerOS — Your AI Career Operating System",
     description:
       "The AI-powered career OS that guides you from evaluation to achievement.",
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,
