@@ -86,7 +86,7 @@ describe("submitPrivacyContact", () => {
     });
     const opts = sendMailSpy.mock.calls[0][0];
     expect(opts.html).not.toContain("<script>");
-    expect(opts.html).not.toContain("onerror=alert");
+    expect(opts.html).not.toContain("<img");
     expect(opts.html).toContain("&lt;script&gt;");
   });
 
