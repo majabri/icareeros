@@ -1,26 +1,52 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const sendMailSpy = vi.fn().mockResolvedValue({ accepted: ["info@icareeros.com"], rejected: [], messageId: "<id>" });
+// ── next/cache ───────────────────────────────────────────────────────────────
+// Some of the legal actions revalidate paths after submission. Stub it so
+// Vitest doesn't try to invoke the real Next.js cache layer outside of a
+// request scope.
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+
+// ── @/lib/mailer ─────────────────────────────────────────────────────────────
+const sendMailSpy = vi.fn().mockResolvedValue({
+  accepted: ["info@icareeros.com"],
+  rejected: [],
+  messageId: "<id>",
+});
 
 vi.mock("@/lib/mailer", () => ({
   sendMail: (opts: unknown) => sendMailSpy(opts),
   getFromAddress: () => "noreply@icareeros.com",
 }));
 
+// ── next/headers — Next.js 15 strict request-scope check ─────────────────────
+// `submitPrivacyContact()` does `await headers()` to capture the IP / UA. In
+// vitest there's no request scope, so Next throws unless we stub it.
+// (Same pattern as adminActions.test.ts via PR #114.)
 vi.mock("next/headers", () => ({
-  headers: vi.fn(async () => ({
+  headers: vi.fn().mockResolvedValue({
     get: (key: string) => {
       if (key === "x-forwarded-for") return "9.9.9.9";
       if (key === "user-agent") return "TestUA/1.0";
       return null;
     },
-  })),
+  }),
+  cookies: vi.fn().mockResolvedValue({
+    getAll: vi.fn().mockReturnValue([]),
+    get: vi.fn(),
+    set: vi.fn(),
+    delete: vi.fn(),
+  }),
 }));
 
 import { submitPrivacyContact } from "../legalContactActions";
 
 beforeEach(() => {
-  sendMailSpy.mockClear();
+  vi.clearAllMocks();
+  sendMailSpy.mockResolvedValue({
+    accepted: ["info@icareeros.com"],
+    rejected: [],
+    messageId: "<id>",
+  });
 });
 
 describe("submitPrivacyContact", () => {
@@ -83,12 +109,15 @@ describe("submitPrivacyContact", () => {
   });
 
   it("silently 'succeeds' when honeypot field is filled (bot trap)", async () => {
-    const res = await submitPrivacyContact({ ...validInput, website: "http://spam.example" });
+    const res = await submitPrivacyContact({
+      ...validInput,
+      website: "http://spam.example",
+    });
     expect(res.ok).toBe(false); // zod rejects max(0)
     expect(sendMailSpy).not.toHaveBeenCalled();
-    // (zod's max(0) means non-empty website fails validation before honeypot check;
-    //  the visible "succeed" path is for the honeypot rule. Either way bots don't
-    //  get email delivered.)
+    // (zod's max(0) means non-empty website fails validation before honeypot
+    //  check; the visible "succeed" path is for the honeypot rule. Either way
+    //  bots don't get email delivered.)
   });
 
   it("returns error when sendMail throws (SMTP down)", async () => {
