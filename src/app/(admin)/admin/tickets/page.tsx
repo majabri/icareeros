@@ -119,7 +119,7 @@ export default async function AdminTicketsPage() {
     );
   }
 
-  const all = (tickets ?? []) as AdminTicket[];
+  const all = (tickets ?? []) as unknown as AdminTicket[];
 
   const byStatus = STATUS_ORDER.reduce<Record<TicketStatus, AdminTicket[]>>((acc, s) => {
     acc[s] = all.filter(t => t.status === s);
