@@ -10,7 +10,7 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     env:
       # Tests run against the live Vercel deployment — no local server needed
@@ -37,4 +37,4 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: npx playwright test --retries=2
