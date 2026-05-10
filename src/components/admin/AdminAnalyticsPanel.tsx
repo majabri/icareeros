@@ -55,7 +55,7 @@ export function AdminAnalyticsPanel({
     // Users
     { label: "Total users",       value: totalUsers,           sub: `+${newUsersLast7Days} this week`,    color: "blue" },
     { label: "Free plan",         value: planDist.free,        sub: `${Math.round((planDist.free / Math.max(totalUsers,1)) * 100)}% of users`, color: "gray" },
-    { label: "Pro plan",          value: planDist.pro,         sub: "$19/mo subscribers",                  color: "green" },
+    { label: "Pro plan",          value: planDist.pro,         sub: "$29.99/mo subscribers",                  color: "green" },
     { label: "Starter plan",      value: planDist.starter,     sub: "$9.99/mo subscribers",                color: "purple" },
     { label: "Standard plan",     value: planDist.standard,    sub: "$18.99/mo subscribers",               color: "indigo" },
     // Activity
