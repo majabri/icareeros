@@ -15,9 +15,9 @@
 //   STRIPE_PRICE_PRO_MONTHLY                   price_...
 //   STRIPE_PRICE_PRO_ANNUAL                    price_...
 //   STRIPE_PRICE_SPRINT                        price_... (one-time $29)
-//   STRIPE_PRICE_INTERVIEW_WEEK                price_... (one-time $19)
-//   STRIPE_PRICE_NEGOTIATION_PACK              price_... (one-time $19)
-//   STRIPE_PRICE_FOUNDING_LIFETIME             price_... (one-time $89, capped)
+//   STRIPE_PRICE_INTERVIEW_PACK                price_... (quarterly $19, recurring)
+//   STRIPE_PRICE_NEGOTIATION_PACK              price_... (quarterly $19, recurring)
+//   STRIPE_PRICE_FOUNDING                      price_... (one-time $89, capped)
 
 import Stripe from "stripe";
 import type { SubscriptionPlan, BillingCycle, AddonKey } from "@/services/billing/types";
@@ -55,9 +55,9 @@ export function resolvePriceId(opts: ResolveOpts): string | null {
   if (opts.addon) {
     const map: Record<AddonKey, string | undefined> = {
       sprint:            process.env.STRIPE_PRICE_SPRINT,
-      interview_week:    process.env.STRIPE_PRICE_INTERVIEW_WEEK,
+      interview_pack:    process.env.STRIPE_PRICE_INTERVIEW_PACK,
       negotiation_pack:  process.env.STRIPE_PRICE_NEGOTIATION_PACK,
-      founding_lifetime: process.env.STRIPE_PRICE_FOUNDING_LIFETIME,
+      founding_lifetime: process.env.STRIPE_PRICE_FOUNDING,
     };
     return map[opts.addon] ?? null;
   }
@@ -85,7 +85,7 @@ export function planFromPriceId(priceId: string): {
     [process.env.STRIPE_PRICE_STANDARD_ANNUAL,    "standard", "annual",  null],
     [process.env.STRIPE_PRICE_PRO_MONTHLY,        "pro",      "monthly", null],
     [process.env.STRIPE_PRICE_PRO_ANNUAL,         "pro",      "annual",  null],
-    [process.env.STRIPE_PRICE_FOUNDING_LIFETIME,  "pro",      null,      "founding_lifetime"],
+    [process.env.STRIPE_PRICE_FOUNDING,            "pro",      null,      "founding_lifetime"],
   ];
   for (const [envVal, plan, cycle, addon] of map) {
     if (envVal && envVal === priceId) return { plan, cycle, addon };
@@ -98,6 +98,6 @@ export function planFromPriceId(priceId: string): {
  * row is missing (treated as sold-out fail-closed).
  */
 export function isFoundingPriceId(priceId: string): boolean {
-  const founding = process.env.STRIPE_PRICE_FOUNDING_LIFETIME;
+  const founding = process.env.STRIPE_PRICE_FOUNDING;
   return Boolean(founding && founding === priceId);
 }

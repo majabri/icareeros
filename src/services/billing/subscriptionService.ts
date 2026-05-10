@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase";
+import { RECURRING_ADDONS } from "./types";
 import type {
   UserSubscription,
   SubscriptionPlan,
@@ -69,7 +70,10 @@ export async function createCheckoutSession(
     (typeof window !== "undefined" ? window.location.origin : "");
   const successUrl = opts.successUrl ?? `${baseUrl}/settings/billing?status=success`;
   const cancelUrl  = opts.cancelUrl  ?? `${baseUrl}/settings/billing?status=canceled`;
-  const mode: "subscription" | "payment" = opts.addon ? "payment" : "subscription";
+  const mode: "subscription" | "payment" =
+    opts.addon
+      ? (RECURRING_ADDONS.has(opts.addon) ? "subscription" : "payment")
+      : "subscription";
 
   const res = await fetch("/api/stripe/checkout", {
     method:  "POST",
@@ -88,9 +92,9 @@ function resolvePublicPriceId(opts: CreateCheckoutOpts): string | null {
   if (opts.addon) {
     const map: Record<AddonKey, string | undefined> = {
       sprint:            process.env.NEXT_PUBLIC_STRIPE_PRICE_SPRINT,
-      interview_week:    process.env.NEXT_PUBLIC_STRIPE_PRICE_INTERVIEW_WEEK,
+      interview_pack:    process.env.NEXT_PUBLIC_STRIPE_PRICE_INTERVIEW_PACK,
       negotiation_pack:  process.env.NEXT_PUBLIC_STRIPE_PRICE_NEGOTIATION_PACK,
-      founding_lifetime: process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING_LIFETIME,
+      founding_lifetime: process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING,
     };
     return map[opts.addon] ?? null;
   }

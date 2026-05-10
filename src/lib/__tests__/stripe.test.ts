@@ -24,7 +24,7 @@ const ENV_KEYS = [
   "STRIPE_PRICE_STANDARD_MONTHLY",
   "STRIPE_PRICE_PRO_MONTHLY",
   "STRIPE_PRICE_PRO_ANNUAL",
-  "STRIPE_PRICE_FOUNDING_LIFETIME",
+  "STRIPE_PRICE_FOUNDING",
   "STRIPE_PRICE_SPRINT",
 ];
 const SNAPSHOT: Record<string, string | undefined> = {};
@@ -61,7 +61,7 @@ describe("resolvePriceId", () => {
 
   it("addon resolves separately from plan/cycle", async () => {
     process.env.STRIPE_PRICE_SPRINT            = "price_sprint";
-    process.env.STRIPE_PRICE_FOUNDING_LIFETIME = "price_founding";
+    process.env.STRIPE_PRICE_FOUNDING = "price_founding";
     const { resolvePriceId } = await loadLib();
     expect(resolvePriceId({ addon: "sprint" })).toBe("price_sprint");
     expect(resolvePriceId({ addon: "founding_lifetime" })).toBe("price_founding");
@@ -87,7 +87,7 @@ describe("planFromPriceId", () => {
   });
 
   it("Founding Lifetime reverse-maps to pro/null/founding_lifetime", async () => {
-    process.env.STRIPE_PRICE_FOUNDING_LIFETIME = "price_Z";
+    process.env.STRIPE_PRICE_FOUNDING = "price_Z";
     const { planFromPriceId } = await loadLib();
     expect(planFromPriceId("price_Z")).toEqual({ plan: "pro", cycle: null, addon: "founding_lifetime" });
   });
@@ -100,14 +100,14 @@ describe("planFromPriceId", () => {
 
 describe("isFoundingPriceId", () => {
   it("true when the env var matches", async () => {
-    process.env.STRIPE_PRICE_FOUNDING_LIFETIME = "price_F";
+    process.env.STRIPE_PRICE_FOUNDING = "price_F";
     const { isFoundingPriceId } = await loadLib();
     expect(isFoundingPriceId("price_F")).toBe(true);
     expect(isFoundingPriceId("price_other")).toBe(false);
   });
 
   it("false when the env var is unset", async () => {
-    delete process.env.STRIPE_PRICE_FOUNDING_LIFETIME;
+    delete process.env.STRIPE_PRICE_FOUNDING;
     const { isFoundingPriceId } = await loadLib();
     expect(isFoundingPriceId("price_F")).toBe(false);
   });

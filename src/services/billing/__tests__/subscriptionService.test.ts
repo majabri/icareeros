@@ -98,7 +98,7 @@ describe("subscriptionService — monetization enabled", () => {
   });
 
   it("createCheckoutSession with addon switches mode to 'payment'", async () => {
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING_LIFETIME = "price_founding";
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING = "price_founding";
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ checkoutUrl: "https://stripe.test/p_1" }),

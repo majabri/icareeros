@@ -157,15 +157,15 @@ export function BillingSettings() {
           ))}
         </div>
 
-        {/* One-time add-ons footer */}
+        {/* Add-ons footer — Sprint is one-time; Interview Pack and Negotiation Pack are quarterly recurring. */}
         <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4">
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Available on every tier — one-time add-ons
+            Available on every tier — add-ons
           </p>
           <ul className="space-y-1 text-xs text-gray-600">
-            <li>• <span className="font-semibold text-gray-700">Career Sprint</span> ($29) — 30-day intensive coaching push, AI-only at launch.</li>
-            <li>• <span className="font-semibold text-gray-700">Interview Week</span> ($19) — focused interview-prep boost.</li>
-            <li>• <span className="font-semibold text-gray-700">Negotiation Pack</span> ($19) — offer-negotiation toolkit and email templates.</li>
+            <li>• <span className="font-semibold text-gray-700">Career Sprint</span> ($29 one-time) — 30-day intensive coaching push, AI-only at launch.</li>
+            <li>• <span className="font-semibold text-gray-700">Interview Pack</span> ($19 / quarter) — focused interview-prep boost, billed quarterly.</li>
+            <li>• <span className="font-semibold text-gray-700">Negotiation Pack</span> ($19 / quarter) — offer-negotiation toolkit and email templates, billed quarterly.</li>
           </ul>
         </div>
       </div>
