@@ -1,0 +1,136 @@
+<!--
+  iCareerOS — "Change email address" template.
+  Source of truth for what's pasted into Supabase Dashboard
+    → Authentication → Emails → Change Email Address.
+
+  Variables available in Supabase email templates:
+    {{ .ConfirmationURL }}   — primary confirm-new-email link
+    {{ .Email }}             — current address (the one this email is sent to)
+    {{ .NewEmail }}          — the new address the user wants to switch to
+    {{ .SiteURL }}           — Site URL set in Supabase URL Configuration
+
+  Subject suggestion (set in Supabase): "Confirm your new iCareerOS email"
+
+  IMPORTANT: Supabase sends this email to BOTH the old AND the new address.
+  Both copies use the same template; both confirm the change. The variables
+  always reference the address-being-confirmed via {{ .Email }} on the
+  recipient line and {{ .NewEmail }} on the new-address line.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Confirm your new iCareerOS email</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <!-- Preheader: shown in inbox preview, hidden in body -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
+    Confirm your new iCareerOS email — link expires in 1 hour.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f8fa;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <!-- Brand header — iCareerOS horizontal logo (light, from docs/specs/logo-final-system.html). -->
+          <tr>
+            <td style="padding:24px 32px 16px 32px;border-bottom:1px solid #f1f5f9;line-height:0;">
+              <span style="display:inline-block;line-height:0;">
+                <svg width="225" height="48" viewBox="0 0 340 72" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iCareerOS — Your AI Career Operating System">
+                  <title>iCareerOS — Your AI Career Operating System</title>
+                  <line x1="24" y1="4"  x2="43" y2="15" stroke="#00B8A9" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="43" y1="15" x2="43" y2="37" stroke="#FF6B6B" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="43" y1="37" x2="24" y2="48" stroke="#F5A623" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="24" y1="48" x2="5"  y2="37" stroke="#10B981" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="5"  y1="37" x2="5"  y2="15" stroke="hsl(220,50%,65%)" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="5"  y1="15" x2="24" y2="4"  stroke="hsl(172,70%,58%)" stroke-width="2.5" stroke-linecap="round"/>
+                  <text x="24" y="31" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="12" font-weight="800" fill="#0F1B2D">OS</text>
+                  <circle cx="24" cy="4"  r="3.8" fill="#00B8A9"/>
+                  <circle cx="43" cy="15" r="3.2" fill="#FF6B6B"/>
+                  <circle cx="43" cy="37" r="3.2" fill="#F5A623"/>
+                  <circle cx="24" cy="48" r="3.8" fill="#10B981"/>
+                  <circle cx="5"  cy="37" r="3.2" fill="hsl(220,50%,65%)"/>
+                  <circle cx="5"  cy="15" r="3.2" fill="hsl(172,70%,58%)"/>
+                  <text x="62" y="38" font-family="Inter,system-ui,sans-serif" font-size="30" font-weight="800">
+                    <tspan fill="#00B8A9">i</tspan><tspan fill="#0F1B2D">C</tspan><tspan fill="hsl(172,70%,58%)">a</tspan><tspan fill="#FF6B6B">r</tspan><tspan fill="#F5A623">e</tspan><tspan fill="#10B981">e</tspan><tspan fill="hsl(220,50%,65%)">r</tspan><tspan fill="#FF6B6B">O</tspan><tspan fill="#00B8A9">S</tspan>
+                  </text>
+                  <text x="62" y="56" font-family="Inter,system-ui,sans-serif" font-size="8.5" fill="#64748B" letter-spacing="0.13em">YOUR AI CAREER OPERATING SYSTEM</text>
+                </svg>
+              </span>
+              <!--[if mso]>
+              <span style="font-size:20px;font-weight:700;color:#0F1B2D;letter-spacing:-0.01em;">iCareerOS</span>
+              <span style="color:#64748B;font-size:11px;margin-left:6px;">Your AI Career Operating System</span>
+              <![endif]-->
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 32px 8px 32px;">
+              <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;">
+                Confirm your new email
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#334155;">
+                You requested to change the email on your iCareerOS account from
+                <strong style="color:#0f172a;">{{ .Email }}</strong>
+                to
+                <strong style="color:#0f172a;">{{ .NewEmail }}</strong>.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:#334155;">
+                Click the button below to confirm the change. You'll receive a copy of this email at both addresses; the new address becomes active once it's confirmed. This link expires in <strong style="color:#0f172a;">1 hour</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA button -->
+          <tr>
+            <td align="center" style="padding:0 32px 16px 32px;">
+              <a href="{{ .ConfirmationURL }}"
+                 style="display:inline-block;background:#00a8cc;background-image:linear-gradient(180deg,#00d9ff 0%,#00a8cc 100%);color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;line-height:1;padding:14px 28px;border-radius:10px;border:1px solid #007a99;">
+                Confirm new email
+              </a>
+            </td>
+          </tr>
+
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:8px 32px 24px 32px;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">
+                Button not working? Paste this link into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;color:#0369a1;word-break:break-all;line-height:1.5;">
+                <a href="{{ .ConfirmationURL }}" style="color:#0369a1;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Reassurance / not you -->
+          <tr>
+            <td style="padding:0 32px 28px 32px;border-top:1px solid #f1f5f9;">
+              <p style="margin:20px 0 0 0;font-size:12px;color:#64748b;line-height:1.55;">
+                If you didn't request this change, ignore this email — your existing email and password still work. If you keep seeing change-email confirmations you didn't ask for, <a href="{{ .SiteURL }}/legal/contact" style="color:#0369a1;text-decoration:underline;">contact us</a> right away.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#fafafa;padding:18px 32px;border-top:1px solid #f1f5f9;">
+              <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
+                iCareerOS — the career operating system that runs on outcomes, not advice.<br />
+                Need help? <a href="{{ .SiteURL }}/legal/contact" style="color:#64748b;text-decoration:underline;">Contact us</a>.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Outside-card meta line -->
+        <p style="margin:14px 0 0 0;font-size:11px;color:#94a3b8;text-align:center;line-height:1.5;">
+          Sent to {{ .Email }} because an email-change was requested at <a href="{{ .SiteURL }}" style="color:#94a3b8;text-decoration:underline;">icareeros.com</a>.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
