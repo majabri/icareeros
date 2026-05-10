@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase";
+import { RECURRING_ADDONS } from "./types";
 import type {
   UserSubscription,
   SubscriptionPlan,
