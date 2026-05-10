@@ -88,6 +88,28 @@ export async function createCheckoutSession(
   return json.checkoutUrl ?? null;
 }
 
+/**
+ * Static lookup table for plan+cycle price IDs.
+ *
+ * IMPORTANT: Next.js only inlines `NEXT_PUBLIC_*` env vars at build time when
+ * they are referenced as DIRECT property accesses (`process.env.NEXT_PUBLIC_X`).
+ * Dynamic computed-property access (`process.env[key]`) silently returns
+ * `undefined` in the client bundle even when the env var is set in Vercel —
+ * because the static analyzer doesn't see the literal var name and never
+ * substitutes the value.
+ *
+ * This map enumerates every combination so each access is direct, which is
+ * what Next.js needs.
+ */
+const PUBLIC_PLAN_CYCLE_PRICE_MAP: Record<string, string | undefined> = {
+  starter_monthly:  process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_MONTHLY,
+  starter_annual:   process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_ANNUAL,
+  standard_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD_MONTHLY,
+  standard_annual:  process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD_ANNUAL,
+  pro_monthly:      process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
+  pro_annual:       process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
+};
+
 function resolvePublicPriceId(opts: CreateCheckoutOpts): string | null {
   if (opts.addon) {
     const map: Record<AddonKey, string | undefined> = {
@@ -99,8 +121,8 @@ function resolvePublicPriceId(opts: CreateCheckoutOpts): string | null {
     return map[opts.addon] ?? null;
   }
   if (opts.plan && opts.cycle) {
-    const key = `NEXT_PUBLIC_STRIPE_PRICE_${opts.plan.toUpperCase()}_${opts.cycle.toUpperCase()}`;
-    return process.env[key] ?? null;
+    const key = `${opts.plan}_${opts.cycle}`;
+    return PUBLIC_PLAN_CYCLE_PRICE_MAP[key] ?? null;
   }
   return null;
 }
