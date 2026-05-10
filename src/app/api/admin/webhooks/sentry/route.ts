@@ -1,17 +1,17 @@
 /**
  * POST /api/admin/webhooks/sentry
  *
- * Sentry "Internal Integration" webhook receiver. Logs issue events into
- * `infrastructure_events`. v1 uses shared-secret auth (`Authorization:
- * Bearer ${SENTRY_WEBHOOK_SECRET}`); native HMAC verification via
- * `sentry-hook-signature` is a follow-up.
+ * Sentry "Internal Integration" webhook receiver. Authenticates via the
+ * native `sentry-hook-signature` header — Sentry signs the raw body with
+ * HMAC-SHA256 using the integration's client secret (stored in
+ * `SENTRY_WEBHOOK_SECRET`).
  *
  * Configure in Sentry: Settings → Developer Settings → Internal Integrations
  *   URL:     https://icareeros.com/api/admin/webhooks/sentry
- *   Events:  issue.created, issue.resolved (error-spike threshold)
- *   Secret:  the value put in Vercel env var SENTRY_WEBHOOK_SECRET
+ *   Events:  issue.created, issue.resolved
+ *   Secret:  copy "Client Secret" into Vercel env var `SENTRY_WEBHOOK_SECRET`.
  *
- * ADR-005 Phase 1 (W6-B).
+ * ADR-005 Phase 1 (W6-D).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,10 +19,10 @@ import {
   logInfrastructureEvent,
   type InfrastructureEventSeverity,
 } from "@/lib/observability/logInfrastructureEvent";
-import { verifyWebhookSecret } from "@/lib/observability/verifyWebhookSecret";
+import { verifyHmacSignature } from "@/lib/observability/verifyHmacSignature";
 
 interface SentryWebhookBody {
-  action?:     string;
+  action?: string;
   installation?: { uuid?: string };
   data?: {
     issue?: {
@@ -40,32 +40,33 @@ interface SentryWebhookBody {
 }
 
 function severityFor(level: string | undefined, action: string | undefined): InfrastructureEventSeverity {
-  if (action === "resolved") return "info";
-  if (level === "fatal") return "critical";
-  if (level === "error") return "error";
-  if (level === "warning") return "warning";
+  if (action === "resolved")    return "info";
+  if (level  === "fatal")       return "critical";
+  if (level  === "error")       return "error";
+  if (level  === "warning")     return "warning";
   return "info";
 }
 
 export async function POST(req: NextRequest) {
-  const auth = verifyWebhookSecret(
-    req.headers.get("authorization"),
+  const rawBody = await req.text();
+
+  const auth = verifyHmacSignature(
+    rawBody,
+    req.headers.get("sentry-hook-signature"),
     process.env.SENTRY_WEBHOOK_SECRET,
+    "sha256",
   );
   if (!auth.ok) {
     return NextResponse.json({ error: "unauthorized", reason: auth.reason }, { status: 401 });
   }
 
   let body: SentryWebhookBody;
-  try {
-    body = (await req.json()) as SentryWebhookBody;
-  } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
-  }
+  try { body = JSON.parse(rawBody) as SentryWebhookBody; }
+  catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
 
-  const action = typeof body.action === "string" ? body.action : "unknown";
-  const issue = body.data?.issue;
-  const eventType = `issue.${action}`;
+  const action     = typeof body.action === "string" ? body.action : "unknown";
+  const issue      = body.data?.issue;
+  const eventType  = `issue.${action}`;
   const resolvedAt = action === "resolved" ? new Date().toISOString() : null;
 
   const result = await logInfrastructureEvent({

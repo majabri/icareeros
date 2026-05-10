@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHmac } from "node:crypto";
 
 const logSpy = vi.fn().mockResolvedValue({ ok: true, id: "evt-1" });
 vi.mock("@/lib/observability/logInfrastructureEvent", () => ({
@@ -7,19 +8,22 @@ vi.mock("@/lib/observability/logInfrastructureEvent", () => ({
 
 import { POST } from "../route";
 
+const SECRET = "this-is-a-real-secret-with-enough-entropy";
+
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.VERCEL_WEBHOOK_SECRET = "this-is-a-real-secret-with-enough-entropy";
+  process.env.VERCEL_WEBHOOK_SECRET = SECRET;
 });
 
-function makeReq(opts: { auth?: string | null; body?: unknown } = {}) {
-  const headers: Record<string, string> = {};
-  if (opts.auth !== null) headers.authorization = opts.auth ?? `Bearer ${process.env.VERCEL_WEBHOOK_SECRET}`;
-  return new Request("http://localhost/api/admin/webhooks/vercel", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(opts.body ?? {}),
-  });
+function makeReq(opts: { sig?: string | null; body?: unknown } = {}) {
+  const bodyStr = JSON.stringify(opts.body ?? {});
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (opts.sig === undefined) {
+    headers["x-vercel-signature"] = createHmac("sha1", SECRET).update(bodyStr).digest("hex");
+  } else if (opts.sig !== null) {
+    headers["x-vercel-signature"] = opts.sig;
+  }
+  return new Request("http://localhost/api/admin/webhooks/vercel", { method: "POST", headers, body: bodyStr });
 }
 
 describe("POST /api/admin/webhooks/vercel", () => {
@@ -30,37 +34,37 @@ describe("POST /api/admin/webhooks/vercel", () => {
     expect(logSpy).not.toHaveBeenCalled();
   });
 
-  it("returns 401 on mismatched bearer", async () => {
-    const res = await POST(makeReq({ auth: "Bearer wrong-secret" }) as never);
+  it("returns 401 when signature is missing", async () => {
+    const res = await POST(makeReq({ sig: null, body: { type: "deployment.created" } }) as never);
     expect(res.status).toBe(401);
-    expect(logSpy).not.toHaveBeenCalled();
   });
 
-  it("returns 400 on invalid JSON body", async () => {
-    const req = new Request("http://localhost/api/admin/webhooks/vercel", {
-      method: "POST",
-      headers: { authorization: `Bearer ${process.env.VERCEL_WEBHOOK_SECRET}` },
-      body: "not-json",
-    });
-    const res = await POST(req as never);
+  it("returns 401 on a tampered signature", async () => {
+    const res = await POST(makeReq({ sig: "0".repeat(40), body: { type: "deployment.created" } }) as never);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 on invalid JSON body (after passing HMAC)", async () => {
+    const bad = "not-json";
+    const headers: Record<string, string> = {
+      "x-vercel-signature": createHmac("sha1", SECRET).update(bad).digest("hex"),
+    };
+    const res = await POST(new Request("http://localhost/api/admin/webhooks/vercel", { method: "POST", headers, body: bad }) as never);
     expect(res.status).toBe(400);
   });
 
-  it("logs deployment.error events as severity=error", async () => {
-    const res = await POST(
-      makeReq({
-        body: {
-          type: "deployment.error",
-          id: "vercel-evt-123",
-          createdAt: 1715284200000,
-          payload: {
-            target: "production",
-            project: { name: "icareeros" },
-            deployment: { id: "dpl_xyz", url: "icareeros.vercel.app" },
-          },
-        },
-      }) as never,
-    );
+  it("logs deployment.error events with severity=error", async () => {
+    const body = {
+      type: "deployment.error",
+      id: "vercel-evt-123",
+      createdAt: 1715284200000,
+      payload: {
+        target: "production",
+        project: { name: "icareeros" },
+        deployment: { id: "dpl_xyz", url: "icareeros.vercel.app" },
+      },
+    };
+    const res = await POST(makeReq({ body }) as never);
     expect(res.status).toBe(200);
     expect(logSpy).toHaveBeenCalledOnce();
     const arg = logSpy.mock.calls[0][0];
