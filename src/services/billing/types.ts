@@ -103,7 +103,7 @@ export const PLAN_PRICES: Record<SubscriptionPlan, PlanPrice> = {
 
 export type AddonKey =
   | "sprint"
-  | "interview_week"
+  | "interview_pack"
   | "negotiation_pack"
   | "founding_lifetime";
 
@@ -114,11 +114,21 @@ export interface AddonPrice {
 }
 
 export const ADDON_PRICES: Record<AddonKey, AddonPrice> = {
-  sprint:            { amount: 29, label: "Career Sprint",      description: "One-time intensive sprint" },
-  interview_week:    { amount: 19, label: "Interview Week",     description: "One-time interview prep boost" },
-  negotiation_pack:  { amount: 19, label: "Negotiation Pack",   description: "One-time offer negotiation kit" },
+  sprint:            { amount: 29, label: "Career Sprint",      description: "One-time 30-day intensive sprint" },
+  interview_pack:    { amount: 19, label: "Interview Pack",     description: "Quarterly interview-prep boost ($19 / 3 months)" },
+  negotiation_pack:  { amount: 19, label: "Negotiation Pack",   description: "Quarterly offer-negotiation toolkit ($19 / 3 months)" },
   founding_lifetime: { amount: 89, label: "Founding Lifetime",  description: "One-time. Pro for life. Limited seats." },
 };
+
+/**
+ * Add-ons that bill as a recurring subscription rather than a one-time
+ * payment. Used by createCheckoutSession to pick the correct Stripe
+ * checkout mode ("subscription" vs "payment").
+ */
+export const RECURRING_ADDONS: ReadonlySet<AddonKey> = new Set<AddonKey>([
+  "interview_pack",
+  "negotiation_pack",
+]);
 
 export type FeatureKey =
   | "feature_ai_coach"
@@ -235,7 +245,7 @@ export const PLAN_FEATURES: Record<SubscriptionPlan, ReadonlyArray<PlanFeature>>
     { group: "Act",                 text: "Unlimited outreach drafting" },
     { group: "Act",                 text: "Unlimited mock interviews with deep feedback" },
     { group: "Act",                 text: "Salary intelligence + negotiation toolkit" },
-    { group: "Act",                 text: "Advanced positioning + Interview Week triggers" },
+    { group: "Act",                 text: "Advanced positioning + Interview Pack triggers" },
     { group: "Coach",               text: "Unlimited on-demand coaching briefs" },
     { group: "Coach",               text: "Unlimited interactive AI chat (priority)" },
     { group: "Coach",               text: "Human Coach (Mode C)", comingSoon: true },

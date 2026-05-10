@@ -112,8 +112,8 @@ describe("ADDON_PRICES — one-time SKUs", () => {
   it("Sprint = $29 one-time", () => {
     expect(ADDON_PRICES.sprint.amount).toBe(29);
   });
-  it("Interview Week = $19 one-time", () => {
-    expect(ADDON_PRICES.interview_week.amount).toBe(19);
+  it("Interview Pack = $19 quarterly recurring", () => {
+    expect(ADDON_PRICES.interview_pack.amount).toBe(19);
   });
   it("Negotiation Pack = $19 one-time", () => {
     expect(ADDON_PRICES.negotiation_pack.amount).toBe(19);
