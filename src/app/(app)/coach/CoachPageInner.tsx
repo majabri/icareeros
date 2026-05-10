@@ -87,7 +87,7 @@ export function CoachPageInner() {
           href="/settings/billing"
           className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
         >
-          Upgrade to Starter — $19/mo
+          Upgrade to Starter — $9.99/mo
         </Link>
       </div>
     );
