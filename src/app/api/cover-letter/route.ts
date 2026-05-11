@@ -98,7 +98,21 @@ export async function POST(req: Request) {
     const { opportunity_id, cycle_id } = body;
 
     // 3. Load opportunity
-    const { data: opp, error: oppErr } = await supabase
+      // RLS fix (2026-05-11): `opportunities` is service-role-only for reads.
+      // Querying via the user-session client returns no rows and produces
+      // a misleading 'Opportunity not found' 404 even when the row exists.
+      // Use a service-role client for the lookup. The service key is the
+      // same one used elsewhere in this codebase (jobs/agent, jobs/search).
+    const { createClient: createServiceRoleClient } = await import("@supabase/supabase-js");
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const oppClient = serviceKey
+      ? createServiceRoleClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          serviceKey,
+          { auth: { persistSession: false } },
+        )
+      : supabase;
+    const { data: opp, error: oppErr } = await oppClient
       .from("opportunities")
       .select("id, title, company, location, description, url")
       .eq("id", opportunity_id)
