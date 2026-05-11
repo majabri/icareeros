@@ -351,7 +351,7 @@ export default function JobsPage() {
 
       {/* Wave 2 — in-platform Job Detail Drawer. Renders only when
           selectedJob is set; the drawer manages its own scrim. */}
-      <JobDetailDrawer job={selectedJob} onClose={closeJob} />
+      <JobDetailDrawer job={selectedJob} onClose={closeJob} cycleId={cycleId} />
     </div>
   );
 }
