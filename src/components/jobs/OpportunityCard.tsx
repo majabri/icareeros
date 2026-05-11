@@ -10,6 +10,14 @@ import { CoverLetterModal } from "./CoverLetterModal";
 interface OpportunityCardProps {
   opportunity: OpportunityResult;
   cycleId?: string | null;
+  /**
+   * Wave 2 — opens the in-platform Job Detail Drawer in the parent page.
+   * When provided, the card title and "View details" button trigger this
+   * instead of navigating to an external URL. Hard rule from
+   * COWORK-BRIEF-jobs-experience-v1: users never leave the platform to
+   * read a posting — only the Apply button goes external.
+   */
+  onSelect?: (opp: OpportunityResult) => void;
 }
 
 const FIT_COLORS: Record<string, string> = {
@@ -41,18 +49,11 @@ function formatSalary(
   return `Up to ${fmt(max!)}`;
 }
 
-export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: OpportunityCardProps) {
   const router = useRouter();
   const [showOutreach,     setShowOutreach]     = useState(false);
   const [showCoverLetter,  setShowCoverLetter]  = useState(false);
 
-  /**
-   * Hand off this job's description to Resume Advisor (/resumeadvisor) and
-   * navigate. The advisor page reads `resumeAdvisor:incomingJob` from
-   * sessionStorage on mount and pre-fills the JD field, so the user can
-   * immediately load their resume from profile / paste / upload and run
-   * the same fit-analysis pipeline. We don't reinvent — we hand off.
-   */
   function handleAnalyzeFit() {
     if (typeof window === "undefined") return;
     try {
@@ -69,11 +70,6 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
     router.push("/resumeadvisor");
   }
 
-  /**
-   * Phase 5 Item 2/4 handoff — write the job summary to sessionStorage and
-   * navigate to /applications?track=1. The pipeline page reads the payload
-   * on mount, opens the add-form pre-filled, and clears the key.
-   */
   function handleTrack() {
     if (typeof window === "undefined") return;
     writeIncomingTrack({
@@ -85,8 +81,14 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
     router.push("/applications?track=1");
   }
 
-  const fit    = fitLabel(opp.fit_score);
-  const salary = formatSalary(opp.salary_min ?? null, opp.salary_max ?? null, opp.salary_currency ?? null, opp.salary ?? null);
+  function handleSelect() {
+    if (onSelect) onSelect(opp);
+  }
+
+  const fit         = fitLabel(opp.fit_score);
+  const salary      = formatSalary(opp.salary_min ?? null, opp.salary_max ?? null, opp.salary_currency ?? null, opp.salary ?? null);
+  const chasedUrl   = opp.apply_url_company || null;
+  const companyName = opp.company || "this company";
 
   return (
     <>
@@ -95,14 +97,18 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
         {/* Header row */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <a
-              href={opp.url || "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate font-semibold text-gray-900 hover:text-brand-600 transition-colors"
-            >
-              {opp.title}
-            </a>
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={handleSelect}
+                className="block w-full text-left truncate font-semibold text-gray-900 hover:text-brand-600 transition-colors"
+                aria-label={`View details for ${opp.title} at ${opp.company}`}
+              >
+                {opp.title}
+              </button>
+            ) : (
+              <span className="block truncate font-semibold text-gray-900">{opp.title}</span>
+            )}
             <p className="mt-0.5 truncate text-sm text-gray-500">
               {opp.company}
               {opp.location ? ` · ${opp.location}` : ""}
@@ -115,20 +121,17 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
 
         {/* Tags row */}
         <div className="flex flex-wrap gap-1.5">
-          {opp.type && (
-            <Tag>{opp.type}</Tag>
-          )}
+          {opp.type && <Tag>{opp.type}</Tag>}
           {opp.is_remote && <Tag color="sky">Remote</Tag>}
           {salary && <Tag color="green">{salary}</Tag>}
           {/*
-            Source tag is intentionally hidden. Adzuna (and similar
-            aggregators) are plumbing — users care about the company,
-            not which job board indexed the listing. Re-introduce only
-            for sources users would recognize positively (e.g., LinkedIn).
+            Source tag is intentionally hidden. Aggregator names
+            (Adzuna, Indeed, etc.) are plumbing and must never reach
+            the user per COWORK-BRIEF-jobs-experience-v1.
           */}
         </div>
 
-        {/* Description snippet */}
+        {/* Description snippet — clamped to 2 lines; full description lives in the drawer */}
         {opp.description && (
           <p className="line-clamp-2 text-xs text-gray-500 leading-relaxed">
             {opp.description}
@@ -152,6 +155,18 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             <span />
           )}
           <div className="flex items-center gap-2">
+            {/* View details — opens in-platform drawer (Wave 2) */}
+            {onSelect && (
+              <button
+                type="button"
+                onClick={handleSelect}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs
+                           font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                aria-label={`View details for ${opp.title}`}
+              >
+                View details
+              </button>
+            )}
             {/* Analyze fit — hand off this JD to Resume Advisor */}
             <button
               onClick={handleAnalyzeFit}
@@ -193,64 +208,34 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             >
               📋 Track
             </button>
-            {/* Apply button — three-tier fallback (UAT 2026-05-11):
-                1. apply_url_company set  → "Apply →" linking to chased
-                                            company / ATS URL. Brand cyan.
-                2. opp.url present         → "View posting →" linking to
-                                            the original aggregator URL.
-                                            Still cyan so the user can act,
-                                            but the label tells them it
-                                            opens on Adzuna / Indeed / etc.
-                3. neither                 → disabled "Apply (link
-                                            unavailable)". Rare.
-
-                Previously this was strict 1/3 gating which left most
-                curated-fallback jobs with no actionable button. */}
-            {(() => {
-              const chasedUrl = opp.apply_url_company || null;
-              const rawUrl    = opp.url || null;
-              if (chasedUrl) {
-                let host = "";
-                try { host = new URL(chasedUrl).hostname.replace(/^www\./, ""); } catch { host = ""; }
-                return (
-                  <a
-                    href={chasedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
-                    title={host ? `Apply on ${host}` : "Apply"}
-                  >
-                    Apply →
-                  </a>
-                );
-              }
-              if (rawUrl) {
-                let host = "";
-                try { host = new URL(rawUrl).hostname.replace(/^www\./, ""); } catch { host = ""; }
-                return (
-                  <a
-                    href={rawUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
-                    title={host ? `View on ${host}` : "View posting"}
-                  >
-                    View posting →
-                  </a>
-                );
-              }
-              return (
-                <button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  title="No application link is attached to this listing."
-                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
-                >
-                  Apply (link unavailable)
-                </button>
-              );
-            })()}
+            {/* Apply button (Wave 2 hard rule):
+                - Only show external link when we have apply_url_company
+                  (a CHASED, company-direct or ATS URL). Aggregator URLs
+                  (opp.url from Adzuna et al.) are NEVER used here.
+                - Label always shows the company name — never the
+                  aggregator's name.
+                - When no chased URL: disabled "Apply (link unavailable)". */}
+            {chasedUrl ? (
+              <a
+                href={chasedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
+                title={`Apply at ${companyName}`}
+              >
+                ✈ Apply at {companyName} →
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                title="Direct application link unavailable — open the listing for more options."
+                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
+              >
+                Apply (link unavailable)
+              </button>
+            )}
           </div>
         </div>
       </div>
