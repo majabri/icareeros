@@ -21,6 +21,14 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+// Wave 2 — compliance location fields (Settings-only per decision A 2026-05-10).
+import {
+  COUNTRIES,
+  SUBDIVISIONS_BY_CC,
+  SUBDIVISION_LABEL,
+  getSubdivisionByCode,
+} from "@/lib/geo/data";
+import { CityTypeahead, type CityPickResult } from "@/components/geo/CityTypeahead";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -67,6 +75,10 @@ export default function AccountPage() {
   const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
   const [avatarFile, setAvatarFile]       = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  // Wave 2 — compliance location. Stored on user_profiles.location_{country,state,city}.
+  const [country, setCountry]             = useState<string>("");   // ISO 3166-1 alpha-2
+  const [stateCode, setStateCode]         = useState<string>("");   // subdivision code, US/CA/MX only
+  const [city, setCity]                   = useState<string>("");
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
   const [msg, setMsg]                     = useState<Msg | null>(null);
@@ -81,13 +93,16 @@ export default function AccountPage() {
         setUser(u);
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("full_name, phone, avatar_url")
+          .select("full_name, phone, avatar_url, location_country, location_state, location_city")
           .eq("user_id", u.id)
           .maybeSingle();
         if (profile) {
           setFullName(profile.full_name ?? u.user_metadata?.full_name ?? "");
           setPhone(profile.phone ?? "");
           setAvatarUrl(profile.avatar_url ?? null);
+          setCountry((profile.location_country as string | null) ?? "");
+          setStateCode((profile.location_state as string | null) ?? "");
+          setCity((profile.location_city as string | null) ?? "");
         } else {
           setFullName(u.user_metadata?.full_name ?? "");
         }
@@ -140,6 +155,10 @@ export default function AccountPage() {
           full_name:  fullName.trim() || null,
           phone:      phone.trim() || null,
           avatar_url: finalAvatarUrl,
+          // Wave 2 — compliance location columns (Settings-only).
+          location_country: country || null,
+          location_state:   stateCode || null,
+          location_city:    city.trim() || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" },
@@ -232,6 +251,80 @@ export default function AccountPage() {
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                 placeholder="+1 (555) 000-0000" autoComplete="tel"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            </div>
+          </div>
+
+          {/* ── Compliance location (Wave 2, 2026-05-10) ────────────────
+              Stored on user_profiles.location_{country,state,city}.
+              Used for jurisdiction-specific compliance (GDPR/CCPA/PIPEDA/
+              EU AI Act etc.) and regional job matching. Never shown
+              publicly — the Career Profile location field is a separate,
+              free-text display label. */}
+          <div className="pt-2 border-t border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-900">Location for compliance</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Used for regional compliance and job matching. Never shared publicly.
+            </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3 max-w-2xl">
+              {/* Country */}
+              <div>
+                <label htmlFor="loc-country" className="mb-1 block text-sm font-medium text-gray-700">Country</label>
+                <select
+                  id="loc-country"
+                  value={country}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCountry(next);
+                    // Reset subdivision when country changes — codes are scoped per country.
+                    if (getSubdivisionByCode(next, stateCode) === null) setStateCode("");
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                >
+                  <option value="">— Select —</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Subdivision — only for US / CA / MX */}
+              {country && SUBDIVISIONS_BY_CC[country] && (
+                <div>
+                  <label htmlFor="loc-state" className="mb-1 block text-sm font-medium text-gray-700">
+                    {SUBDIVISION_LABEL[country] ?? "Region"}
+                  </label>
+                  <select
+                    id="loc-state"
+                    value={stateCode}
+                    onChange={(e) => setStateCode(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  >
+                    <option value="">— Select —</option>
+                    {SUBDIVISIONS_BY_CC[country].map((s) => (
+                      <option key={s.code} value={s.code}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* City — Nominatim typeahead, scoped to selected country */}
+              <div>
+                <label htmlFor="loc-city" className="mb-1 block text-sm font-medium text-gray-700">City</label>
+                <CityTypeahead
+                  id="loc-city"
+                  value={city}
+                  onChange={setCity}
+                  countryCode={country || null}
+                  placeholder="Start typing…"
+                  onPick={(picked: CityPickResult) => {
+                    // If user picked a Nominatim result and it includes a country,
+                    // and they hadn't already selected one, auto-fill it. We don't
+                    // overwrite an explicit selection.
+                    if (!country && picked.countryCode) setCountry(picked.countryCode);
+                  }}
+                />
+              </div>
             </div>
           </div>
 
