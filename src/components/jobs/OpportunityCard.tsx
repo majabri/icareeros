@@ -193,34 +193,64 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             >
               📋 Track
             </button>
-            {/* W4-B-5 (UAT 2026-05-10): chase-aware Apply button.
-                When the redirect chaser resolved to a non-aggregator URL,
-                we have apply_url_company and link there (company-direct
-                or ATS). Otherwise we DROP the link rather than expose the
-                Adzuna tracking URL — per Amir's decision the aggregator
-                email-gate is a worse UX than a clear "unavailable" state. */}
-            {opp.apply_url_company ? (
-              <a
-                href={opp.apply_url_company}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white
-                           hover:bg-brand-700 transition-colors"
-                title={`Apply on ${(() => { try { return new URL(opp.apply_url_company!).hostname; } catch { return opp.apply_url_company!; } })()}`}
-              >
-                Apply →
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                title="Direct application link unavailable for this listing. Open the job posting below to find a way to apply."
-                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
-              >
-                Apply (link unavailable)
-              </button>
-            )}
+            {/* Apply button — three-tier fallback (UAT 2026-05-11):
+                1. apply_url_company set  → "Apply →" linking to chased
+                                            company / ATS URL. Brand cyan.
+                2. opp.url present         → "View posting →" linking to
+                                            the original aggregator URL.
+                                            Still cyan so the user can act,
+                                            but the label tells them it
+                                            opens on Adzuna / Indeed / etc.
+                3. neither                 → disabled "Apply (link
+                                            unavailable)". Rare.
+
+                Previously this was strict 1/3 gating which left most
+                curated-fallback jobs with no actionable button. */}
+            {(() => {
+              const chasedUrl = opp.apply_url_company || null;
+              const rawUrl    = opp.url || null;
+              if (chasedUrl) {
+                let host = "";
+                try { host = new URL(chasedUrl).hostname.replace(/^www\./, ""); } catch { host = ""; }
+                return (
+                  <a
+                    href={chasedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
+                    title={host ? `Apply on ${host}` : "Apply"}
+                  >
+                    Apply →
+                  </a>
+                );
+              }
+              if (rawUrl) {
+                let host = "";
+                try { host = new URL(rawUrl).hostname.replace(/^www\./, ""); } catch { host = ""; }
+                return (
+                  <a
+                    href={rawUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
+                    title={host ? `View on ${host}` : "View posting"}
+                  >
+                    View posting →
+                  </a>
+                );
+              }
+              return (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title="No application link is attached to this listing."
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
+                >
+                  Apply (link unavailable)
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>

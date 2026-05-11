@@ -762,7 +762,7 @@ export default function ResumeAdvisorPage() {
                 </section>
               )}
 
-              {/* Action grid — items #6, #7, #8, #9 */}
+              {/* Action grid — items #6, #7, #8, #9 + Apply (UAT 2026-05-11) */}
               <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Take action</h2>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -771,6 +771,29 @@ export default function ResumeAdvisorPage() {
                   <button onClick={handleInterviewPrep} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">🎤 Interview prep questions →</button>
                   <button onClick={() => void handleSaveJob()} disabled={busy?.kind === "save-job"} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">⭐ {busy?.kind === "save-job" ? "Saving…" : "Save job to Opportunities"}</button>
                 </div>
+
+                {/* Apply CTA — visible when the analyzed JD has a URL or
+                    the resume advisor was opened from an Opportunities card.
+                    Renders full-width below the action grid. (Amir 2026-05-11) */}
+                {(() => {
+                  const applyUrl = (jobSource === "url" && jobUrl.trim())
+                    ? jobUrl.trim()
+                    : (incomingJob?.url || "");
+                  if (!applyUrl) return null;
+                  let hostLabel = "";
+                  try { hostLabel = new URL(applyUrl).hostname.replace(/^www\./, ""); } catch { hostLabel = ""; }
+                  return (
+                    <a
+                      href={applyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
+                      title={hostLabel ? `Open posting on ${hostLabel}` : "Open posting"}
+                    >
+                      ✈ Apply to this job{hostLabel ? ` — on ${hostLabel}` : ""} →
+                    </a>
+                  );
+                })()}
 
                 {/* UAT 2026-05-10: persistent inline statuses for each action.
                     Previously these used a transient toast (4s) and users
