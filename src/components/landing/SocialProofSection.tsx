@@ -1,6 +1,6 @@
 export function SocialProofSection() {
   return (
-    <section style={{ padding:"4rem 3rem", background:"var(--neutral-100)", borderBottom:"1px solid var(--neutral-300)", textAlign:"center" }}>
+    <section className="landing-fade-bg" style={{ padding:"4rem 3rem", background:"var(--neutral-100)", borderBottom:"1px solid var(--neutral-300)", textAlign:"center" }}>
       <div style={{ maxWidth:1200, margin:"0 auto" }}>
         <p style={{ fontSize:"1.2rem", color:"var(--neutral-700)", marginBottom:"2rem", fontWeight:500 }}>
           Trusted by 50,000+ Career Seekers

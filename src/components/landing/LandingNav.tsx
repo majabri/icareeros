@@ -42,7 +42,7 @@ export function LandingNav() {
       }}>
         {/* Logo */}
         <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
-          <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
+          <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
         </a>
 
         {/* Desktop nav links */}
@@ -61,11 +61,6 @@ export function LandingNav() {
               >{label}</a>
             </li>
           ))}
-          <li>
-            {/* Theme toggle — unauth visitors can flip Day/Night here
-                without signing in (Amir 2026-05-11). Compact 3-state. */}
-            <ThemeToggle compact />
-          </li>
           <li>
             <a href="/auth/login" style={{
               border: "2px solid var(--primary)", color: "var(--primary)",
@@ -100,6 +95,10 @@ export function LandingNav() {
               (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,217,255,0.2)";
             }}
             >Start Free</a>
+          </li>
+          <li>
+            {/* Theme toggle — repositioned right of Start Free (Amir 2026-05-11). */}
+            <ThemeToggle compact />
           </li>
         </ul>
 

@@ -382,3 +382,44 @@ body {
 [data-theme='dark'] :focus-visible {
   outline-color: var(--accent);
 }
+
+
+/* ── Landing sections — transparent in dark mode (Amir 2026-05-11) ───
+   Sections tagged with .landing-fade-bg drop their inline gradient in
+   dark mode so the global ConstellationBackground reads through. Light
+   mode unchanged — the inline gradients still apply.
+
+   StatsSection is intentionally NOT tagged — its colorful brand gradient
+   is preserved in both modes.
+
+   The catch-all selectors below also handle inline-styled children that
+   use --neutral-100/--neutral-200 backgrounds (SocialProof testimonial,
+   Lifecycle stage card, FAQ accordion items, etc.). They're rewritten
+   to a translucent navy with blur in dark mode. */
+[data-theme='dark'] .landing-fade-bg {
+  background: transparent !important;
+  border-bottom-color: var(--surface-border) !important;
+}
+
+[data-theme='dark'] .landing-fade-bg [style*="--neutral-100"],
+[data-theme='dark'] .landing-fade-bg [style*="--neutral-200"] {
+  background-color: rgba(15, 27, 45, 0.55) !important;
+  background-image: none !important;
+  color: var(--text-primary) !important;
+  border-color: var(--surface-border) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Text-color tokens used inline on landing — flip them via attribute
+   selector so the body copy reads on a near-black background. */
+[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-900)\""],
+[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-900)"] {
+  color: var(--text-primary) !important;
+}
+[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-700)\""],
+[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-700)"],
+[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-600)\""],
+[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-600)"] {
+  color: var(--text-secondary) !important;
+}

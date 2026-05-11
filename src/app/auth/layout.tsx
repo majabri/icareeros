@@ -15,13 +15,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
           borderBottom: "1px solid var(--surface-border, var(--neutral-300))",
           boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
-          height: "56px", display: "flex", alignItems: "center", padding: "0 1.5rem",
+          height: "72px", display: "flex", alignItems: "center", padding: "0 1.5rem",
         }}>
           <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
-            <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
+            <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
           </a>
         </header>
-        <div style={{ paddingTop: "56px" }}>
+        <div style={{ paddingTop: "72px" }}>
           {children}
         </div>
       </div>

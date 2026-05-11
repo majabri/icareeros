@@ -15,7 +15,7 @@ const FAQS = [
 
 export function FAQSection() {
   return (
-    <section style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)" }}>
+    <section className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, textAlign:"center", marginBottom:"3rem", color:"var(--neutral-900)" }}>Common Questions</h2>
 
