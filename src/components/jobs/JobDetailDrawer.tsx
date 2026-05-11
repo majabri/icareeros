@@ -165,9 +165,9 @@ export function JobDetailDrawer({ job, onClose, onOutreach, onCoverLetter }: Job
               {job.is_remote && <span>🏠 Remote</span>}
               {salary && <span className="font-semibold text-gray-700">💰 {salary}</span>}
             </div>
-            {job.fit_reasoning && (
+            {job.match_summary && (
               <p className="text-xs italic text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                {job.fit_reasoning}
+                {job.match_summary}
               </p>
             )}
           </div>
