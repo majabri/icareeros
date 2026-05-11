@@ -42,7 +42,7 @@ export function LandingNav() {
       }}>
         {/* Logo */}
         <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
-          <Logo variant="horizontal" width={180} ariaLabel="iCareerOS" />
+          <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
         </a>
 
         {/* Desktop nav links */}

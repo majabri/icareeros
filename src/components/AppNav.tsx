@@ -36,7 +36,7 @@ export function AppNav() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo */}
           <a href="/dashboard" className="flex items-center gap-2 font-bold text-gray-900 shrink-0" aria-label="iCareerOS — go to dashboard">
-            <Logo variant="horizontal" width={170} ariaLabel="iCareerOS" />
+            <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
           </a>
 
           {/* Nav links */}
