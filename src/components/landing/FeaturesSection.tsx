@@ -28,25 +28,37 @@ export function FeaturesSection() {
           Tools built specifically for career growth at every stage
         </p>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:"2.5rem", marginTop:"3rem" }}>
+        <div className="features-grid" style={{ display:"grid", gap:"2rem", marginTop:"3rem" }}>
           {FEATURES.map(f => (
             <div key={f.title} className="fade-in" style={{
-              background:"var(--neutral-100)", padding:"2.5rem", borderRadius:"1.5rem",
+              background:"var(--neutral-100)", padding:"3rem 2.5rem", borderRadius:"1.5rem",
               border:"1px solid var(--neutral-300)", transition:"all 0.3s", textAlign:"left",
             }}
             onMouseEnter={e => { const el = e.currentTarget; el.style.borderColor="var(--primary)"; el.style.boxShadow="0 15px 40px rgba(0,217,255,0.12)"; el.style.transform="translateY(-8px)"; }}
             onMouseLeave={e => { const el = e.currentTarget; el.style.borderColor="var(--neutral-300)"; el.style.boxShadow=""; el.style.transform=""; }}>
               <div style={{
-                width:70, height:70, background:"linear-gradient(135deg,var(--primary) 0%,var(--tertiary) 100%)",
+                width:80, height:80, background:"linear-gradient(135deg,var(--primary) 0%,var(--tertiary) 100%)",
                 borderRadius:"1rem", display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:"2rem", marginBottom:"1.5rem", boxShadow:"0 4px 15px rgba(0,217,255,0.15)",
               }}>{f.icon}</div>
-              <h3 style={{ fontSize:"1.2rem", marginBottom:"0.75rem", color:"var(--neutral-900)" }}>{f.title}</h3>
-              <p style={{ color:"var(--neutral-700)", fontSize:"0.95rem", lineHeight:1.7 }}>{f.desc}</p>
+              <h3 style={{ fontSize:"1.35rem", fontWeight:700, marginBottom:"0.85rem", color:"var(--neutral-900)" }}>{f.title}</h3>
+              <p style={{ color:"var(--neutral-700)", fontSize:"1rem", lineHeight:1.7 }}>{f.desc}</p>
             </div>
           ))}
         </div>
       </div>
+      {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop.
+          Replaces the previous auto-fit minmax(320px,1fr) which laid out
+          4+2 on a 1280px container (Amir 2026-05-11). */}
+      <style>{`
+        .features-grid { grid-template-columns: 1fr; }
+        @media (min-width: 768px) {
+          .features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1024px) {
+          .features-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+      `}</style>
     </section>
   );
 }
