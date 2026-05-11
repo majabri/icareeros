@@ -651,3 +651,23 @@ body {
 [data-theme='dark'] .text-emerald-900 { color: hsl(150 65% 78%) !important; }
 [data-theme='dark'] .text-red-900     { color: hsl(0 80% 80%)   !important; }
 [data-theme='dark'] .text-blue-900    { color: hsl(210 95% 82%) !important; }
+
+
+/* ── bg-white opacity variants used by the global footer + sticky chrome
+   (2026-05-11). `bg-white/70` / `bg-white/50` / `bg-white/90` are NOT
+   the same selector as `bg-white` — Tailwind compiles them to
+   different classes that escape the slash. Match them under
+   [data-theme='dark'] and route to the translucent navy surface so the
+   footer + any other semi-opaque white element disappears into the
+   constellation correctly. */
+[data-theme='dark'] .bg-white\/50  { background-color: rgba(15, 27, 45, 0.45) !important; }
+[data-theme='dark'] .bg-white\/60  { background-color: rgba(15, 27, 45, 0.50) !important; }
+[data-theme='dark'] .bg-white\/70  { background-color: rgba(15, 27, 45, 0.55) !important; }
+[data-theme='dark'] .bg-white\/80  { background-color: rgba(15, 27, 45, 0.62) !important; }
+[data-theme='dark'] .bg-white\/90  { background-color: rgba(15, 27, 45, 0.70) !important; }
+[data-theme='dark'] .bg-white\/95  { background-color: rgba(15, 27, 45, 0.78) !important; }
+
+/* Same for black-on-light cards used as overlays in some components. */
+[data-theme='dark'] .bg-black\/50  { background-color: rgba(0, 0, 0, 0.55) !important; }
+[data-theme='dark'] .bg-black\/60  { background-color: rgba(0, 0, 0, 0.65) !important; }
+[data-theme='dark'] .bg-black\/70  { background-color: rgba(0, 0, 0, 0.75) !important; }
