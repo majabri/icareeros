@@ -629,14 +629,14 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
 
   return (
     <>
-      {/* Desktop sidebar — sits below 56 px AppTopBar */}
+      {/* Desktop sidebar — sits below 72 px AppTopBar */}
       <aside
         aria-label="Main sidebar"
         className="icareeros-sidebar hidden md:flex flex-col shrink-0 shadow-sm bg-white border-r border-gray-200"
         style={{
           position: "sticky",
-          top: 56,
-          height: "calc(100vh - 56px)",
+          top: 72,
+          height: "calc(100vh - 72px)",
           width: collapsed ? 64 : 224,
           transition: reducedMotion ? "none" : `width ${dur} ease`,
           overflow: "hidden",

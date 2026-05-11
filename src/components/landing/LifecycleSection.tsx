@@ -96,7 +96,7 @@ export function LifecycleSection() {
   const active = STAGES[activeIndex];
 
   return (
-    <section id="lifecycle" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)", textAlign:"center" }}>
+    <section id="lifecycle" className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)", textAlign:"center" }}>
       <div ref={ref} style={{ maxWidth:1200, margin:"0 auto" }}>
         <div style={{ marginBottom:"1rem", display:"inline-block", background:"var(--primary)", color:"#fff", padding:"0.25rem 1rem", borderRadius:"2rem", fontSize:"0.85rem", fontWeight:600, textTransform:"uppercase", letterSpacing:"1px" }}>
           How it works

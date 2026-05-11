@@ -5,7 +5,7 @@ import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { AppTopBar }               from "@/components/AppTopBar";
 import { AppSidebar }              from "@/components/AppSidebar";
 
-const TOP_BAR_H = 56; // px — must match AppTopBar height
+const TOP_BAR_H = 72; // px — must match AppTopBar height
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);

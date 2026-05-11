@@ -7,7 +7,7 @@ const PROBLEMS = [
 ];
 export function ProblemSection() {
   return (
-    <section style={{ padding:"4rem 3rem", background:"linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)" }}>
+    <section className="landing-fade-bg" style={{ padding:"4rem 3rem", background:"linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)" }}>
       <div style={{ maxWidth:900, margin:"0 auto", textAlign:"center" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"2rem", color:"var(--neutral-900)" }}>
           Your Job Search Shouldn&rsquo;t Feel Like This

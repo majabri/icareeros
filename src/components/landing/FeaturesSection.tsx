@@ -21,7 +21,7 @@ export function FeaturesSection() {
   }, []);
 
   return (
-    <section id="features" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)" }}>
+    <section id="features" className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)" }}>
       <div ref={ref} style={{ maxWidth:1400, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", textAlign:"center" }}>Designed to Help You Succeed</h2>
         <p style={{ fontSize:"1.1rem", color:"var(--neutral-700)", marginBottom:"3rem", maxWidth:600, margin:"0 auto 3rem", textAlign:"center" }}>

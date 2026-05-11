@@ -97,7 +97,7 @@ export function AppTopBar({ onMenuClick }: Props) {
           ? "0 2px 16px rgba(0,0,0,0.08)"
           : "0 1px 6px rgba(0,0,0,0.04)",
         transition: "box-shadow 0.3s",
-        height: "56px",
+        height: "72px",
         display: "flex",
         alignItems: "center",
         padding: "0 1.25rem",
@@ -125,7 +125,7 @@ export function AppTopBar({ onMenuClick }: Props) {
         style={{ display: "inline-flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}
         aria-label="iCareerOS — go to dashboard"
       >
-        <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
+        <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
       </a>
 
       {/* Spacer */}

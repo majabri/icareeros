@@ -1,7 +1,7 @@
 "use client";
 export function CTASection() {
   return (
-    <section id="cta" style={{ padding:"5rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)", textAlign:"center" }}>
+    <section id="cta" className="landing-fade-bg" style={{ padding:"5rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)", textAlign:"center" }}>
       <div style={{
         maxWidth:700, margin:"0 auto", background:"var(--neutral-100)",
         padding:"4rem", borderRadius:"2rem", border:"2px solid var(--neutral-300)",
