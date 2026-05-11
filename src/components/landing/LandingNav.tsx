@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -60,6 +61,11 @@ export function LandingNav() {
               >{label}</a>
             </li>
           ))}
+          <li>
+            {/* Theme toggle — unauth visitors can flip Day/Night here
+                without signing in (Amir 2026-05-11). Compact 3-state. */}
+            <ThemeToggle compact />
+          </li>
           <li>
             <a href="/auth/login" style={{
               border: "2px solid var(--primary)", color: "var(--primary)",
@@ -145,6 +151,9 @@ export function LandingNav() {
                 }}>{label}</a>
               </li>
             ))}
+            <li style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
+              <ThemeToggle />
+            </li>
             <li style={{ marginTop: "1rem" }}>
               <a href="/auth/signup" onClick={() => setMenuOpen(false)} style={{
                 display: "block", textAlign: "center",
