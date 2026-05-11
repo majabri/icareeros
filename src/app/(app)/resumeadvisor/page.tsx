@@ -139,6 +139,21 @@ export default function ResumeAdvisorPage() {
   // Cover letter state (item #6)
   const [coverLetter, setCoverLetter] = useState<CoverLetterResult | null>(null);
 
+  // ── UAT 2026-05-10: persistent inline status for each action ───────────
+  // Toasts auto-dismissed after 4s and users missed errors. These render
+  // inline on the page until cleared or replaced.
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null);
+  const [critiqueError, setCritiqueError] = useState<string | null>(null);
+  const [saveJobStatus, setSaveJobStatus] = useState<
+    { kind: "ok"; opportunityId: string } | { kind: "err"; message: string } | null
+  >(null);
+
+  // ── UAT 2026-05-10: profile mutations dirty the fit score ──────────────
+  // Set true after Add-to-profile / Add-to-target so the user sees an
+  // explicit "Re-analyze" CTA rather than the now-stale score. We don't
+  // auto-rerun to avoid burning LLM tokens on every click.
+  const [analysisDirty, setAnalysisDirty] = useState(false);
+
   // ── Load versions + user ────────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
@@ -244,6 +259,9 @@ export default function ResumeAdvisorPage() {
   async function handleCheck() {
     setChecking(true); setError(null); setResult(null); setRewriteResult(null);
     setCritique(null); setCoverLetter(null);
+    // UAT 2026-05-10: clear stale inline statuses so a fresh check starts clean.
+    setCoverLetterError(null); setCritiqueError(null); setSaveJobStatus(null);
+    setAnalysisDirty(false);
     try {
       let resumeText = "";
       if (resumeSource === "upload" && uploadedFile) {
@@ -344,7 +362,13 @@ export default function ResumeAdvisorPage() {
         { onConflict: "user_id" }
       );
       if (e) throw new Error(e.message);
-      setToast({ kind: "ok", text: `Added "${skill}" to your profile. Re-run analysis to update fit.` });
+      // UAT fix: optimistically remove from missing-skill list so the chip
+      // disappears, and mark the score as needing a re-run.
+      setResult(prev => prev
+        ? { ...prev, missingSkills: prev.missingSkills.filter(s => s !== skill) }
+        : prev);
+      setAnalysisDirty(true);
+      setToast({ kind: "ok", text: `Added "${skill}" to your profile.` });
     } catch (e) {
       setToast({ kind: "err", text: e instanceof Error ? e.message : "Add failed" });
     } finally {
@@ -370,6 +394,11 @@ export default function ResumeAdvisorPage() {
         { onConflict: "user_id" }
       );
       if (e) throw new Error(e.message);
+      // UAT fix: optimistically remove from recommendations and dirty score.
+      setResult(prev => prev
+        ? { ...prev, recommendations: prev.recommendations.filter(x => x !== rec) }
+        : prev);
+      setAnalysisDirty(true);
       setToast({ kind: "ok", text: "Added to your Target Skills." });
     } catch (e) {
       setToast({ kind: "err", text: e instanceof Error ? e.message : "Add failed" });
@@ -414,15 +443,25 @@ export default function ResumeAdvisorPage() {
 
   // ── Item #6: cover letter ──────────────────────────────────────────────
   async function handleCoverLetter() {
-    if (!resolvedResumeText || !jobDescription.trim()) {
-      setToast({ kind: "err", text: "Need both resume + pasted job description for cover letter." });
+    setCoverLetterError(null);
+    if (!resolvedResumeText) {
+      setCoverLetterError("Run the fit analysis first so we have your resume text.");
+      return;
+    }
+    // UAT fix: accept URL mode. In paste mode we send the full JD; in URL
+    // mode we send the URL as context — Claude can extract company/role.
+    const jdForCoverLetter = jobSource === "paste"
+      ? jobDescription.trim()
+      : (jobUrl.trim() ? `Job URL: ${jobUrl.trim()}` : "");
+    if (!jdForCoverLetter) {
+      setCoverLetterError("Paste a job description or job URL above first.");
       return;
     }
     setBusy({ kind: "cover-letter" });
     try {
       const r = await fetch("/api/resume/cover-letter-from-text", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText: resolvedResumeText, jobDescription }),
+        body: JSON.stringify({ resumeText: resolvedResumeText, jobDescription: jdForCoverLetter }),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -430,15 +469,18 @@ export default function ResumeAdvisorPage() {
       }
       const cl = (await r.json()) as CoverLetterResult;
       setCoverLetter(cl);
-      setToast({ kind: "ok", text: "Cover letter generated." });
     } catch (e) {
-      setToast({ kind: "err", text: e instanceof Error ? e.message : "Cover letter failed" });
+      setCoverLetterError(e instanceof Error ? e.message : "Cover letter failed");
     } finally { setBusy(null); }
   }
 
   // ── Item #7: professional critique ─────────────────────────────────────
   async function handleCritique() {
-    if (!resolvedResumeText) return;
+    setCritiqueError(null);
+    if (!resolvedResumeText) {
+      setCritiqueError("Run the fit analysis first so we have your resume text.");
+      return;
+    }
     setCritiquing(true);
     try {
       const r = await fetch("/api/resume/critique", {
@@ -452,43 +494,91 @@ export default function ResumeAdvisorPage() {
       const c = (await r.json()) as CritiqueResult;
       setCritique(c);
     } catch (e) {
-      setToast({ kind: "err", text: e instanceof Error ? e.message : "Critique failed" });
+      // UAT fix: persistent inline error rather than transient toast.
+      setCritiqueError(e instanceof Error ? e.message : "Critique failed");
     } finally { setCritiquing(false); }
   }
 
   // ── Item #8: interview prep questions (link out) ───────────────────────
   function handleInterviewPrep() {
-    // Pass the JD via session storage so /interview can pre-fill it
-    if (typeof window !== "undefined" && jobDescription) {
-      try { sessionStorage.setItem("interviewPrep:jd", jobDescription); } catch {/* ignore */}
+    // UAT fix 2026-05-10: persist BOTH the JD and the resume text so /interview
+    // can pre-fill its setup form. The interview page reads sessionStorage on
+    // mount and clears the keys after consuming.
+    if (typeof window !== "undefined") {
+      try {
+        const jdForInterview = jobSource === "paste"
+          ? jobDescription
+          : jobUrl ? `Job URL: ${jobUrl}` : "";
+        if (jdForInterview) sessionStorage.setItem("interviewPrep:jd", jdForInterview);
+        if (resolvedResumeText) sessionStorage.setItem("interviewPrep:resume", resolvedResumeText);
+      } catch { /* sessionStorage may be unavailable in some environments */ }
     }
     window.location.href = "/interview";
   }
 
   // ── Item #9: save job to opportunities ─────────────────────────────────
+  // UAT fix 2026-05-10: the previous version only inserted into the SHARED
+  // `opportunities` table (no user_id column), so saved jobs never surfaced
+  // in any user-facing list. Now also writes `user_opportunity_matches`
+  // with is_saved=true, which is what /jobs reads to render saved-jobs.
   async function handleSaveJob() {
-    if (!userId) return;
-    if (jobSource !== "paste" || !jobDescription.trim()) {
-      setToast({ kind: "err", text: "Paste the job description to save." });
+    setSaveJobStatus(null);
+    if (!userId) {
+      setSaveJobStatus({ kind: "err", message: "Sign in to save jobs." });
+      return;
+    }
+    const hasPaste = jobSource === "paste" && jobDescription.trim().length > 0;
+    const hasUrl   = jobSource === "url"   && jobUrl.trim().length > 0;
+    if (!hasPaste && !hasUrl) {
+      setSaveJobStatus({ kind: "err", message: "Paste a job description or job URL above first." });
       return;
     }
     setBusy({ kind: "save-job" });
     try {
-      // Heuristic title/company from first non-blank line
-      const firstLine = jobDescription.split("\n").map(s => s.trim()).find(Boolean) ?? "Saved opportunity";
-      const titleGuess = firstLine.slice(0, 80);
-      const { error: e } = await supabase.from("opportunities").insert({
-        title: titleGuess,
-        company: "Manual entry",
-        description: jobDescription,
-        source: "manual",
-        source_id: `manual-${userId}-${Date.now()}`,
-        is_active: true,
-      });
-      if (e) throw new Error(e.message);
-      setToast({ kind: "ok", text: "Saved to Opportunities. View it in the Jobs tab." });
+      // Derive a title — first non-blank line of pasted text, or last path
+      // segment of the URL. Company stays "Manual entry" until the user
+      // edits it from the saved-jobs view.
+      let titleGuess = "Saved opportunity";
+      if (hasPaste) {
+        const firstLine = jobDescription.split("\n").map(s => s.trim()).find(Boolean);
+        if (firstLine) titleGuess = firstLine.slice(0, 80);
+      } else if (hasUrl) {
+        try {
+          const u = new URL(jobUrl);
+          const last = u.pathname.split("/").filter(Boolean).pop();
+          titleGuess = (last && decodeURIComponent(last).replace(/[-_]+/g, " ")) || u.hostname;
+          titleGuess = titleGuess.slice(0, 80);
+        } catch { /* malformed URL — fall through to default */ }
+      }
+
+      const { data: oppRow, error: oppErr } = await supabase
+        .from("opportunities")
+        .insert({
+          title: titleGuess,
+          company: "Manual entry",
+          description: hasPaste ? jobDescription : null,
+          url: hasUrl ? jobUrl.trim() : null,
+          source: "manual",
+          source_id: `manual-${userId}-${Date.now()}`,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (oppErr) throw new Error(oppErr.message);
+
+      // Link to user — this is the row /jobs reads when listing saved jobs.
+      const { error: matchErr } = await supabase
+        .from("user_opportunity_matches")
+        .insert({
+          user_id: userId,
+          opportunity_id: oppRow.id,
+          is_saved: true,
+        });
+      if (matchErr) throw new Error(matchErr.message);
+
+      setSaveJobStatus({ kind: "ok", opportunityId: oppRow.id });
     } catch (e) {
-      setToast({ kind: "err", text: e instanceof Error ? e.message : "Save failed" });
+      setSaveJobStatus({ kind: "err", message: e instanceof Error ? e.message : "Save failed" });
     } finally { setBusy(null); }
   }
 
@@ -611,6 +701,22 @@ export default function ResumeAdvisorPage() {
                 </section>
               )}
 
+              {/* UAT 2026-05-10: profile mutated since this score was computed */}
+              {analysisDirty && (
+                <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-center justify-between gap-3">
+                  <span>
+                    <strong>Score may be outdated.</strong> You changed your profile or target skills since this analysis ran.
+                  </span>
+                  <button
+                    onClick={() => void handleCheck()}
+                    disabled={checking}
+                    className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {checking ? "Re-analyzing…" : "Re-analyze"}
+                  </button>
+                </section>
+              )}
+
               {result.gaps.length > 0 && (
                 <section className="rounded-xl border border-amber-100 bg-white p-6 shadow-sm">
                   <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-amber-600">⚠ Gaps</h2>
@@ -659,6 +765,40 @@ export default function ResumeAdvisorPage() {
                   <button onClick={handleInterviewPrep} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">🎤 Interview prep questions →</button>
                   <button onClick={() => void handleSaveJob()} disabled={busy?.kind === "save-job"} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">⭐ {busy?.kind === "save-job" ? "Saving…" : "Save job to Opportunities"}</button>
                 </div>
+
+                {/* UAT 2026-05-10: persistent inline statuses for each action.
+                    Previously these used a transient toast (4s) and users
+                    missed both successes and failures. */}
+                {coverLetterError && (
+                  <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <span>📝</span>
+                    <span className="flex-1"><strong>Cover letter:</strong> {coverLetterError}</span>
+                    <button onClick={() => setCoverLetterError(null)} className="text-red-500 hover:text-red-700">Dismiss</button>
+                  </div>
+                )}
+                {critiqueError && (
+                  <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <span>🔍</span>
+                    <span className="flex-1"><strong>Critique:</strong> {critiqueError}</span>
+                    <button onClick={() => setCritiqueError(null)} className="text-red-500 hover:text-red-700">Dismiss</button>
+                  </div>
+                )}
+                {saveJobStatus?.kind === "err" && (
+                  <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <span>⭐</span>
+                    <span className="flex-1"><strong>Save:</strong> {saveJobStatus.message}</span>
+                    <button onClick={() => setSaveJobStatus(null)} className="text-red-500 hover:text-red-700">Dismiss</button>
+                  </div>
+                )}
+                {saveJobStatus?.kind === "ok" && (
+                  <div role="status" className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <span>✓</span>
+                    <span className="flex-1">
+                      Saved. <a href="/jobs" className="font-semibold underline">View saved jobs</a>.
+                    </span>
+                    <button onClick={() => setSaveJobStatus(null)} className="text-emerald-600 hover:text-emerald-800">Dismiss</button>
+                  </div>
+                )}
               </section>
 
               {/* Cover letter result (item #6) */}
