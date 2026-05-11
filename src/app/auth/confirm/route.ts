@@ -6,7 +6,19 @@
  *
  * The user NEVER sees supabase.co — verification happens server-side via
  * supabase.auth.verifyOtp(), which exchanges the token_hash for a session
- * and sets the auth cookies. On success, we redirect to /auth/confirmed.
+ * and sets the auth cookies.
+ *
+ * Post-verification routing depends on the OTP type:
+ *
+ *   - `signup` (email confirmation after sign-up): we IMMEDIATELY sign the
+ *     user out and redirect to /auth/login?confirmed=true. Clicking a
+ *     confirmation link verifies the EMAIL ADDRESS, not the user's identity
+ *     — the link could be forwarded, the inbox could be on a shared device.
+ *     Forcing a password sign-in after confirmation is the safer default.
+ *
+ *   - `magiclink`, `recovery`, `email_change`, `invite` and any other type:
+ *     the user has actively initiated a sign-in / account-change flow and
+ *     expects to be authenticated. Keep the session and forward to `next`.
  *
  * This complements /auth/callback (PKCE code exchange). Old links generated
  * by signUp({ emailRedirectTo: ... }) still hit /auth/callback; new template
@@ -22,7 +34,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const tokenHash = url.searchParams.get("token_hash");
   const type = (url.searchParams.get("type") ?? "signup") as EmailOtpType;
-  const next = url.searchParams.get("next") || "/auth/confirmed";
+  const next = url.searchParams.get("next") || "/dashboard";
 
   if (!tokenHash) {
     return NextResponse.redirect(
@@ -62,5 +74,14 @@ export async function GET(req: Request) {
     );
   }
 
+  // Signup confirmation → sign out, force password login.
+  if (type === "signup") {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(
+      new URL("/auth/login?confirmed=true", req.url)
+    );
+  }
+
+  // Magic link / recovery / invite / email_change → keep session, forward.
   return NextResponse.redirect(new URL(next, req.url));
 }
