@@ -1,4 +1,5 @@
 import { ConstellationBackground } from "@/components/ConstellationBackground";
+import { Logo } from "@/components/brand/Logo";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,13 +17,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
           height: "56px", display: "flex", alignItems: "center", padding: "0 1.5rem",
         }}>
-          <a href="/" style={{
-            fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.5px",
-            textDecoration: "none",
-            background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--tertiary) 100%)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-          }}>
-            iCareerOS
+          <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
+            <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
           </a>
         </header>
         <div style={{ paddingTop: "56px" }}>

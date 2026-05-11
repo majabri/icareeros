@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { Logo } from "@/components/brand/Logo";
 
 interface Props {
   onMenuClick?: () => void;
@@ -117,18 +118,14 @@ export function AppTopBar({ onMenuClick }: Props) {
         </button>
       )}
 
-      {/* Logo */}
+      {/* Logo — full SVG with tagline (Amir 2026-05-11: bigger). 220px
+          width = ~47px height in the 56px top bar. */}
       <a
         href="/dashboard"
-        style={{
-          fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.5px",
-          textDecoration: "none",
-          background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--tertiary) 100%)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-          flexShrink: 0,
-        }}
+        style={{ display: "inline-flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}
+        aria-label="iCareerOS — go to dashboard"
       >
-        iCareerOS
+        <Logo variant="horizontal" width={220} ariaLabel="iCareerOS" />
       </a>
 
       {/* Spacer */}
