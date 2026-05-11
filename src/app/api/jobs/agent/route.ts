@@ -324,10 +324,59 @@ QUALITY
       }
     }
 
+    // ── W4-B-1 (UAT 2026-05-10): curated-empty fallback ─────────────
+    // If the AI plans + Adzuna + validator pipeline returned NOTHING for
+    // this user, fall back to the shared `opportunities` table populated
+    // by the prefetch cron. The user sees jobs instead of "No matches" —
+    // not personally curated, but better than an empty state. We flag
+    // these rows with `agent.usedFallback=true` so the UI can label them.
+    let usedFallback = false;
+    if (opportunitiesWithIds.length === 0) {
+      // Best-effort filter: match on remote-friendly if the user wants
+      // remote, else open it up. Limit to recently-seen, active, non-flagged.
+      let q = supabase
+        .from("opportunities")
+        .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, is_flagged, flag_reasons, quality_score")
+        .eq("is_active", true)
+        .or("is_flagged.is.null,is_flagged.eq.false")
+        .order("first_seen_at", { ascending: false })
+        .limit(30);
+      if (((up?.work_mode as string | null) ?? "").toLowerCase() === "remote") {
+        q = q.eq("is_remote", true);
+      }
+      const { data: fallbackRows, error: fallbackErr } = await q;
+      if (!fallbackErr && Array.isArray(fallbackRows) && fallbackRows.length > 0) {
+        usedFallback = true;
+        // Shape rows to match OpportunityResult so the UI doesn't care
+        // they came from the fallback path.
+        opportunitiesWithIds = fallbackRows.map((r) => ({
+          id:               r.id as string, // already a UUID
+          title:            r.title as string,
+          company:          r.company as string,
+          location:         (r.location as string | null) ?? "",
+          description:      (r.description as string | null) ?? "",
+          url:              (r.url as string | null) ?? "",
+          type:             (r.job_type as string | null) ?? "",
+          is_remote:        Boolean(r.is_remote),
+          salary_min:       (r.salary_min as number | null) ?? null,
+          salary_max:       (r.salary_max as number | null) ?? null,
+          salary_currency:  (r.salary_currency as string | null) ?? null,
+          first_seen_at:    (r.first_seen_at as string | null)
+                              ?? (r.posted_at as string | null)
+                              ?? null,
+          is_flagged:       Boolean(r.is_flagged),
+          flag_reasons:     (r.flag_reasons as string[] | null) ?? null,
+          quality_score:    (r.quality_score as number | null) ?? null,
+          apply_url_company: null, // chase happens client-side via existing flow
+        })) as typeof opportunitiesWithIds;
+      }
+    }
+
     return NextResponse.json({
       opportunities: opportunitiesWithIds,
       total:         opportunitiesWithIds.length,
       planCount:     plans.length,
+      usedFallback,
       // Strip rationale from client payload — only the planner needs it.
       // We keep a shortened summary for transparency without leaking the
       // full keyword strategy.

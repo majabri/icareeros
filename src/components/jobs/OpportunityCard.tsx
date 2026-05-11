@@ -193,16 +193,33 @@ export function OpportunityCard({ opportunity: opp, cycleId }: OpportunityCardPr
             >
               📋 Track
             </button>
-            {(opp.apply_url_company || opp.url) && (
+            {/* W4-B-5 (UAT 2026-05-10): chase-aware Apply button.
+                When the redirect chaser resolved to a non-aggregator URL,
+                we have apply_url_company and link there (company-direct
+                or ATS). Otherwise we DROP the link rather than expose the
+                Adzuna tracking URL — per Amir's decision the aggregator
+                email-gate is a worse UX than a clear "unavailable" state. */}
+            {opp.apply_url_company ? (
               <a
-                href={opp.apply_url_company ?? opp.url ?? "#"}
+                href={opp.apply_url_company}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white
                            hover:bg-brand-700 transition-colors"
+                title={`Apply on ${(() => { try { return new URL(opp.apply_url_company!).hostname; } catch { return opp.apply_url_company!; } })()}`}
               >
                 Apply →
               </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                title="Direct application link unavailable for this listing. Open the job posting below to find a way to apply."
+                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
+              >
+                Apply (link unavailable)
+              </button>
             )}
           </div>
         </div>
