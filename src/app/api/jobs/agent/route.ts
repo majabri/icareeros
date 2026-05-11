@@ -27,6 +27,7 @@ import type { OpportunityResult } from "@/services/opportunityTypes";
 import { validateJobs } from "@/services/jobs/jobValidator";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 import { chaseApplyUrlsBatch }   from "@/services/jobs/applyUrlChaser";
+import { cleanJobDescription } from "@/services/jobs/descriptionCleaner";
 
 interface SearchPlan {
   what:        string;
@@ -376,7 +377,7 @@ QUALITY
           title:            r.title as string,
           company:          r.company as string,
           location:         (r.location as string | null) ?? "",
-          description:      (r.description as string | null) ?? "",
+          description:      cleanJobDescription(r.description as string | null),
           url:              (r.url as string | null) ?? "",
           type:             (r.job_type as string | null) ?? "",
           is_remote:        Boolean(r.is_remote),

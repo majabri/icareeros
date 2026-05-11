@@ -10,6 +10,7 @@
  */
 
 import type { OpportunityResult } from "@/services/opportunityTypes";
+import { cleanJobDescription } from "@/services/jobs/descriptionCleaner";
 
 interface AdzunaJob {
   id: string;
@@ -128,7 +129,7 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
         company:      a.company?.display_name?.trim() ?? "Unknown",
         location:     a.location?.display_name?.trim() ?? "",
         type,
-        description:  a.description ?? "",
+        description:  cleanJobDescription(a.description),
         url:          a.redirect_url,
         matchReason:  "",
         salary,
