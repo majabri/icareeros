@@ -147,6 +147,27 @@ export default function InterviewPage() {
       .catch(() => setHistoryLoaded(true));
   }, []);
 
+  // UAT 2026-05-10: pre-fill from /resumeadvisor handoff.
+  // The Resume Advisor's "Interview prep questions" button stashes the JD
+  // and the resolved resume text in sessionStorage. Consume them on mount
+  // and clear so they don't bleed into a future visit.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const jd = sessionStorage.getItem("interviewPrep:jd");
+      const resume = sessionStorage.getItem("interviewPrep:resume");
+      if (jd) {
+        setJobDescription(jd);
+        sessionStorage.removeItem("interviewPrep:jd");
+      }
+      if (resume) {
+        setResume(resume);
+        setShowResumeField(true);
+        sessionStorage.removeItem("interviewPrep:resume");
+      }
+    } catch { /* sessionStorage unavailable — silently skip */ }
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
