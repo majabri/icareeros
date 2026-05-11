@@ -36,9 +36,9 @@ export default function LandingPage() {
         <ProblemSection />
         <LifecycleSection />
         <FeaturesSection />
-        <StatsSection />
         <FAQSection />
         <CTASection />
+        <StatsSection />
       </main>
       <LandingFooter />
       </div>

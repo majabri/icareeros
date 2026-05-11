@@ -423,3 +423,15 @@ body {
 [data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-600)"] {
   color: var(--text-secondary) !important;
 }
+
+
+/* CTA inner card — semantic tokens so dark mode shows the constellation
+   through (Amir 2026-05-11). Light mode keeps the existing surface. */
+:root {
+  --landing-cta-bg:     var(--neutral-100);
+  --landing-cta-border: var(--neutral-300);
+}
+[data-theme='dark'] {
+  --landing-cta-bg:     transparent;
+  --landing-cta-border: rgba(0, 242, 255, 0.22);
+}
