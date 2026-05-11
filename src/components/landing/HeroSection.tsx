@@ -34,7 +34,11 @@ export function HeroSection() {
     let animId: number;
     function animate() {
       if (!canvas || !ctx) return;
-      ctx.fillStyle = "rgba(245,247,255,0.95)";
+      // Theme-aware motion-blur. Dark mode aligns with the JBS aesthetic
+      // (near-black page background) so the particles trail against a dark
+      // canvas; light mode keeps the original almost-white pastel trail.
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      ctx.fillStyle = isDark ? "rgba(5,5,5,0.92)" : "rgba(245,247,255,0.95)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       for (const p of pts) {
@@ -80,8 +84,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section style={{
-      background: "linear-gradient(135deg,#f5f7ff 0%,#e8f5ff 50%,#fff5e8 100%)",
+    <section className="icareeros-bg-gradient" style={{
       position: "relative", padding: "6rem 3rem",
       textAlign: "center", minHeight: "100vh",
       display: "flex", alignItems: "center", justifyContent: "center",
@@ -94,11 +97,11 @@ export function HeroSection() {
           Career Operating System
         </div>
 
-        <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.2, letterSpacing:"-1px", color:"var(--neutral-900)" }}>
+        <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.2, letterSpacing:"-1px", color:"var(--text-primary)" }}>
           The career OS that runs<br/>on outcomes, not advice.
         </h1>
 
-        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--neutral-700)", maxWidth:680, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
+        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:680, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
           Most career tools give you information. iCareerOS gives you a system — six stages that loop from Evaluate to Achieve, built to keep moving until you hit your next milestone.
         </p>
 
