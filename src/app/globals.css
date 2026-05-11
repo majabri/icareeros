@@ -181,13 +181,17 @@ body {
    replace these with explicit dark: utilities. */
 
 [data-theme='dark'] .icareeros-topbar {
-  background: rgba(15, 27, 45, 0.92) !important;
-  border-bottom-color: hsl(220 65% 18%) !important;
+  background: rgba(15, 27, 45, 0.62) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border-bottom-color: var(--surface-border) !important;
 }
 
 [data-theme='dark'] aside.icareeros-sidebar,
 [data-theme='dark'] aside.icareeros-sidebar nav {
-  background: var(--surface-card) !important;
+  background: rgba(15, 27, 45, 0.62) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
   border-color: var(--surface-border) !important;
 }
 
