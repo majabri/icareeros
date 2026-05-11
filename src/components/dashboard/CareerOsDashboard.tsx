@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient }    from "@/lib/supabase";
 import { CycleStageCard }  from "./CycleStageCard";
@@ -93,30 +93,63 @@ async function loadCompletionSignals(userId: string): Promise<CompletionSignals>
 }
 
 /**
- * Phase 5 Item 2 — read just enough of career_profiles to decide whether
- * the dashboard should run in onboarding mode. profileReady is true iff
- * the user has both a non-empty headline AND skills.length >= 3.
+ * UAT 2026-05-10: dashboard's onboarding CTA must hide ONLY when the
+ * Career Profile is 100% complete by the same 7-check definition used on
+ * /mycareer/profile (computeCompleteness):
+ *   1. full_name        2. summary        3. skills.length > 0
+ *   4. work_experience  5. education      6. certifications
+ *   7. resume_versions row count > 0
  *
- * The same record drives the CoachBriefPanel gate: a brief generated
- * against an empty profile is useless, so the panel is replaced with
- * a "Complete your profile" link until both conditions are met.
+ * Previously this returned true at the lower "headline + skills >= 3"
+ * threshold, so users at e.g. 60% completeness saw the CTA disappear too
+ * early. The CTA now persists until every section is filled.
+ *
+ * The same record drives the CoachBriefPanel gate — gating the brief on
+ * full completeness is fine: a profile with 7-of-7 has enough material
+ * for any downstream stage to run.
  */
 async function loadProfileReady(userId: string): Promise<boolean> {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("career_profiles")
-    .select("headline, skills")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (!data) return false;
-  const headline = typeof data.headline === "string" ? data.headline.trim() : "";
-  const skills   = Array.isArray(data.skills) ? data.skills : [];
-  return headline.length > 0 && skills.length >= 3;
+  const [cpRes, versionsRes] = await Promise.all([
+    supabase
+      .from("career_profiles")
+      .select("full_name, summary, skills, work_experience, education, certifications")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("resume_versions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId),
+  ]);
+  const cp = cpRes.data;
+  if (!cp) return false;
+
+  const fullName       = typeof cp.full_name === "string" ? cp.full_name.trim() : "";
+  const summary        = typeof cp.summary   === "string" ? cp.summary.trim()   : "";
+  const skills         = Array.isArray(cp.skills)          ? cp.skills          : [];
+  const workExperience = Array.isArray(cp.work_experience) ? cp.work_experience : [];
+  const education      = Array.isArray(cp.education)       ? cp.education       : [];
+  const certifications = Array.isArray(cp.certifications)  ? cp.certifications  : [];
+  const versionCount   = versionsRes.count ?? 0;
+
+  return (
+    fullName.length > 0 &&
+    summary.length  > 0 &&
+    skills.length         > 0 &&
+    workExperience.length > 0 &&
+    education.length      > 0 &&
+    certifications.length > 0 &&
+    versionCount          > 0
+  );
 }
 
 export function CareerOsDashboard() {
   const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
+  // UAT 2026-05-10: ref-mirror of userId so the visibilitychange listener
+  // can read the latest value without re-subscribing every render.
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
   const [cycle, setCycle]             = useState<ActiveCycle | null>(null);
   const [activeCycles, setActiveCycles] = useState<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>>([]);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
@@ -176,7 +209,27 @@ export function CareerOsDashboard() {
     });
   }, []);
 
-  const refreshCycle = useCallback(async (uid: string, preferCycleId?: string) => {
+  // UAT 2026-05-10: refresh profileReady when the tab regains focus, so
+  // the onboarding banner disappears as soon as the user comes back from
+  // /mycareer/profile with a freshly-completed profile.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      // userId is in a ref-like state — read latest.
+      const uid = userIdRef.current;
+      if (!uid) return;
+      loadProfileReady(uid).then(setProfileReady).catch(() => { /* ignore */ });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
+
+    const refreshCycle = useCallback(async (uid: string, preferCycleId?: string) => {
     const [list, fresh, ready] = await Promise.all([
       listActiveCycles(uid),
       getActiveCycle(uid),
