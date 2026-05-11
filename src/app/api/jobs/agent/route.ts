@@ -330,11 +330,25 @@ QUALITY
     // by the prefetch cron. The user sees jobs instead of "No matches" —
     // not personally curated, but better than an empty state. We flag
     // these rows with `agent.usedFallback=true` so the UI can label them.
+    //
+    // RLS fix 2026-05-11: opportunities is service_role-only for reads.
+    // The original query used the user-session client which silently got
+    // 0 rows back and triggered the empty state on every load. Use a
+    // service-role client for the fallback read.
     let usedFallback = false;
     if (opportunitiesWithIds.length === 0) {
+      const fallbackServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const fallbackClient = fallbackServiceKey
+        ? createServiceRoleClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            fallbackServiceKey,
+            { auth: { persistSession: false } },
+          )
+        : supabase; // Last-ditch fallback: hit user-session client and
+                    // accept that RLS will likely return [].
       // Best-effort filter: match on remote-friendly if the user wants
       // remote, else open it up. Limit to recently-seen, active, non-flagged.
-      let q = supabase
+      let q = fallbackClient
         .from("opportunities")
         .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, is_flagged, flag_reasons, quality_score")
         .eq("is_active", true)
