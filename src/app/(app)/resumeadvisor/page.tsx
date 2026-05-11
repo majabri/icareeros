@@ -522,11 +522,17 @@ export default function ResumeAdvisorPage() {
               <button onClick={() => { setResumeSource("vault"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${resumeSource === "vault" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>📚 Saved versions {versionsLoaded && versions.length > 0 && `(${versions.length})`}</button>
             </div>
             {resumeSource === "upload" ? (
-              <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => requestUpload()} className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 ${dragOver ? "border-brand-400 bg-brand-50" : uploadedFile ? "border-emerald-300 bg-emerald-50" : "border-gray-300 bg-gray-50 hover:border-brand-300"}`}>
-                <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
-                {uploadedFile ? <p className="font-medium text-gray-800">{uploadedFile.name}</p> : <><p className="font-medium text-gray-700">Drop your resume here</p><p className="mt-1 text-xs text-gray-400">PDF, Word (.doc, .docx), or TXT · click to browse</p></>}
+              <>
+                {/* File input rendered as a sibling of the drop-zone, not a child.
+                    Programmatic .click() bubbles a synthetic click event — if the
+                    input were nested inside the onClick={() => requestUpload()}
+                    div, accepting consent would re-trigger consent. */}
                 <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-              </div>
+                <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => requestUpload()} className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 ${dragOver ? "border-brand-400 bg-brand-50" : uploadedFile ? "border-emerald-300 bg-emerald-50" : "border-gray-300 bg-gray-50 hover:border-brand-300"}`}>
+                  <span className="mb-2 text-2xl">{uploadedFile ? "✅" : "📄"}</span>
+                  {uploadedFile ? <p className="font-medium text-gray-800">{uploadedFile.name}</p> : <><p className="font-medium text-gray-700">Drop your resume here</p><p className="mt-1 text-xs text-gray-400">PDF, Word (.doc, .docx), or TXT · click to browse</p></>}
+                </div>
+              </>
             ) : (
               <div>
                 {!versionsLoaded ? <div className="flex items-center justify-center py-6"><div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" /></div>

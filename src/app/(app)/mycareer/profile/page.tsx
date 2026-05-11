@@ -529,6 +529,16 @@ export default function CareerProfilePage() {
 
           {/* ── Resume Vault ─────────────────────────────────────────── */}
           <Section title="Import from Resume" subtitle="Upload PDF, Word, or TXT — auto-fills every section below.">
+            {/*
+              File input is rendered OUTSIDE the click-handler div on purpose.
+              Programmatic .click() on the input bubbles a synthetic click
+              event up the DOM — if the input were a child, it would
+              re-trigger the drop-zone's onClick → requestUpload(), causing
+              the consent modal to re-open after the user already approved.
+              See UAT finding 2026-05-10: consent popup looped twice.
+            */}
+            <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); }} />
             <div
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
@@ -545,8 +555,6 @@ export default function CareerProfilePage() {
                 {parsing ? "Processing…" : "Drop resume here or click to browse"}
               </p>
               {!parsing && <p className="mt-1 text-xs text-gray-400">PDF · Word (.doc, .docx) · TXT — auto-imported on drop</p>}
-              <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); }} />
             </div>
 
             {parsing && (
