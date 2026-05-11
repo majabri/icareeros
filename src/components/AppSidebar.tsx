@@ -116,8 +116,8 @@ type MarketplaceItem = {
 };
 
 const MARKETPLACE_ITEMS: MarketplaceItem[] = [
-  { href: "/services", label: "Skill Store",       icon: "store"      },
-  { href: "/gigs",     label: "Open Market",       icon: "openmarket" },
+  { label: "Skill Store",       icon: "store",      comingSoon: true },
+  { label: "Open Market",       icon: "openmarket", comingSoon: true },
   { label: "Coursera",          icon: "course", comingSoon: true },
   { label: "Udemy",             icon: "course", comingSoon: true },
   { label: "LinkedIn Learning", icon: "course", comingSoon: true },
