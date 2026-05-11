@@ -47,10 +47,14 @@
   --surface-border:   rgba(0, 242, 255, 0.18); /* JBS cyan-tinted border, low alpha */
   --surface-overlay:  rgba(5, 5, 5, 0.92); /* modal scrim + sticky-header bg */
 
-  /* Text hierarchy (JBS spec: white → light gray → muted gray) */
-  --text-primary:     #FFFFFF;
-  --text-secondary:   hsl(0 0% 75%);
-  --text-muted:       hsl(0 0% 55%);
+  /* Text hierarchy (JBS spec: white → light gray → muted gray).
+     Bumped 2026-05-11 for readability — previous values (75% / 55%)
+     dropped under the constellation/translucent-card stack. New scale
+     uses neutral grays (no blue tint) and clears WCAG AA at every
+     level on the JBS #050505 page bg. */
+  --text-primary:     #FFFFFF;             /* 21:1 contrast on #050505 */
+  --text-secondary:   hsl(0 0% 88%);       /* #e0e0e0 — 16:1 */
+  --text-muted:       hsl(0 0% 72%);       /* #b8b8b8 — 10:1 */
 
   /* Brand accent — JBS THE color */
   --accent:           #00f2ff;             /* primary cyan */
@@ -209,12 +213,26 @@ body {
 [data-theme='dark'] .bg-white         { background-color: rgba(15, 27, 45, 0.62) !important; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 [data-theme='dark'] .bg-gray-50       { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
 [data-theme='dark'] .bg-gray-100      { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
-[data-theme='dark'] .text-gray-900    { color: var(--text-primary) !important; }
-[data-theme='dark'] .text-gray-800    { color: var(--text-primary) !important; }
-[data-theme='dark'] .text-gray-700    { color: hsl(220 50% 80%)    !important; }
-[data-theme='dark'] .text-gray-600    { color: var(--text-muted)   !important; }
-[data-theme='dark'] .text-gray-500    { color: var(--text-muted)   !important; }
-[data-theme='dark'] .text-gray-400    { color: hsl(220 50% 55%)    !important; }
+/* Dark-mode text-color overrides — bumped 2026-05-11 for readability.
+   All values are NEUTRAL grays (no blue tint) and pass WCAG AA on the
+   JBS #050505 page bg AND on the translucent navy card surface. */
+[data-theme='dark'] .text-gray-900    { color: #FFFFFF        !important; } /* 21:1 */
+[data-theme='dark'] .text-gray-800    { color: #FFFFFF        !important; }
+[data-theme='dark'] .text-gray-700    { color: hsl(0 0% 88%)  !important; } /* #e0e0e0, 16:1 */
+[data-theme='dark'] .text-gray-600    { color: hsl(0 0% 82%)  !important; } /* #d1d1d1, 14:1 */
+[data-theme='dark'] .text-gray-500    { color: hsl(0 0% 75%)  !important; } /* #bfbfbf, 11:1 */
+[data-theme='dark'] .text-gray-400    { color: hsl(0 0% 68%)  !important; } /* #adadad,  8:1 */
+[data-theme='dark'] .text-gray-300    { color: hsl(0 0% 60%)  !important; } /* #999999,  6:1 — borderline */
+[data-theme='dark'] .text-slate-900   { color: #FFFFFF        !important; }
+[data-theme='dark'] .text-slate-800   { color: #FFFFFF        !important; }
+[data-theme='dark'] .text-slate-700   { color: hsl(0 0% 88%)  !important; }
+[data-theme='dark'] .text-slate-600   { color: hsl(0 0% 82%)  !important; }
+[data-theme='dark'] .text-slate-500   { color: hsl(0 0% 75%)  !important; }
+[data-theme='dark'] .text-zinc-900    { color: #FFFFFF        !important; }
+[data-theme='dark'] .text-zinc-800    { color: #FFFFFF        !important; }
+[data-theme='dark'] .text-zinc-700    { color: hsl(0 0% 88%)  !important; }
+[data-theme='dark'] .text-zinc-600    { color: hsl(0 0% 82%)  !important; }
+[data-theme='dark'] .text-zinc-500    { color: hsl(0 0% 75%)  !important; }
 [data-theme='dark'] .border-gray-100  { border-color: var(--surface-border) !important; }
 [data-theme='dark'] .border-gray-200  { border-color: var(--surface-border) !important; }
 [data-theme='dark'] .border-gray-300  { border-color: hsl(220 65% 24%)      !important; }
@@ -242,9 +260,29 @@ body {
    text on them needs to flip from text-brand-700/800 to a lighter shade to
    keep contrast. */
 [data-theme='dark'] .bg-brand-50 { background-color: hsl(192 80% 18%) !important; }
-[data-theme='dark'] .text-brand-700 { color: hsl(192 70% 70%) !important; }
-[data-theme='dark'] .text-brand-800 { color: hsl(192 70% 65%) !important; }
-[data-theme='dark'] .text-brand-900 { color: hsl(192 70% 75%) !important; }
+[data-theme='dark'] .text-brand-500 { color: hsl(192 95% 78%) !important; } /* same family as 700 */
+[data-theme='dark'] .text-brand-600 { color: hsl(192 95% 78%) !important; }
+[data-theme='dark'] .text-brand-700 { color: hsl(192 95% 78%) !important; } /* bright cyan-tinted white, 12:1 */
+[data-theme='dark'] .text-brand-800 { color: hsl(192 90% 82%) !important; }
+[data-theme='dark'] .text-brand-900 { color: hsl(192 85% 86%) !important; }
+[data-theme='dark'] .text-cyan-700  { color: hsl(192 95% 78%) !important; }
+[data-theme='dark'] .text-cyan-800  { color: hsl(192 90% 82%) !important; }
+[data-theme='dark'] .text-cyan-600  { color: hsl(192 95% 78%) !important; }
+
+/* Common semantic colors that show up in cards/badges — bump for legibility */
+[data-theme='dark'] .text-emerald-600 { color: hsl(150 70% 70%) !important; }
+[data-theme='dark'] .text-emerald-700 { color: hsl(150 65% 72%) !important; }
+[data-theme='dark'] .text-emerald-800 { color: hsl(150 65% 75%) !important; }
+[data-theme='dark'] .text-red-600     { color: hsl(0 80% 75%)   !important; }
+[data-theme='dark'] .text-red-700     { color: hsl(0 80% 78%)   !important; }
+[data-theme='dark'] .text-amber-600   { color: hsl(38 95% 70%)  !important; }
+[data-theme='dark'] .text-amber-700   { color: hsl(38 95% 72%)  !important; }
+[data-theme='dark'] .text-amber-800   { color: hsl(38 95% 75%)  !important; }
+[data-theme='dark'] .text-blue-600    { color: hsl(210 95% 78%) !important; }
+[data-theme='dark'] .text-blue-700    { color: hsl(210 95% 80%) !important; }
+[data-theme='dark'] .text-blue-800    { color: hsl(210 95% 82%) !important; }
+[data-theme='dark'] .text-purple-700  { color: hsl(270 80% 80%) !important; }
+[data-theme='dark'] .text-purple-800  { color: hsl(270 80% 82%) !important; }
 
 
 /* ── JBS design-system primitives (2026-05-11) ───────────────────────────
