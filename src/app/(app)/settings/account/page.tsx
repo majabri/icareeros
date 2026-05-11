@@ -268,7 +268,7 @@ export default function AccountPage() {
               Used for regional compliance and job matching. Never shared publicly.
             </p>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-3 max-w-2xl">
+            <div className="mt-4 grid gap-4 sm:grid-cols-3 max-w-4xl">
               {/* Country */}
               <div>
                 <label htmlFor="loc-country" className="mb-1 block text-sm font-medium text-gray-700">Country</label>
