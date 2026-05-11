@@ -126,14 +126,14 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
         role="dialog"
         aria-modal="true"
         aria-labelledby="job-drawer-title"
-        style={{ backgroundColor: "var(--surface-elevated, #ffffff)", color: "var(--text-primary, #111827)" }}
+        style={{ backgroundColor: "var(--surface-card, #ffffff)", color: "var(--text-primary, #111827)" }}
         className="fixed inset-y-0 right-0 z-[81] flex w-full flex-col shadow-2xl
                    md:w-[58%] md:max-w-3xl
                    animate-in slide-in-from-right duration-200"
       >
         {/* Header — back + close. shrink-0 so it never collapses. */}
         <header
-          style={{ borderColor: "var(--border-default, #e5e7eb)", backgroundColor: "var(--surface-elevated, #ffffff)" }}
+          style={{ borderColor: "var(--surface-border, #e5e7eb)", backgroundColor: "var(--surface-card, #ffffff)" }}
           className="flex items-center justify-between border-b px-4 py-3 shrink-0"
         >
           <button
@@ -150,7 +150,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
           <button
             type="button"
             onClick={onClose}
-            style={{ color: "var(--text-secondary, #6b7280)" }}
+            style={{ color: "var(--text-muted, #6b7280)" }}
             className="rounded-lg p-1.5 hover:opacity-80 transition-opacity"
             aria-label="Close drawer"
           >
@@ -178,7 +178,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
               )}
             </div>
             <p style={{ color: "var(--text-primary, #374151)" }} className="text-sm font-medium">{companyName}</p>
-            <div style={{ color: "var(--text-secondary, #6b7280)" }} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <div style={{ color: "var(--text-muted, #6b7280)" }} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               {job.location && <span>📍 {job.location}</span>}
               {job.type && <span>💼 {job.type}</span>}
               {job.is_remote && <span>🏠 Remote</span>}
@@ -187,9 +187,9 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
             {job.match_summary && (
               <p
                 style={{
-                  color: "var(--text-secondary, #4b5563)",
-                  backgroundColor: "var(--surface-default, #f9fafb)",
-                  borderColor: "var(--border-default, #e5e7eb)",
+                  color: "var(--text-muted, #4b5563)",
+                  backgroundColor: "var(--surface-muted, #f9fafb)",
+                  borderColor: "var(--surface-border, #e5e7eb)",
                 }}
                 className="text-xs italic rounded-lg px-3 py-2 border"
               >
@@ -204,8 +204,8 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
               type="button"
               onClick={handleAnalyzeFit}
               style={{
-                borderColor: "var(--border-default, #e5e7eb)",
-                backgroundColor: "var(--surface-default, #ffffff)",
+                borderColor: "var(--surface-border, #e5e7eb)",
+                backgroundColor: "var(--surface-card, #ffffff)",
                 color: "var(--text-primary, #374151)",
               }}
               className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80 transition-opacity"
@@ -217,8 +217,8 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
                 type="button"
                 onClick={() => setShowCoverLetter(true)}
                 style={{
-                  borderColor: "var(--border-default, #e5e7eb)",
-                  backgroundColor: "var(--surface-default, #ffffff)",
+                  borderColor: "var(--surface-border, #e5e7eb)",
+                  backgroundColor: "var(--surface-card, #ffffff)",
                   color: "var(--text-primary, #374151)",
                 }}
                 className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80 transition-opacity"
@@ -231,8 +231,8 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
                 type="button"
                 onClick={() => setShowOutreach(true)}
                 style={{
-                  borderColor: "var(--border-default, #e5e7eb)",
-                  backgroundColor: "var(--surface-default, #ffffff)",
+                  borderColor: "var(--surface-border, #e5e7eb)",
+                  backgroundColor: "var(--surface-card, #ffffff)",
                   color: "var(--text-primary, #374151)",
                 }}
                 className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80 transition-opacity"
@@ -244,8 +244,8 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
               type="button"
               onClick={handleTrack}
               style={{
-                borderColor: "var(--border-default, #e5e7eb)",
-                backgroundColor: "var(--surface-default, #ffffff)",
+                borderColor: "var(--surface-border, #e5e7eb)",
+                backgroundColor: "var(--surface-card, #ffffff)",
                 color: "var(--text-primary, #374151)",
               }}
               className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80 transition-opacity"
@@ -257,7 +257,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
           {/* About the role */}
           {truncatedDesc && (
             <section className="space-y-2">
-              <h2 style={{ color: "var(--text-secondary, #6b7280)" }} className="text-sm font-semibold uppercase tracking-wide">About this role</h2>
+              <h2 style={{ color: "var(--text-muted, #6b7280)" }} className="text-sm font-semibold uppercase tracking-wide">About this role</h2>
               <div style={{ color: "var(--text-primary, #374151)" }} className="whitespace-pre-wrap text-sm leading-relaxed">
                 {truncatedDesc}
               </div>
@@ -275,7 +275,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
 
         {/* Sticky Apply CTA — only external link in the drawer */}
         <footer
-          style={{ borderColor: "var(--border-default, #e5e7eb)", backgroundColor: "var(--surface-elevated, #ffffff)" }}
+          style={{ borderColor: "var(--surface-border, #e5e7eb)", backgroundColor: "var(--surface-card, #ffffff)" }}
           className="border-t px-6 py-4 shrink-0"
         >
           {applyUrl ? (
@@ -293,12 +293,12 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
                 type="button"
                 disabled
                 aria-disabled="true"
-                style={{ backgroundColor: "var(--surface-default, #f3f4f6)", color: "var(--text-secondary, #9ca3af)" }}
+                style={{ backgroundColor: "var(--surface-muted, #f3f4f6)", color: "var(--text-muted, #9ca3af)" }}
                 className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold cursor-not-allowed w-full"
               >
                 Apply (link unavailable)
               </button>
-              <p style={{ color: "var(--text-secondary, #9ca3af)" }} className="text-[11px]">
+              <p style={{ color: "var(--text-muted, #9ca3af)" }} className="text-[11px]">
                 We couldn&apos;t resolve a direct application link for this listing.
               </p>
             </div>
