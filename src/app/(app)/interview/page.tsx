@@ -356,7 +356,7 @@ export default function InterviewPage() {
   // ── Setup ──────────────────────────────────────────────────────────────────
   if (phase === "setup") {
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-12 pb-16">
+      <div className="min-h-screen px-4 py-12 pb-16">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="mb-7 text-center">
@@ -475,7 +475,7 @@ export default function InterviewPage() {
   // ── Prep Guide ─────────────────────────────────────────────────────────────
   if (phase === "prep") {
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-8 pb-16">
+      <div className="min-h-screen px-4 py-8 pb-16">
         <div className="max-w-7xl mx-auto space-y-5">
           <div className="flex items-center justify-between">
             <button
@@ -520,7 +520,7 @@ export default function InterviewPage() {
   if (phase === "complete") {
     const fb = parseFinalFeedback(finalMessage);
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-12 pb-16">
+      <div className="min-h-screen px-4 py-12 pb-16">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Score card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
