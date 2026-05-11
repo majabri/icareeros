@@ -165,7 +165,7 @@ export default function JobsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 space-y-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
       <header>
         <h1 className="mb-1 text-2xl font-bold text-gray-900">Opportunities</h1>
         <p className="text-sm text-gray-500">

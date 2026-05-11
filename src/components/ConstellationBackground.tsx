@@ -47,7 +47,11 @@ export function ConstellationBackground() {
       if (!canvas || !ctx) return;
 
       // Low-opacity fill = long vivid trails (matches landing page feel)
-      ctx.fillStyle = "rgba(245, 247, 255, 0.78)";
+      // Theme-aware motion-blur fill — read data-theme each frame so the
+      // particle trail adapts when the user toggles. Light = pastel wash,
+      // dark = near-black wash matching the JBS body bg.
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      ctx.fillStyle = isDark ? "rgba(5, 5, 5, 0.85)" : "rgba(245, 247, 255, 0.78)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       for (const p of pts) {
