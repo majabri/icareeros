@@ -1,99 +1,22 @@
 "use client";
-import { useEffect, useRef } from "react";
 
-const COLORS = ["#00d9ff","#00ff88","#ffff00","#ffa366","#ff6b6b"];
-
+/**
+ * HeroSection — Phase 3 design-system unification (2026-05-11).
+ *
+ * Previously had its own inline canvas particle animation. Now the global
+ * ConstellationBackground (mounted at app/page.tsx + app/(app)/layout.tsx +
+ * app/auth/layout.tsx) provides ONE consistent particle layer across every
+ * page. The hero is a pure content section — content only, transparent bg.
+ */
 export function HeroSection() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    function resize() {
-      if (!canvas) return;
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    }
-    resize();
-
-    type P = { x:number; y:number; vx:number; vy:number; size:number; color:string; opacity:number; opacityDir:number };
-    const pts: P[] = Array.from({ length: 100 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.8,
-      vy: (Math.random() - 0.5) * 0.8,
-      size: Math.random() * 3 + 1.5,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      opacity: Math.random() * 0.6 + 0.4,
-      opacityDir: (Math.random() - 0.5) * 0.03,
-    }));
-
-    let animId: number;
-    function animate() {
-      if (!canvas || !ctx) return;
-      // Theme-aware motion-blur. Dark mode aligns with the JBS aesthetic
-      // (near-black page background) so the particles trail against a dark
-      // canvas; light mode keeps the original almost-white pastel trail.
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      ctx.fillStyle = isDark ? "rgba(5,5,5,0.92)" : "rgba(245,247,255,0.95)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      for (const p of pts) {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-        p.opacity += p.opacityDir;
-        if (p.opacity > 1) { p.opacity = 1; p.opacityDir *= -1; }
-        if (p.opacity < 0.2) { p.opacity = 0.2; p.opacityDir *= -1; }
-
-        ctx.globalAlpha = p.opacity;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
-          const d = Math.sqrt(dx*dx + dy*dy);
-          if (d < 200) {
-            ctx.globalAlpha = 0.2 * (1 - d / 200);
-            ctx.strokeStyle = pts[i].color;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(pts[i].x, pts[i].y);
-            ctx.lineTo(pts[j].x, pts[j].y);
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.globalAlpha = 1;
-      animId = requestAnimationFrame(animate);
-    }
-    animate();
-
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-    return () => { cancelAnimationFrame(animId); ro.disconnect(); };
-  }, []);
-
   return (
-    <section className="icareeros-bg-gradient" style={{
-      position: "relative", padding: "6rem 3rem",
+    <section style={{
+      position: "relative", padding: "6rem 1.5rem",
       textAlign: "center", minHeight: "100vh",
       display: "flex", alignItems: "center", justifyContent: "center",
-      overflow: "hidden",
     }}>
-      <canvas ref={canvasRef} style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", zIndex:1 }} />
-
       <div style={{ maxWidth: 900, position: "relative", zIndex: 2 }}>
-        <div style={{ color:"var(--primary)", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
+        <div style={{ color:"var(--accent, var(--primary))", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
           Career Operating System
         </div>
 

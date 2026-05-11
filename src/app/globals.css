@@ -201,9 +201,14 @@ body {
    when [data-theme='dark']. Only kicks in during dark mode — light mode
    is unchanged. Phase 2 (Sprint 2) will replace these with explicit
    `dark:` utilities per component for finer control. */
-[data-theme='dark'] .bg-white         { background-color: var(--surface-card)   !important; }
-[data-theme='dark'] .bg-gray-50       { background-color: var(--surface-muted)  !important; }
-[data-theme='dark'] .bg-gray-100      { background-color: var(--surface-muted)  !important; }
+/* Dark-mode cards are translucent so the constellation background reads
+   through continuously across every page (Amir 2026-05-11). Light mode
+   unchanged — these are .bg-white / .bg-gray-50 utility overrides
+   scoped under [data-theme='dark']. backdrop-filter softens the
+   constellation so foreground content stays readable. */
+[data-theme='dark'] .bg-white         { background-color: rgba(15, 27, 45, 0.62) !important; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+[data-theme='dark'] .bg-gray-50       { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
+[data-theme='dark'] .bg-gray-100      { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
 [data-theme='dark'] .text-gray-900    { color: var(--text-primary) !important; }
 [data-theme='dark'] .text-gray-800    { color: var(--text-primary) !important; }
 [data-theme='dark'] .text-gray-700    { color: hsl(220 50% 80%)    !important; }

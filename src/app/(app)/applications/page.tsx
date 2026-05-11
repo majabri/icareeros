@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Pipeline — iCareerOS" };
 
 export default function Page() {
   return (
-    <div className="p-6 md:p-10 max-w-7xl">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 mb-1">📋 Application pipeline</h1>
         <p className="text-sm text-gray-500">
