@@ -65,6 +65,64 @@ function SourceRolePill({ role }: { role: string }) {
   );
 }
 
+// ── UAT 2026-05-10: target-suggestions response cache ────────────────────────
+// The /api/career-os/target-suggestions route makes a Sonnet 4.6 tool-use call
+// that consistently takes 8-15s. Caching the response in localStorage with a
+// stale-while-revalidate pattern means repeat visits show instantly; the
+// background revalidate keeps things fresh without blocking the UI.
+//
+// Key is per-user so device-shared accounts don't cross-pollute. Schema
+// versioned in the key itself ("v1") so a future shape change won't try to
+// hydrate stale cache.
+type TargetSuggestionsCache = {
+  generatedAt: number; // epoch ms
+  payload: {
+    skills:         SkillSuggestion[];
+    education:      EducationSuggestion[];
+    certifications: CertificationSuggestion[];
+    rolesUsed:      string[];
+    meta:           SuggestionResponse["_meta"] | null;
+  };
+};
+const TARGETSKILLS_CACHE_PREFIX = "targetskills:cache:v1:";
+const TARGETSKILLS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function readTargetSuggestionsCache(userId: string): TargetSuggestionsCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(TARGETSKILLS_CACHE_PREFIX + userId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TargetSuggestionsCache;
+    if (!parsed || typeof parsed.generatedAt !== "number" || !parsed.payload) return null;
+    // Reject entries older than the TTL — we treat them as miss.
+    if (Date.now() - parsed.generatedAt > TARGETSKILLS_CACHE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeTargetSuggestionsCache(userId: string, payload: TargetSuggestionsCache["payload"]) {
+  if (typeof window === "undefined") return;
+  try {
+    const entry: TargetSuggestionsCache = { generatedAt: Date.now(), payload };
+    window.localStorage.setItem(TARGETSKILLS_CACHE_PREFIX + userId, JSON.stringify(entry));
+  } catch {
+    /* quota / private-mode — silently skip */
+  }
+}
+
+function formatAgo(ms: number): string {
+  const sec = Math.max(1, Math.floor(ms / 1000));
+  if (sec < 60)    return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60)    return `${min}m ago`;
+  const hr  = Math.floor(min / 60);
+  if (hr  < 24)    return `${hr}h ago`;
+  const day = Math.floor(hr  / 24);
+  return `${day}d ago`;
+}
+
 export default function TargetSkillsPage() {
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
@@ -87,6 +145,8 @@ export default function TargetSkillsPage() {
   const [rolesUsed, setRolesUsed] = useState<string[]>([]);
   const [meta, setMeta] = useState<SuggestionResponse["_meta"] | null>(null);
   const [sugsLoading, setSugsLoading] = useState(false);
+  const [sugsFromCache, setSugsFromCache] = useState(false);
+  const [sugsGeneratedAt, setSugsGeneratedAt] = useState<number | null>(null);
   const [sugsErr,     setSugsErr]     = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -120,7 +180,29 @@ export default function TargetSkillsPage() {
   }, [supabase]);
 
   // ── Fetch AI suggestions ──────────────────────────────────────────────────
-  const fetchSuggestions = useCallback(async () => {
+  // UAT 2026-05-10: stale-while-revalidate. On cache hit we hydrate state
+  // synchronously so the page renders instantly, then either skip the network
+  // call (default) or refresh in the background (when force=true).
+  const fetchSuggestions = useCallback(async (opts: { force?: boolean } = {}) => {
+    const force = opts.force === true;
+
+    // Cache check — only on the implicit auto-load path. The explicit
+    // "Refresh suggestions" button always bypasses cache.
+    if (!force && userId) {
+      const cached = readTargetSuggestionsCache(userId);
+      if (cached) {
+        setSkillSugs(cached.payload.skills);
+        setEduSugs(cached.payload.education);
+        setCertSugs(cached.payload.certifications);
+        setRolesUsed(cached.payload.rolesUsed);
+        setMeta(cached.payload.meta);
+        setSugsGeneratedAt(cached.generatedAt);
+        setSugsFromCache(true);
+        // Cache hit → no network. The user can hit Refresh if they want fresh.
+        return;
+      }
+    }
+
     setSugsLoading(true);
     setSugsErr(null);
     try {
@@ -135,17 +217,30 @@ export default function TargetSkillsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `Failed (${res.status})`);
-      setSkillSugs(Array.isArray(data.skills) ? data.skills : []);
-      setEduSugs(Array.isArray(data.education) ? data.education : []);
-      setCertSugs(Array.isArray(data.certifications) ? data.certifications : []);
-      setRolesUsed(Array.isArray(data.target_roles_used) ? data.target_roles_used : []);
-      setMeta(data._meta ?? null);
+      const skills = Array.isArray(data.skills) ? data.skills : [];
+      const education = Array.isArray(data.education) ? data.education : [];
+      const certifications = Array.isArray(data.certifications) ? data.certifications : [];
+      const rolesUsed = Array.isArray(data.target_roles_used) ? data.target_roles_used : [];
+      const meta = data._meta ?? null;
+
+      setSkillSugs(skills);
+      setEduSugs(education);
+      setCertSugs(certifications);
+      setRolesUsed(rolesUsed);
+      setMeta(meta);
+      setSugsFromCache(false);
+      setSugsGeneratedAt(Date.now());
+
+      // Persist freshly-fetched result for next visit.
+      if (userId) {
+        writeTargetSuggestionsCache(userId, { skills, education, certifications, rolesUsed, meta });
+      }
     } catch (e) {
       setSugsErr(e instanceof Error ? e.message : "Failed to load suggestions");
     } finally {
       setSugsLoading(false);
     }
-  }, [dismissedSkills, dismissedEducation, dismissedCertifications]);
+  }, [userId, dismissedSkills, dismissedEducation, dismissedCertifications]);
 
   useEffect(() => {
     if (!loading && userId) void fetchSuggestions();
@@ -281,14 +376,29 @@ export default function TargetSkillsPage() {
         </p>
       </header>
 
-      {/* Show which target roles were researched */}
+      {/* Show which target roles were researched (+ cache status, UAT 2026-05-10) */}
       {!sugsLoading && rolesUsed.length > 0 && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          Researching for target job title{rolesUsed.length > 1 ? "s" : ""}:{" "}
-          <strong>{rolesUsed.join(" · ")}</strong>
-          {meta?.inferred && (
-            <span className="ml-2 text-xs text-blue-600">
-              (inferred from your profile — set explicit target roles in <a href="/mycareer/preferences" className="underline hover:no-underline">Search Preferences</a>)
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <span>
+            Researching for target job title{rolesUsed.length > 1 ? "s" : ""}:{" "}
+            <strong>{rolesUsed.join(" · ")}</strong>
+            {meta?.inferred && (
+              <span className="ml-2 text-xs text-blue-600">
+                (inferred from your profile — set explicit target roles in <a href="/mycareer/preferences" className="underline hover:no-underline">Search Preferences</a>)
+              </span>
+            )}
+          </span>
+          {sugsGeneratedAt && (
+            <span className="ml-auto flex items-center gap-2 text-xs text-blue-600">
+              {sugsFromCache ? "Researched" : "Just researched"} {formatAgo(Date.now() - sugsGeneratedAt)}
+              <button
+                type="button"
+                onClick={() => void fetchSuggestions({ force: true })}
+                disabled={sugsLoading}
+                className="rounded border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                Refresh
+              </button>
             </span>
           )}
         </div>
@@ -304,7 +414,7 @@ export default function TargetSkillsPage() {
       {sugsErr && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           Couldn&apos;t load suggestions: {sugsErr}{" "}
-          <button type="button" onClick={() => void fetchSuggestions()} className="underline hover:no-underline">Retry</button>
+          <button type="button" onClick={() => void fetchSuggestions({ force: true })} className="underline hover:no-underline">Retry</button>
         </div>
       )}
 
@@ -490,7 +600,7 @@ export default function TargetSkillsPage() {
 
       {/* ── Save bar ──────────────────────────────────────────────────────── */}
       <div className="sticky bottom-0 -mx-4 sm:-mx-6 border-t border-gray-200 bg-white px-4 py-4 sm:px-6 flex items-center justify-end gap-3">
-        <button type="button" onClick={() => void fetchSuggestions()} disabled={sugsLoading}
+        <button type="button" onClick={() => void fetchSuggestions({ force: true })} disabled={sugsLoading}
           className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           {sugsLoading ? "Loading…" : "Refresh suggestions"}
         </button>
