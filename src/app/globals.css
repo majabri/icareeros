@@ -15,7 +15,9 @@
   --neutral-100:   #ffffff;
   --neutral-200:   #f8f9fa;
   --neutral-300:   #e9ecef;
+  --neutral-600:   #6c757d;     /* added for LifecycleSection SVG text */
   --neutral-700:   #495057;
+  --neutral-800:   #343a40;
   --neutral-900:   #212529;
   /* Semantic surface tokens — backed by the legacy --neutral-* vars in
      light mode, overridden under [data-theme='dark'] below. Phase 1 of
@@ -69,6 +71,21 @@
 
   /* Background gradient — dark mode hero / page wash */
   --bg-gradient: linear-gradient(135deg, #050505 0%, #0F1B2D 50%, #050505 100%);
+
+  /* Legacy --neutral-* tokens — also flip in dark mode so inline styles
+     across the landing sections (FAQ, Features, Problem, Lifecycle,
+     SocialProof, etc.) that reference var(--neutral-700/900) for text
+     and var(--neutral-100/200/300) for surfaces pick up readable values
+     without per-file changes. This is the canonical 2026-05-11 fix
+     replacing the broken attribute-selector tricks that didn't match
+     React's inline-style output. */
+  --neutral-100:   rgba(15, 27, 45, 0.62);   /* translucent navy card */
+  --neutral-200:   rgba(15, 27, 45, 0.55);   /* slightly fainter */
+  --neutral-300:   rgba(0, 242, 255, 0.22);  /* cyan-tinted hairline */
+  --neutral-600:   hsl(0 0% 82%);            /* readable mid-gray on dark */
+  --neutral-700:   hsl(0 0% 88%);            /* body text */
+  --neutral-800:   hsl(0 0% 94%);            /* high-contrast secondary */
+  --neutral-900:   #FFFFFF;                  /* headings */
 }
 
 /* Background-gradient utility used by the fixed <div> in layout.tsx.
@@ -439,28 +456,12 @@ body {
   border-bottom-color: var(--surface-border) !important;
 }
 
-[data-theme='dark'] .landing-fade-bg [style*="--neutral-100"],
-[data-theme='dark'] .landing-fade-bg [style*="--neutral-200"] {
-  background-color: rgba(15, 27, 45, 0.55) !important;
-  background-image: none !important;
-  color: var(--text-primary) !important;
-  border-color: var(--surface-border) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-/* Text-color tokens used inline on landing — flip them via attribute
-   selector so the body copy reads on a near-black background. */
-[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-900)\""],
-[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-900)"] {
-  color: var(--text-primary) !important;
-}
-[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-700)\""],
-[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-700)"],
-[data-theme='dark'] .landing-fade-bg [style*="color:\"var(--neutral-600)\""],
-[data-theme='dark'] .landing-fade-bg [style*="color: var(--neutral-600)"] {
-  color: var(--text-secondary) !important;
-}
+/* (2026-05-11) The attribute-selector tricks that previously lived
+   here ([style*='--neutral-700'] etc.) didn't match React's inline-
+   style output reliably across browsers — Chromium normalises differently
+   than Firefox, etc. Replaced with the cleaner --neutral-* variable
+   override in the [data-theme='dark'] block above, which flips every
+   inline color/background using those tokens transparently. */
 
 
 /* CTA inner card — semantic tokens so dark mode shows the constellation
