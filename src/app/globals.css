@@ -607,3 +607,47 @@ body {
   --muted-foreground:  hsl(0 0% 75%);
   /* --accent is already #00f2ff in dark mode (declared above). */
 }
+
+
+/* ── Tailwind gradient stops (from-* / to- / via-) — dark-mode overrides ─
+   2026-05-11. The Founding Lifetime banner uses bg-gradient-to-br with
+   from-amber-50 / to-orange-50. .bg-amber-50 was already overridden but
+   the gradient form compiles to --tw-gradient-from / --tw-gradient-to
+   CSS variables on the element, NOT to background-color. Override the
+   classes that set those variables. */
+[data-theme='dark'] .from-amber-50   { --tw-gradient-from: rgba(245, 158, 11, 0.15) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(245, 158, 11, 0)) !important; }
+[data-theme='dark'] .from-amber-100  { --tw-gradient-from: rgba(245, 158, 11, 0.22) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(245, 158, 11, 0)) !important; }
+[data-theme='dark'] .from-emerald-50 { --tw-gradient-from: rgba(16, 185, 129, 0.15) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(16, 185, 129, 0)) !important; }
+[data-theme='dark'] .from-blue-50    { --tw-gradient-from: rgba(59, 130, 246, 0.15) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(59, 130, 246, 0)) !important; }
+[data-theme='dark'] .from-red-50     { --tw-gradient-from: rgba(239, 68, 68, 0.15)  !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(239, 68, 68, 0)) !important; }
+[data-theme='dark'] .from-purple-50  { --tw-gradient-from: rgba(168, 85, 247, 0.15) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(168, 85, 247, 0)) !important; }
+[data-theme='dark'] .from-gray-50    { --tw-gradient-from: rgba(255, 255, 255, 0.04) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(255, 255, 255, 0)) !important; }
+[data-theme='dark'] .from-brand-50   { --tw-gradient-from: rgba(0, 242, 255, 0.10)  !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(0, 242, 255, 0)) !important; }
+
+[data-theme='dark'] .to-amber-50    { --tw-gradient-to: rgba(245, 158, 11, 0.10) !important; }
+[data-theme='dark'] .to-amber-100   { --tw-gradient-to: rgba(245, 158, 11, 0.15) !important; }
+[data-theme='dark'] .to-orange-50   { --tw-gradient-to: rgba(249, 115, 22, 0.10) !important; }
+[data-theme='dark'] .to-orange-100  { --tw-gradient-to: rgba(249, 115, 22, 0.15) !important; }
+[data-theme='dark'] .to-emerald-50  { --tw-gradient-to: rgba(16, 185, 129, 0.10) !important; }
+[data-theme='dark'] .to-blue-50     { --tw-gradient-to: rgba(59, 130, 246, 0.10) !important; }
+[data-theme='dark'] .to-red-50      { --tw-gradient-to: rgba(239, 68, 68, 0.10) !important; }
+[data-theme='dark'] .to-purple-50   { --tw-gradient-to: rgba(168, 85, 247, 0.10) !important; }
+[data-theme='dark'] .to-gray-50     { --tw-gradient-to: rgba(255, 255, 255, 0.02) !important; }
+
+/* Stronger borders for semantic 300/400 — used by FoundingLifetime's
+   border-amber-300, AddOffer's border-emerald-300, etc. */
+[data-theme='dark'] .border-amber-300    { border-color: rgba(245, 158, 11, 0.45) !important; }
+[data-theme='dark'] .border-amber-400    { border-color: rgba(245, 158, 11, 0.55) !important; }
+[data-theme='dark'] .border-emerald-300  { border-color: rgba(16, 185, 129, 0.45) !important; }
+[data-theme='dark'] .border-emerald-400  { border-color: rgba(16, 185, 129, 0.55) !important; }
+[data-theme='dark'] .border-blue-300     { border-color: rgba(59, 130, 246, 0.45) !important; }
+[data-theme='dark'] .border-red-300      { border-color: rgba(239, 68, 68, 0.45)  !important; }
+[data-theme='dark'] .border-red-400      { border-color: rgba(239, 68, 68, 0.55)  !important; }
+[data-theme='dark'] .border-purple-300   { border-color: rgba(168, 85, 247, 0.45) !important; }
+[data-theme='dark'] .border-amber-200    { border-color: rgba(245, 158, 11, 0.40) !important; }
+
+/* Semantic-color text at hue 900 (used by amber-900 in the seats-left chip) */
+[data-theme='dark'] .text-amber-900   { color: hsl(38 95% 80%)  !important; }
+[data-theme='dark'] .text-emerald-900 { color: hsl(150 65% 78%) !important; }
+[data-theme='dark'] .text-red-900     { color: hsl(0 80% 80%)   !important; }
+[data-theme='dark'] .text-blue-900    { color: hsl(210 95% 82%) !important; }
