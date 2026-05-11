@@ -29,6 +29,8 @@ import {
   getSubdivisionByCode,
 } from "@/lib/geo/data";
 import { CityTypeahead, type CityPickResult } from "@/components/geo/CityTypeahead";
+// Wave 3 — theme preference toggle (also accessible from AppTopBar).
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Msg = { type: "success" | "error"; text: string };
 
@@ -336,6 +338,22 @@ export default function AccountPage() {
           </button>
         </section>
       </form>
+
+      {/* ── Appearance (Wave 3, 2026-05-10) ────────────────────────────
+          Same control as the AppTopBar toggle — duplicated here so users
+          who land in settings to change their theme have it where they
+          expect. State syncs through ThemeProvider context, so toggling
+          here updates the topbar control and vice versa. */}
+      <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Appearance</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Choose how iCareerOS looks. <span className="font-medium">Auto</span> follows
+            your operating system&apos;s setting and switches at sunset / sunrise.
+          </p>
+        </div>
+        <ThemeToggle />
+      </section>
 
       {/* ── Account info (read-only) ─────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

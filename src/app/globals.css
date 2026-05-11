@@ -14,14 +14,45 @@
   --neutral-300:   #e9ecef;
   --neutral-700:   #495057;
   --neutral-900:   #212529;
+  /* Semantic surface tokens — backed by the legacy --neutral-* vars in
+     light mode, overridden under [data-theme='dark'] below. Phase 1 of
+     dark mode (2026-05-10) covers app shell + high-traffic surfaces. */
+  --surface-page:     #ffffff;
+  --surface-card:     #ffffff;
+  --surface-muted:    #f8fafc;
+  --surface-border:   #e5e7eb;
+  --text-primary:     #0f172a;
+  --text-muted:       #6b7280;
+  --bg-gradient: linear-gradient(135deg, #f5f7ff 0%, #e8f5ff 50%, #fff5e8 100%);
+}
+
+/* Dark theme — Wave 3 of COWORK-BRIEF-uat-continuation-v1.
+   Applied when <html data-theme="dark">, set either by the user (light
+   or dark preference) or by the no-FOUC script when preference is auto
+   and OS prefers-color-scheme is dark. Brand accent colours
+   (teal, coral, gold, green) stay the same — only surfaces darken. */
+[data-theme='dark'] {
+  --surface-page:     #0F1B2D;             /* brand.navy */
+  --surface-card:     hsl(220 65% 12%);
+  --surface-muted:    hsl(220 65% 15%);
+  --surface-border:   hsl(220 65% 18%);
+  --text-primary:     #F8FAFC;
+  --text-muted:       hsl(220 50% 65%);
+  --bg-gradient: linear-gradient(135deg, #0F1B2D 0%, hsl(220 65% 10%) 50%, #0F1B2D 100%);
+}
+
+/* Background-gradient utility used by the fixed <div> in layout.tsx.
+   Light and dark variants picked up automatically via --bg-gradient. */
+.icareeros-bg-gradient {
+  background: var(--bg-gradient);
 }
 
 html { scroll-behavior: smooth; }
 
 body {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  color: var(--neutral-900);
-  background: var(--neutral-100);
+  color: var(--text-primary);
+  background: var(--surface-page);
   line-height: 1.6;
   /* overflow-x: clip is Safari/sticky-safe; legacy `hidden` breaks position: sticky
      on aside in Safari, leading to mis-aligned click hit-tests on the sidebar. */
@@ -94,3 +125,92 @@ body {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Wave 3 / dark mode Phase 1 — app shell overrides ─────────────────
+   These are the surfaces the user sees on every page: top bar, sidebar,
+   primary card containers. Tailwind utility classes used on these surfaces
+   get an attribute-based override here so we don't have to add `dark:`
+   prefixes to hundreds of components in Phase 1. Phase 2 (Sprint 2) will
+   replace these with explicit dark: utilities. */
+
+[data-theme='dark'] .icareeros-topbar {
+  background: rgba(15, 27, 45, 0.92) !important;
+  border-bottom-color: hsl(220 65% 18%) !important;
+}
+
+[data-theme='dark'] aside.icareeros-sidebar,
+[data-theme='dark'] aside.icareeros-sidebar nav {
+  background: var(--surface-card) !important;
+  border-color: var(--surface-border) !important;
+}
+
+[data-theme='dark'] aside.icareeros-sidebar a,
+[data-theme='dark'] aside.icareeros-sidebar button,
+[data-theme='dark'] aside.icareeros-sidebar span,
+[data-theme='dark'] aside.icareeros-sidebar p {
+  color: var(--text-primary);
+}
+
+/* Phase 1 surfaces — dashboard, settings/*, legal/* get dark variants
+   on common Tailwind utility classes by attribute selector. Components
+   that use these utilities in those routes pick up dark surfaces
+   without per-component `dark:` prefixes. */
+[data-theme='dark'] .dark-shell-bg-white {
+  background-color: var(--surface-card) !important;
+}
+[data-theme='dark'] .dark-shell-text {
+  color: var(--text-primary) !important;
+}
+[data-theme='dark'] .dark-shell-text-muted {
+  color: var(--text-muted) !important;
+}
+[data-theme='dark'] .dark-shell-border {
+  border-color: var(--surface-border) !important;
+}
+
+/* ── Wave 3 / dark mode Phase 1 — utility-class overrides ─────────────
+   Tailwind compiles bg-white / text-gray-* / border-gray-* to literal
+   class rules. To get Phase 1 coverage without adding `dark:` prefixes
+   to hundreds of components, override the high-frequency utilities
+   when [data-theme='dark']. Only kicks in during dark mode — light mode
+   is unchanged. Phase 2 (Sprint 2) will replace these with explicit
+   `dark:` utilities per component for finer control. */
+[data-theme='dark'] .bg-white         { background-color: var(--surface-card)   !important; }
+[data-theme='dark'] .bg-gray-50       { background-color: var(--surface-muted)  !important; }
+[data-theme='dark'] .bg-gray-100      { background-color: var(--surface-muted)  !important; }
+[data-theme='dark'] .text-gray-900    { color: var(--text-primary) !important; }
+[data-theme='dark'] .text-gray-800    { color: var(--text-primary) !important; }
+[data-theme='dark'] .text-gray-700    { color: hsl(220 50% 80%)    !important; }
+[data-theme='dark'] .text-gray-600    { color: var(--text-muted)   !important; }
+[data-theme='dark'] .text-gray-500    { color: var(--text-muted)   !important; }
+[data-theme='dark'] .text-gray-400    { color: hsl(220 50% 55%)    !important; }
+[data-theme='dark'] .border-gray-100  { border-color: var(--surface-border) !important; }
+[data-theme='dark'] .border-gray-200  { border-color: var(--surface-border) !important; }
+[data-theme='dark'] .border-gray-300  { border-color: hsl(220 65% 24%)      !important; }
+[data-theme='dark'] .divide-gray-100 > * + * { border-color: var(--surface-border) !important; }
+[data-theme='dark'] .divide-gray-200 > * + * { border-color: var(--surface-border) !important; }
+
+/* Input fields — keep them readable in dark mode without re-styling every
+   <input>. White-background inputs flip to the muted surface so text stays
+   legible. Brand-coloured accents (focus rings, primary buttons) keep their
+   light-mode look — that's intentional. */
+[data-theme='dark'] input,
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  background-color: var(--surface-muted);
+  color: var(--text-primary);
+  border-color: var(--surface-border);
+}
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: hsl(220 50% 55%);
+}
+
+/* Brand-accent backgrounds (bg-brand-50 etc.) stay BRIGHT in dark mode by
+   default. That's actually fine — they're meant to call attention. But the
+   text on them needs to flip from text-brand-700/800 to a lighter shade to
+   keep contrast. */
+[data-theme='dark'] .bg-brand-50 { background-color: hsl(192 80% 18%) !important; }
+[data-theme='dark'] .text-brand-700 { color: hsl(192 70% 70%) !important; }
+[data-theme='dark'] .text-brand-800 { color: hsl(192 70% 65%) !important; }
+[data-theme='dark'] .text-brand-900 { color: hsl(192 70% 75%) !important; }

@@ -632,7 +632,7 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
       {/* Desktop sidebar — sits below 56 px AppTopBar */}
       <aside
         aria-label="Main sidebar"
-        className="hidden md:flex flex-col shrink-0 shadow-sm bg-white border-r border-gray-200"
+        className="icareeros-sidebar hidden md:flex flex-col shrink-0 shadow-sm bg-white border-r border-gray-200"
         style={{
           position: "sticky",
           top: 56,
@@ -655,7 +655,7 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
           aria-label="Navigation drawer"
         >
           <div
-            className="flex flex-col bg-white border-r border-gray-200 shadow-xl overflow-hidden"
+            className="icareeros-sidebar flex flex-col bg-white border-r border-gray-200 shadow-xl overflow-hidden"
             style={{ width: 256, height: "100%" }}
             onClick={e => e.stopPropagation()}
           >

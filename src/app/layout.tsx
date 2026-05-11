@@ -3,6 +3,8 @@ import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { CookieConsent } from "@/components/legal/CookieConsent";
 import { GlobalLegalFooter } from "@/components/legal/GlobalLegalFooter";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { NO_FOUC_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: "iCareerOS — Your AI Career Operating System",
@@ -60,6 +62,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/*
+          No-FOUC theme bootstrap — sets <html data-theme="..."> from
+          localStorage (or OS prefers-color-scheme for auto) BEFORE the
+          React tree paints. Without this, users who chose dark mode would
+          see a light flash on every page load.
+
+          See src/lib/theme.ts → NO_FOUC_SCRIPT for the full script body.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: NO_FOUC_SCRIPT }} />
+
         {/* Preconnect to Supabase for faster cold-start round trips */}
         <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} />
         <link
@@ -77,14 +89,14 @@ export default function RootLayout({
           the sidebar and causes clicks to misalign with rendered UI.
           The gradient is rendered as a sibling fixed <div> below instead.
         */}
-        <body className="min-h-screen text-gray-900 antialiased">
+        <body className="min-h-screen text-gray-900 antialiased dark:text-[#F8FAFC]">
         <div
           aria-hidden="true"
+          className="icareeros-bg-gradient"
           style={{
             position: "fixed",
             inset: 0,
             zIndex: -1,
-            background: "linear-gradient(135deg, #f5f7ff 0%, #e8f5ff 50%, #fff5e8 100%)",
             pointerEvents: "none",
           }}
         />
@@ -95,7 +107,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <I18nProvider>{children}</I18nProvider>
+        <ThemeProvider><I18nProvider>{children}</I18nProvider></ThemeProvider>
         <GlobalLegalFooter />
         <CookieConsent />
       </body>

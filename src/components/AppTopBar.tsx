@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Props {
   onMenuClick?: () => void;
@@ -83,6 +84,7 @@ export function AppTopBar({ onMenuClick }: Props) {
 
   return (
     <header
+      className="icareeros-topbar"
       style={{
         position: "fixed",
         top: 0, left: 0, right: 0,
@@ -200,6 +202,9 @@ export function AppTopBar({ onMenuClick }: Props) {
             aria-hidden="true"
           />
         )}
+
+        {/* Theme toggle — Wave 3, 2026-05-10. Compact on small screens. */}
+        <ThemeToggle compact />
 
         {/* Settings link */}
         <a
