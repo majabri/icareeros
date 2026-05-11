@@ -341,7 +341,15 @@ QUALITY
         .or("is_flagged.is.null,is_flagged.eq.false")
         .order("first_seen_at", { ascending: false })
         .limit(30);
-      if (((up?.work_mode as string | null) ?? "").toLowerCase() === "remote") {
+      // user_profiles.work_mode is an ARRAY column (e.g. ['remote'],
+      // ['hybrid','onsite']). The earlier `as string` cast lied — at runtime
+      // .toLowerCase() on an array TypeErrors. UAT 2026-05-11 saw
+      // /api/jobs/agent return 500 with that exact stack.
+      const workModes = Array.isArray(up?.work_mode)
+        ? (up!.work_mode as unknown as string[])
+        : [];
+      const wantsRemote = workModes.some(m => typeof m === "string" && m.toLowerCase() === "remote");
+      if (wantsRemote) {
         q = q.eq("is_remote", true);
       }
       const { data: fallbackRows, error: fallbackErr } = await q;
