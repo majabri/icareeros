@@ -303,7 +303,7 @@ export default function InterviewPage() {
       : null;
     return (
       <div className="min-h-screen px-4 py-8">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center gap-3">
             <button onClick={() => setHistorySession(null)} className="text-sm text-gray-500 hover:text-gray-700">
               ← Back
@@ -357,7 +357,7 @@ export default function InterviewPage() {
   if (phase === "setup") {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-12 pb-16">
-        <div className="max-w-lg mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="mb-7 text-center">
               <div className="text-4xl mb-3">🎤</div>
@@ -476,7 +476,7 @@ export default function InterviewPage() {
   if (phase === "prep") {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 pb-16">
-        <div className="max-w-2xl mx-auto space-y-5">
+        <div className="max-w-7xl mx-auto space-y-5">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setPhase("setup")}
@@ -521,7 +521,7 @@ export default function InterviewPage() {
     const fb = parseFinalFeedback(finalMessage);
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-12 pb-16">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           {/* Score card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
             <div className="text-4xl mb-3">🏆</div>
@@ -616,7 +616,7 @@ export default function InterviewPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {displayMessages.map((msg, i) => (
             <MessageBubble key={i} msg={msg} />
           ))}
@@ -644,7 +644,7 @@ export default function InterviewPage() {
       </div>
 
       <div className="bg-white border-t border-gray-200 px-4 py-3 shrink-0">
-        <div className="max-w-2xl mx-auto flex gap-3 items-end">
+        <div className="max-w-7xl mx-auto flex gap-3 items-end">
           <textarea
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
