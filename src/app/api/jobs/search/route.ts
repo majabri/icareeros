@@ -22,6 +22,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import type { OpportunityResult } from "@/services/opportunityTypes";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 import { chaseApplyUrlsBatch }    from "@/services/jobs/applyUrlChaser";
 
@@ -165,6 +166,11 @@ export async function POST(req: Request) {
       });
     }
 
+    // Capture user.id here so the nested buildQueryVariants closure has
+    // a non-null value (TypeScript loses the narrowing inside async
+    // functions even after the `if (!user) return 401` guard above).
+    const authedUserId = user.id;
+
     // ── W4-B-2 (UAT 2026-05-10): multi-query fan-out for manual search ──
     // Single Adzuna query returned 1-2 results too often. Fan-out into:
     //   Q1: exact title (original params.what)
@@ -201,7 +207,7 @@ export async function POST(req: Request) {
           const cpRow = await supabase
             .from("career_profiles")
             .select("headline")
-            .eq("user_id", user.id)
+            .eq("user_id", authedUserId)
             .maybeSingle();
           const headline = (cpRow.data?.headline as string | null)?.trim();
           if (headline && headline.length > 0 && headline.length < 80) {
@@ -228,7 +234,7 @@ export async function POST(req: Request) {
     // raw totals (which may double-count) for transparency; UI cares about
     // the unique count anyway.
     const seenKeys = new Set<string>();
-    const mergedOpps: typeof variantResults[number]["opportunities"] = [];
+    const mergedOpps: OpportunityResult[] = [];
     let rawTotal = 0;
     let anyFallback = false;
     for (const vr of variantResults) {
