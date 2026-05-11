@@ -62,7 +62,7 @@ const STAGE_ORDER: CareerOsStage[] = [
 ];
 
 type SubItem = { href: string; label: string };
-type NavItem = { href: string; label: string; icon: IconKey; children?: SubItem[] };
+type NavItem = { href: string; label: string; icon: IconKey; children?: SubItem[]; comingSoon?: boolean };
 type StageSection = {
   stage: CareerOsStage;
   num: number;
@@ -91,7 +91,7 @@ const STAGES: StageSection[] = [
     stage: "act", num: 4, label: "Act", icon: "jobs",
     items: [
       { href: "/jobs",         label: "Opportunities", icon: "jobs"       },
-      { href: "/auto-apply",   label: "Autopilot",     icon: "autopilot"  },
+      { href: "/auto-apply",   label: "Autopilot",     icon: "autopilot", comingSoon: true },
       { href: "/applications", label: "Pipeline",      icon: "pipeline"   },
       { href: "/interview",    label: "Interview",     icon: "interview"  },
       { href: "/offers",       label: "Offer Desk",    icon: "offers"     },
@@ -103,7 +103,7 @@ const STAGES: StageSection[] = [
   },
   {
     stage: "achieve", num: 6, label: "Achieve", icon: "achieve",
-    items: [{ href: "/career", label: "Flight Plan", icon: "achieve" }],
+    items: [{ href: "/career", label: "Flight Plan", icon: "achieve", comingSoon: true }],
   },
 ];
 
@@ -491,6 +491,31 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
                         >
                           <span className="text-gray-300"><Ic d={ICONS[item.icon]} /></span>
                           {show && <span>{item.label}</span>}
+                        </div>
+                      );
+                    }
+
+                    // Per-item "Coming soon" — disabled, no nav, Soon pill (UAT 2026-05-10)
+                    if (item.comingSoon) {
+                      return (
+                        <div
+                          key={item.href}
+                          role="button"
+                          aria-disabled="true"
+                          tabIndex={-1}
+                          title={show ? `${item.label} — Coming soon` : item.label}
+                          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium text-gray-400 cursor-default
+                            ${!show ? "justify-center px-2" : ""}`}
+                        >
+                          <span className="text-gray-300"><Ic d={ICONS[item.icon]} /></span>
+                          {show && (
+                            <>
+                              <span className="flex-1">{item.label}</span>
+                              <span className="text-[8px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full leading-none">
+                                Soon
+                              </span>
+                            </>
+                          )}
                         </div>
                       );
                     }
