@@ -22,6 +22,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import type { OpportunityResult } from "@/services/opportunityTypes";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 import { chaseApplyUrlsBatch }    from "@/services/jobs/applyUrlChaser";
 
@@ -165,7 +166,93 @@ export async function POST(req: Request) {
       });
     }
 
-    const result = await searchAdzuna(params);
+    // Capture user.id here so the nested buildQueryVariants closure has
+    // a non-null value (TypeScript loses the narrowing inside async
+    // functions even after the `if (!user) return 401` guard above).
+    const authedUserId = user.id;
+
+    // ── W4-B-2 (UAT 2026-05-10): multi-query fan-out for manual search ──
+    // Single Adzuna query returned 1-2 results too often. Fan-out into:
+    //   Q1: exact title (original params.what)
+    //   Q2: seniority variant — strips a Senior/Junior/Sr/Jr/Lead prefix if
+    //       present, or adds Senior if not, to widen relevant matches.
+    //   Q3: related title from the user's career_profiles.headline when
+    //       available, so a "Product Manager" search also surfaces the
+    //       user's adjacent target. Skipped if headline is empty or echoes
+    //       params.what.
+    // Results are merged + deduped (by URL fallback to company::title).
+    async function buildQueryVariants(baseWhat: string): Promise<string[]> {
+      const seen = new Set<string>();
+      const variants: string[] = [];
+      const push = (s: string) => {
+        const norm = s.trim().toLowerCase();
+        if (!norm || seen.has(norm)) return;
+        seen.add(norm);
+        variants.push(s.trim());
+      };
+      push(baseWhat);
+
+      // Q2: seniority swap
+      const SENIORITY_RE = /^(senior|sr\.?|junior|jr\.?|lead|staff|principal|chief)\s+/i;
+      const stripped = baseWhat.replace(SENIORITY_RE, "").trim();
+      if (stripped !== baseWhat.trim()) {
+        push(stripped);
+      } else {
+        push(`Senior ${baseWhat}`);
+      }
+
+      // Q3: related title from headline
+      if (mode === "manual") {
+        try {
+          const cpRow = await supabase
+            .from("career_profiles")
+            .select("headline")
+            .eq("user_id", authedUserId)
+            .maybeSingle();
+          const headline = (cpRow.data?.headline as string | null)?.trim();
+          if (headline && headline.length > 0 && headline.length < 80) {
+            // Take the first comma-or-pipe-separated chunk as the title-ish part.
+            const firstChunk = headline.split(/[|,—-]/)[0]?.trim();
+            if (firstChunk) push(firstChunk);
+          }
+        } catch { /* not fatal — keep the 1-2 variants we have */ }
+      }
+      return variants;
+    }
+
+    const variants = await buildQueryVariants(params.what ?? "");
+    const variantResults = await Promise.all(
+      variants.map((what) =>
+        searchAdzuna({ ...params, what, resultsPerPage: 10 }).catch((e) => {
+          console.warn(`[/api/jobs/search] variant "${what}" failed:`, e instanceof Error ? e.message : e);
+          return { opportunities: [], total: 0, fallback: true };
+        }),
+      ),
+    );
+
+    // Merge + dedupe across variants. Tag the result `total` with the sum of
+    // raw totals (which may double-count) for transparency; UI cares about
+    // the unique count anyway.
+    const seenKeys = new Set<string>();
+    const mergedOpps: OpportunityResult[] = [];
+    let rawTotal = 0;
+    let anyFallback = false;
+    for (const vr of variantResults) {
+      if (vr.fallback) anyFallback = true;
+      rawTotal += vr.total;
+      for (const opp of vr.opportunities) {
+        const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          mergedOpps.push(opp);
+        }
+      }
+    }
+    const result = {
+      opportunities: mergedOpps,
+      total:         rawTotal,
+      fallback:      anyFallback,
+    };
 
     // Resolve direct apply-on-company URLs from descriptions, then chase
     // the Adzuna redirect to its actual destination so the Apply button
