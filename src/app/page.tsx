@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }         from "@/components/landing/LandingNav";
 import { HeroSection }        from "@/components/landing/HeroSection";
 import { SocialProofSection } from "@/components/landing/SocialProofSection";
@@ -26,6 +27,8 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <>
+      <ConstellationBackground />
+      <div style={{ position: "relative", zIndex: 1 }}>
       <LandingNav />
       <main>
         <HeroSection />
@@ -38,6 +41,7 @@ export default function LandingPage() {
         <CTASection />
       </main>
       <LandingFooter />
+      </div>
     </>
   );
 }
