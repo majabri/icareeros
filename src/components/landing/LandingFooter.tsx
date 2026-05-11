@@ -11,7 +11,7 @@ export function LandingFooter() {
     <footer style={{
       background:"linear-gradient(135deg,var(--neutral-900) 0%,#1a1f2e 100%)",
       color:"var(--neutral-100)", padding:"3rem 1.5rem", textAlign:"center",
-      borderTop:"2px solid var(--primary)",
+      borderTop:"2px solid var(--accent, var(--primary))",
     }}>
       <p style={{ color:"rgba(255,255,255,0.8)", fontSize:"0.9rem", marginBottom: "1rem" }}>
         &copy; {new Date().getFullYear()} iCareerOS. Your career. Your journey. Your success.

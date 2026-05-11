@@ -27,8 +27,8 @@ export function LandingNav() {
 
   return (
     <nav style={{
-      background: "var(--neutral-100)",
-      borderBottom: "1px solid var(--neutral-300)",
+      background: "var(--surface-page)",
+      borderBottom: "1px solid var(--surface-border)",
       position: "sticky", top: 0, zIndex: 100,
       boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
       transition: "box-shadow 0.3s",
@@ -52,11 +52,11 @@ export function LandingNav() {
           {NAV_LINKS.map(([href, label]) => (
             <li key={href} className="nav-link-item">
               <a href={href} style={{
-                textDecoration: "none", color: "var(--neutral-700)",
+                textDecoration: "none", color: "var(--text-secondary)",
                 fontWeight: 500, fontSize: "0.95rem", transition: "color 0.3s",
               }}
               onMouseEnter={e => (e.currentTarget.style.color = "var(--primary)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--neutral-700)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-secondary)")}
               >{label}</a>
             </li>
           ))}
@@ -111,7 +111,7 @@ export function LandingNav() {
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             style={{
               background: "none", border: "none", cursor: "pointer",
-              padding: "0.4rem", color: "var(--neutral-700)",
+              padding: "0.4rem", color: "var(--text-secondary)",
             }}
           >
             {menuOpen ? (
@@ -130,8 +130,8 @@ export function LandingNav() {
       {/* Mobile dropdown menu */}
       {menuOpen && (
         <div style={{
-          borderTop: "1px solid var(--neutral-300)",
-          background: "var(--neutral-100)",
+          borderTop: "1px solid var(--surface-border)",
+          background: "var(--surface-page)",
           padding: "1rem 1.5rem 1.5rem",
         }} className="nav-mobile-menu">
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0" }}>
@@ -139,8 +139,8 @@ export function LandingNav() {
               <li key={href}>
                 <a href={href} onClick={() => setMenuOpen(false)} style={{
                   display: "block", padding: "0.85rem 0",
-                  borderBottom: "1px solid var(--neutral-300)",
-                  textDecoration: "none", color: "var(--neutral-700)",
+                  borderBottom: "1px solid var(--surface-border)",
+                  textDecoration: "none", color: "var(--text-secondary)",
                   fontWeight: 500, fontSize: "1rem",
                 }}>{label}</a>
               </li>
