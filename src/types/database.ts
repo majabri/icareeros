@@ -106,28 +106,31 @@ export type Database = {
       }
       email_preferences: {
         Row: {
-          daily_job_alerts: boolean
           id: string
-          min_match_score: number
-          updated_at: string
           user_id: string
+          job_alerts: boolean
           weekly_insights: boolean
+          marketing: boolean
+          unsubscribe_token: string
+          updated_at: string
         }
         Insert: {
-          daily_job_alerts?: boolean
           id?: string
-          min_match_score?: number
-          updated_at?: string
           user_id: string
+          job_alerts?: boolean
           weekly_insights?: boolean
+          marketing?: boolean
+          unsubscribe_token?: string
+          updated_at?: string
         }
         Update: {
-          daily_job_alerts?: boolean
           id?: string
-          min_match_score?: number
-          updated_at?: string
           user_id?: string
+          job_alerts?: boolean
           weekly_insights?: boolean
+          marketing?: boolean
+          unsubscribe_token?: string
+          updated_at?: string
         }
       }
       interview_schedules: {
