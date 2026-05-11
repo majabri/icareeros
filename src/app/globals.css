@@ -32,13 +32,17 @@
    and OS prefers-color-scheme is dark. Brand accent colours
    (teal, coral, gold, green) stay the same — only surfaces darken. */
 [data-theme='dark'] {
-  --surface-page:     #0F1B2D;             /* brand.navy */
-  --surface-card:     hsl(220 65% 12%);
-  --surface-muted:    hsl(220 65% 15%);
+  /* Phase 2 (2026-05-11): aligned with jabrisolution.com aesthetic —
+     near-black page background, brand-navy as the elevated card surface,
+     pure-white primary text. iCareerOS cyan accent stays unchanged
+     (close enough to JBS's #00f2ff that the family reads as one). */
+  --surface-page:     #050505;             /* JBS body bg, near-black */
+  --surface-card:     #0F1B2D;             /* iCareerOS brand.navy, elevated */
+  --surface-muted:    hsl(220 65% 8%);     /* between page and card */
   --surface-border:   hsl(220 65% 18%);
-  --text-primary:     #F8FAFC;
+  --text-primary:     #FFFFFF;             /* JBS bright white */
   --text-muted:       hsl(220 50% 65%);
-  --bg-gradient: linear-gradient(135deg, #0F1B2D 0%, hsl(220 65% 10%) 50%, #0F1B2D 100%);
+  --bg-gradient: linear-gradient(135deg, #050505 0%, #0F1B2D 50%, #050505 100%);
 }
 
 /* Background-gradient utility used by the fixed <div> in layout.tsx.
