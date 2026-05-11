@@ -11,8 +11,18 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
+        // JBS design-system: JetBrains Mono for tags / badges / code (2026-05-11)
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
       },
       colors: {
+        // JBS design-system palette (mirrors the CSS variables in globals.css).
+        // Available as Tailwind utilities — text-jbs-cyan / bg-jbs-cyan / etc.
+        // Only meaningful in dark mode; light mode keeps the brand-* scale.
+        "jbs-cyan":   "#00f2ff",
+        "jbs-red":    "#ff5f56",
+        "jbs-yellow": "#ffbd2e",
+        "jbs-green":  "#27c93f",
+        "jbs-bg":     "#050505",
         // iCareerOS brand palette — matches landing page CSS vars
         // Primary: #00d9ff (cyan)
         brand: {

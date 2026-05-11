@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* JBS design-system fonts (2026-05-11):
+   - Inter — body, weights 300/400/600/700/800 per JBS spec
+   - JetBrains Mono — monospaced tags (// SECTION_NAME), badges, code */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -32,16 +35,35 @@
    and OS prefers-color-scheme is dark. Brand accent colours
    (teal, coral, gold, green) stay the same — only surfaces darken. */
 [data-theme='dark'] {
-  /* Phase 2 (2026-05-11): aligned with jabrisolution.com aesthetic —
-     near-black page background, brand-navy as the elevated card surface,
-     pure-white primary text. iCareerOS cyan accent stays unchanged
-     (close enough to JBS's #00f2ff that the family reads as one). */
+  /* JBS design-system dark mode (2026-05-11) — full alignment with the
+     jabrisolution.com homepage system. iCareerOS dark mode IS now the JBS
+     aesthetic, with brand-navy as a complementary elevated card surface to
+     preserve identity. Light mode unchanged. */
+
+  /* Surfaces */
   --surface-page:     #050505;             /* JBS body bg, near-black */
-  --surface-card:     #0F1B2D;             /* iCareerOS brand.navy, elevated */
+  --surface-card:     #0F1B2D;             /* iCareerOS brand.navy, elevated card */
   --surface-muted:    hsl(220 65% 8%);     /* between page and card */
-  --surface-border:   hsl(220 65% 18%);
-  --text-primary:     #FFFFFF;             /* JBS bright white */
-  --text-muted:       hsl(220 50% 65%);
+  --surface-border:   rgba(0, 242, 255, 0.18); /* JBS cyan-tinted border, low alpha */
+  --surface-overlay:  rgba(5, 5, 5, 0.92); /* modal scrim + sticky-header bg */
+
+  /* Text hierarchy (JBS spec: white → light gray → muted gray) */
+  --text-primary:     #FFFFFF;
+  --text-secondary:   hsl(0 0% 75%);
+  --text-muted:       hsl(0 0% 55%);
+
+  /* Brand accent — JBS THE color */
+  --accent:           #00f2ff;             /* primary cyan */
+  --accent-hover:     hsl(184 100% 60%);   /* a touch warmer for hover */
+  --accent-faint:     rgba(0, 242, 255, 0.08); /* card-hover wash */
+
+  /* macOS-style section dots (red/yellow/green) — used as Career-OS
+     stage markers, status badges, and accent dots throughout the UI. */
+  --section-red:      #ff5f56;
+  --section-yellow:   #ffbd2e;
+  --section-green:    #27c93f;
+
+  /* Background gradient — dark mode hero / page wash */
   --bg-gradient: linear-gradient(135deg, #050505 0%, #0F1B2D 50%, #050505 100%);
 }
 
@@ -218,3 +240,140 @@ body {
 [data-theme='dark'] .text-brand-700 { color: hsl(192 70% 70%) !important; }
 [data-theme='dark'] .text-brand-800 { color: hsl(192 70% 65%) !important; }
 [data-theme='dark'] .text-brand-900 { color: hsl(192 70% 75%) !important; }
+
+
+/* ── JBS design-system primitives (2026-05-11) ───────────────────────────
+   Reusable component classes that match the jabrisolution.com homepage.
+   Mostly relevant in dark mode but the styles are theme-agnostic — light
+   mode keeps the existing CSS tokens, dark mode swaps to the JBS values
+   defined above. */
+
+/* `// EXEC_SUMMARY` style section tag — monospace, cyan, hairline outline */
+.icareeros-tag {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent, var(--primary));
+  border: 1px solid var(--accent, var(--primary));
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  display: inline-block;
+  line-height: 1;
+}
+[data-theme='dark'] .icareeros-tag {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-faint);
+}
+
+/* Section badges (IT / InfoSec / Partners / Recruiting style) — small,
+   monospace, uppercase, neutral background with cyan rule on hover. */
+.icareeros-section-badge {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, var(--text-primary));
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+[data-theme='dark'] .icareeros-section-badge:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Status dots (macOS traffic-light palette) — pair with .icareeros-tag
+   or section badges to communicate Career-OS stage state. */
+.icareeros-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.icareeros-status-dot--red    { background: var(--section-red,    #ff5f56); }
+.icareeros-status-dot--yellow { background: var(--section-yellow, #ffbd2e); }
+.icareeros-status-dot--green  { background: var(--section-green,  #27c93f); }
+
+/* Primary cyan button — JBS hero CTA style. Solid cyan fill,
+   black-on-cyan text, soft glow on hover. */
+.icareeros-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--accent, var(--primary));
+  color: #050505;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent, var(--primary));
+  text-decoration: none;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.icareeros-btn-primary:hover {
+  box-shadow: 0 0 24px var(--accent-faint, rgba(0, 242, 255, 0.25));
+  transform: translateY(-1px);
+}
+
+/* Secondary outline button — JBS 'Learn More' style. Cyan outline on
+   transparent, fills to cyan-faint on hover. */
+.icareeros-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--text-primary, #FFFFFF);
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.icareeros-btn-secondary:hover {
+  border-color: var(--accent, var(--primary));
+  color: var(--accent, var(--primary));
+  background: var(--accent-faint, rgba(0, 242, 255, 0.06));
+}
+
+/* Dark-mode override for the existing .btn / .btn-primary / .btn-secondary
+   classes used across landing page so they pick up the JBS look without
+   per-component edits. */
+[data-theme='dark'] .btn-primary {
+  background: var(--accent);
+  background-image: none;
+  color: #050505;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+[data-theme='dark'] .btn-primary:hover {
+  box-shadow: 0 0 24px var(--accent-faint);
+  transform: translateY(-2px);
+}
+[data-theme='dark'] .btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+[data-theme='dark'] .btn-secondary:hover {
+  background: var(--accent-faint);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
+}
+
+/* Focus ring — use JBS cyan in dark mode for consistency */
+[data-theme='dark'] :focus-visible {
+  outline-color: var(--accent);
+}
