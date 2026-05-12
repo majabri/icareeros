@@ -90,6 +90,19 @@ serve(async (req: Request) => {
     return json({ error: "method_not_allowed" }, 405);
   }
 
+  // Secret-header auth — verify_jwt is disabled on this function so the
+  // cron route can POST without a Supabase JWT. The `x-ingest-cron-secret`
+  // header is the only thing keeping the public URL from being open.
+  // When INGEST_CRON_SECRET is NOT set in the function env, we skip the
+  // check (handy for local dev + the one-shot Wave 4 dry-run probes).
+  const required = Deno.env.get("INGEST_CRON_SECRET");
+  if (required) {
+    const supplied = req.headers.get("x-ingest-cron-secret");
+    if (supplied !== required) {
+      return json({ error: "unauthorized" }, 401);
+    }
+  }
+
   let body: any = {};
   try { body = await req.json(); } catch { /* empty body is fine */ }
   const dryRun: boolean = body?.dry_run !== false;       // default true
