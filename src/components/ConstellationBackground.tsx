@@ -10,8 +10,8 @@ const COLORS = ["#00d9ff", "#00ff88", "#ffff00", "#ffa366", "#ff6b6b"];
 // FLASH_MS: how long the per-line flash effect lasts after the connect event.
 // 280ms ≈ 17 frames at 60fps — long enough to register, short enough to feel
 // snappy and not tail off.
-const CONNECT_DIST     = 200;          // px — same threshold for line drawing + flash trigger
-const FLASH_PROB       = 0.25;         // only ~25% of new connections actually flash; rest are silent
+const CONNECT_DIST     = 150;          // px — tighter radius = sparser network (was 200; ≈44% fewer connections)
+const FLASH_PROB       = 0.12;         // only ~12% of new connections flash (was 0.25)
 const FLASH_MS         = 350;          // settled fade — slightly longer than a sharp pop
 
 /**
@@ -142,9 +142,9 @@ export function ConstellationBackground() {
           }
 
           // Stroke 1: the steady particle-color line, alpha-boosted by flash.
-          ctx.globalAlpha = Math.min(1, baseAlpha + flashT * 0.22);  // gentler lift, was 0.55
+          ctx.globalAlpha = Math.min(1, baseAlpha + flashT * 0.14);  // softer lift, was 0.22
           ctx.strokeStyle = pts[i].color;
-          ctx.lineWidth   = 0.9 + flashT * 0.5;                     // 0.9 → 1.4px max, was 0.9 → 2.3px
+          ctx.lineWidth   = 0.9 + flashT * 0.3;                     // 0.9 → 1.2px max, was 0.9 → 1.4px
           ctx.beginPath();
           ctx.moveTo(pts[i].x, pts[i].y);
           ctx.lineTo(pts[j].x, pts[j].y);
@@ -154,9 +154,9 @@ export function ConstellationBackground() {
           // Gives the visual sensation of the line "lighting up" on connect
           // before settling back to its calm steady state.
           if (flashT > 0.01) {
-            ctx.globalAlpha = 0.35 * flashT;                          // dimmer overlay, was 0.85
+            ctx.globalAlpha = 0.20 * flashT;                          // dimmer overlay, was 0.35
             ctx.strokeStyle = "#FFFFFF";
-            ctx.lineWidth   = 0.5 + flashT * 0.3;                     // narrower, was 0.6 + 0.8
+            ctx.lineWidth   = 0.5 + flashT * 0.15;                    // narrower, was 0.5 + 0.3
             ctx.beginPath();
             ctx.moveTo(pts[i].x, pts[i].y);
             ctx.lineTo(pts[j].x, pts[j].y);
