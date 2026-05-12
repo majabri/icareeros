@@ -6,6 +6,7 @@ import type { OpportunityResult } from "@/services/opportunityTypes";
 import { OutreachCard } from "./OutreachCard";
 import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { CoverLetterModal } from "./CoverLetterModal";
+import { SalaryBadge } from "./SalaryBadge";
 
 interface OpportunityCardProps {
   opportunity: OpportunityResult;
@@ -114,9 +115,21 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
               {opp.location ? ` · ${opp.location}` : ""}
             </p>
           </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${fit.color}`}>
-            {fit.label}
-          </span>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fit.color}`}>
+              {fit.label}
+            </span>
+            {typeof opp.responseProbability === "number" && opp.responseProbability > 0 && (
+              <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold">
+                Response {opp.responseProbability}%
+              </span>
+            )}
+            {typeof opp.decisionScore === "number" && opp.decisionScore > 0 && (
+              <span className="rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold">
+                Decision {opp.decisionScore}/100
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Tags row */}
@@ -124,6 +137,7 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
           {opp.type && <Tag>{opp.type}</Tag>}
           {opp.is_remote && <Tag color="sky">Remote</Tag>}
           {salary && <Tag color="green">{salary}</Tag>}
+          {salary && <SalaryBadge salary={salary} title={opp.title} />}
           {/*
             Source tag is intentionally hidden. Aggregator names
             (Adzuna, Indeed, etc.) are plumbing and must never reach
