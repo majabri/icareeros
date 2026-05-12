@@ -31,7 +31,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ── Seed companies (Wave 4) ────────────────────────────────────────────────
 
-type ATS = "greenhouse" | "lever" | "ashby" | "workday" | "career_page";
+type ATS = "greenhouse" | "lever" | "ashby" | "workday" | "career_page" | "careers_page_firecrawl";
 
 interface CompanyConfig {
   name: string;          // Display name for the `company` field.
@@ -52,10 +52,13 @@ const SEED_COMPANIES: CompanyConfig[] = [
   { name: "Notion",    slug: "notion",    ats: "ashby"      },
   { name: "OpenAI",    slug: "openai",    ats: "ashby"      },
   { name: "Linear",    slug: "linear",    ats: "ashby"      },
-  // Career page fallback — Airtable/Rippling/Retool have no public API.
-  { name: "Airtable",  slug: "airtable",  ats: "career_page", url: "https://airtable.com/careers" },
-  { name: "Rippling",  slug: "rippling",  ats: "career_page", url: "https://www.rippling.com/careers/jobs" },
-  { name: "Retool",    slug: "retool",    ats: "career_page", url: "https://retool.com/careers" },
+  // SPA careers pages (Wave 4 backlog → Task 3 of post-Wave-5).
+  // These render with client-side React; the inline-HTML regex extractor
+  // returns zero anchors. We use Firecrawl to render-to-markdown server-
+  // side and parse links from the markdown instead.
+  { name: "Airtable",  slug: "airtable",  ats: "careers_page_firecrawl", url: "https://airtable.com/careers" },
+  { name: "Rippling",  slug: "rippling",  ats: "careers_page_firecrawl", url: "https://www.rippling.com/careers" },
+  { name: "Retool",    slug: "retool",    ats: "careers_page_firecrawl", url: "https://retool.com/careers" },
 ];
 
 // ── Shape we normalize every scraper output into ───────────────────────────
@@ -151,6 +154,7 @@ async function scrapeCompany(c: CompanyConfig, max: number): Promise<ScrapedJob[
     case "ashby":       return scrapeAshby(c, max);
     case "workday":     return scrapeWorkday(c, max);
     case "career_page": return scrapeCareerPage(c, max);
+    case "careers_page_firecrawl": return scrapeCareersPageFirecrawl(c, max);
   }
 }
 
@@ -329,6 +333,78 @@ async function scrapeCareerPage(c: CompanyConfig, max: number): Promise<ScrapedJ
       title,
       company:          c.name,
       description:      "",
+      location:         "",
+      is_remote:        false,
+      job_type:         "full_time",
+      salary_min:       null,
+      salary_max:       null,
+      salary_currency:  null,
+      apply_url:        full,
+      posted_at:        new Date().toISOString(),
+    });
+  }
+  return out;
+}
+
+async function scrapeCareersPageFirecrawl(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
+  const FIRECRAWL_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!FIRECRAWL_KEY) throw new Error(`Firecrawl ${c.slug} → missing FIRECRAWL_API_KEY`);
+  const target = c.url || `https://${c.slug}.com/careers`;
+
+  const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${FIRECRAWL_KEY}`,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify({
+      url:             target,
+      formats:         ["markdown"],
+      onlyMainContent: true,
+      // The careers page on each of these SPAs is a single index of all
+      // open roles; we don't need link-crawl depth.
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Firecrawl ${c.slug} → ${res.status} ${t.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const md = (data?.data?.markdown ?? data?.markdown ?? "") as string;
+  if (!md) throw new Error(`Firecrawl ${c.slug} → empty markdown response`);
+
+  // Parse job links from the rendered markdown. Each company structures
+  // its careers index slightly differently, so we accept anything that
+  // looks like a markdown link whose href points at a /job, /career,
+  // /position, /opening, or /role path (or a known ATS hostname embedded
+  // in the markdown).
+  const out: ScrapedJob[] = [];
+  const seen = new Set<string>();
+  const linkRe = /\[([^\]]{4,140})\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(md)) !== null && out.length < max) {
+    const title = m[1].replace(/\s+/g, " ").trim();
+    const href  = m[2].trim();
+    // Heuristic accept: href must look like a job page; title must be
+    // longer than a typical nav label and not obviously a footer link.
+    const looksLikeJob =
+      /\/(job|jobs|career|careers|position|positions|opening|openings|role|roles)\b/i.test(href)
+      || /greenhouse\.io|lever\.co|ashbyhq|workdayjobs|smartrecruiters|workable/i.test(href);
+    if (!looksLikeJob) continue;
+    if (seen.has(href)) continue;
+    // Reject footer / navigation patterns.
+    if (/^(home|about|contact|privacy|terms|press|blog|product|pricing|login|sign in|sign up)$/i.test(title)) continue;
+    seen.add(href);
+
+    const full = href.startsWith("http") ? href : new URL(href, target).toString();
+    out.push({
+      source:           "career_page",
+      source_id:        `cp-${c.slug}-${hash(href)}`,
+      title,
+      company:          c.name,
+      description:      "",   // page index doesn't carry per-role descriptions; OK
       location:         "",
       is_remote:        false,
       job_type:         "full_time",
