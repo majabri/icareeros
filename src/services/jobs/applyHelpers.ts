@@ -48,7 +48,7 @@ export function resolveApplyTarget(opp: Pick<
     return {
       mode:           "direct",
       url:            chased,
-      label:          `✈ Apply at ${company} →`,
+      label:          "✈ Apply →",  // unified short label per Amir 2026-05-12 (was "Apply at <Company>")
       pipelineStatus: "applying",
       hostname,
     };

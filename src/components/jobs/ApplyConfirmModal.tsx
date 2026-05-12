@@ -5,7 +5,7 @@
  *
  * Behaviour (per COWORK-BRIEF-jobs-experience-v1 §Wave 3.5):
  *   - Direct mode (apply_url_company present):
- *       Title: "Ready to apply at <Company>?"
+ *       Title: "Ready to apply?"  (was "Ready to apply at <Company>?")
  *       Subtitle: destination hostname
  *       Two actions: [Generate cover letter first] [Apply now]
  *   - Research mode (no chased URL):
@@ -89,7 +89,7 @@ export function ApplyConfirmModal({ opportunity, target, onClose, onCoverLetter,
         <header className="space-y-1">
           <h2 id="apply-confirm-title" className="text-lg font-semibold">
             {direct
-              ? `Ready to apply at ${companyName}?`
+              ? "Ready to apply?"
               : `Let's find the application for ${companyName}`}
           </h2>
           <p style={{ color: "var(--text-muted, #6b7280)" }} className="text-sm">
@@ -113,7 +113,7 @@ export function ApplyConfirmModal({ opportunity, target, onClose, onCoverLetter,
           >
             {submitting
               ? "Saving…"
-              : direct ? `✈ Apply at ${companyName}` : "🔎 Find & Apply on Google"}
+              : direct ? "✈ Apply" : "🔎 Find & Apply on Google"}
           </button>
           {onCoverLetter && opportunity.id && (
             <button

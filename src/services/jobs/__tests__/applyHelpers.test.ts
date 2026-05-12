@@ -17,7 +17,7 @@ describe("resolveApplyTarget", () => {
     expect(r.mode).toBe("direct");
     expect(r.pipelineStatus).toBe("applying");
     expect(r.url).toContain("greenhouse.io/stripe");
-    expect(r.label).toBe("✈ Apply at Stripe →");
+    expect(r.label).toBe("✈ Apply →");  // unified label per Amir 2026-05-12
     expect(r.hostname).toBe("boards.greenhouse.io");
   });
 
