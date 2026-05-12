@@ -6,7 +6,7 @@ import {
   classifySalary,
   parseSalaryNumber,
   estimateMarketRate,
-} from "@/components/jobs/SalaryBadge";
+} from "@/components/jobs/salaryClassifier";
 
 describe("SalaryBadge helpers", () => {
   it("parseSalaryNumber returns midpoint for a range", () => {
