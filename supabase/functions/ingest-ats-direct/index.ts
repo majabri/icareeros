@@ -13,9 +13,12 @@
  *   • Workday     — POST /wday/cxs/{slug}/jobs
  *   • Career Page — regex job-link extraction fallback
  *
- * Seed companies (10): Stripe, Notion, Linear, Vercel, Anthropic, OpenAI,
- * Figma, Airtable, Retool, Rippling. Slugs are best-guess from the
- * brief — Wave 4 CHECKPOINT verifies them before any DB write.
+ * Seed companies (7 — verified ATS APIs only):
+ *   Greenhouse:  Stripe, Vercel, Anthropic, Figma
+ *   Ashby:       Notion, OpenAI, Linear
+ * Airtable / Rippling / Retool were probed but expose only search-interface
+ * marketing pages (no public job-listings index, even after JS rendering).
+ * They remain in the Adzuna pipeline + Google fallback.
  *
  * Invocation modes:
  *   POST { dry_run: true }                  — fetch + return, NO writes
@@ -52,13 +55,14 @@ const SEED_COMPANIES: CompanyConfig[] = [
   { name: "Notion",    slug: "notion",    ats: "ashby"      },
   { name: "OpenAI",    slug: "openai",    ats: "ashby"      },
   { name: "Linear",    slug: "linear",    ats: "ashby"      },
-  // SPA careers pages (Wave 4 backlog → Task 3 of post-Wave-5).
-  // These render with client-side React; the inline-HTML regex extractor
-  // returns zero anchors. We use Firecrawl to render-to-markdown server-
-  // side and parse links from the markdown instead.
-  { name: "Airtable",  slug: "airtable",  ats: "careers_page_firecrawl", url: "https://airtable.com/careers" },
-  { name: "Rippling",  slug: "rippling",  ats: "careers_page_firecrawl", url: "https://www.rippling.com/careers" },
-  { name: "Retool",    slug: "retool",    ats: "careers_page_firecrawl", url: "https://retool.com/careers" },
+  // Note: Airtable / Rippling / Retool were probed for ATS/career-page
+  // ingestion but ALL THREE expose only search-interface marketing pages
+  // (no public job-listings index — actual roles are loaded over XHR
+  // from internal APIs). Even with Firecrawl's JS rendering the page
+  // markdown contains only nav + filter chrome, no job records. Dropped
+  // from this seed; they remain searchable via the Adzuna pipeline +
+  // Google "Find & Apply" fallback. Revisit after real-user data shows
+  // demand. — see docs/specs/COWORK-BRIEF-jobs-experience-v1.md backlog.
 ];
 
 // ── Shape we normalize every scraper output into ───────────────────────────
