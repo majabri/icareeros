@@ -426,7 +426,7 @@ QUALITY
         ...o,
         quality_score: q.quality_score,
         is_flagged:    (o.is_flagged ?? false) || q.high_risk,
-        flag_reasons:  mergedFlags.length > 0 ? mergedFlags : null,
+        flag_reasons:  mergedFlags.length > 0 ? mergedFlags : undefined,
       }];
     });
     const droppedByQuality = beforeQuality - qualityFiltered.length;
@@ -442,7 +442,11 @@ QUALITY
       remotePreferred: Array.isArray(up?.work_mode) && (up!.work_mode as unknown as string[]).some(m => typeof m === "string" && m.toLowerCase() === "remote"),
     });
     enrichedCurated.sort((a, b) => (b.decisionScore ?? 0) - (a.decisionScore ?? 0));
-    opportunitiesWithIds = enrichedCurated as typeof opportunitiesWithIds;
+    // Strip the EnrichedJob-only `flags` field (structured FakeJobFlag[])
+    // before assigning back — `flag_reasons` already carries the human
+    // labels the UI uses, so the structured `flags` is redundant on the
+    // wire. `as unknown as` widens through the shape mismatch.
+    opportunitiesWithIds = enrichedCurated.map(({ flags: _flags, ...rest }) => rest) as unknown as typeof opportunitiesWithIds;
 
     return NextResponse.json({
       opportunities: opportunitiesWithIds,
