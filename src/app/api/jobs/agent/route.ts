@@ -353,7 +353,7 @@ QUALITY
       // remote, else open it up. Limit to recently-seen, active, non-flagged.
       let q = fallbackClient
         .from("opportunities")
-        .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, is_flagged, flag_reasons, quality_score")
+        .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, is_flagged, flag_reasons, quality_score, source")
         .eq("is_active", true)
         .or("is_flagged.is.null,is_flagged.eq.false")
         .order("first_seen_at", { ascending: false })
@@ -392,7 +392,12 @@ QUALITY
           is_flagged:       Boolean(r.is_flagged),
           flag_reasons:     (r.flag_reasons as string[] | null) ?? null,
           quality_score:    (r.quality_score as number | null) ?? null,
-          apply_url_company: null, // chase happens client-side via existing flow
+          // ATS-sourced rows are already a clean company URL — wire it to
+          // apply_url_company so the OpportunityCard renders the direct
+          // "Apply at <Company>" button instead of the Google fallback.
+          apply_url_company: (r.source as string | null) === "ats"
+            ? ((r.url as string | null) ?? null)
+            : null,
         })) as typeof opportunitiesWithIds;
       }
     }
