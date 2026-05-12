@@ -43,7 +43,7 @@
      preserve identity. Light mode unchanged. */
 
   /* Surfaces */
-  --surface-page:     #0F1B2D;             /* Unified brand-navy: body + chrome share this color (was #050505 — see PR opening "Unified background palette" 2026-05-12) */
+  --surface-page:     #0A1320;             /* Constellation field — one tonal step DARKER than chrome (#0F1B2D) so multicolored particles read maximally vibrant. Three-tier elevation: page #0A1320 → chrome #0F1B2D → cards #162338. */
   --surface-card:     #162338;             /* One tonal step lighter than the base — gives lift without a third hue */
   --surface-muted:    #0F1B2D;             /* Collapsed onto the base; no longer a separate midtone */
   --surface-border:   rgba(0, 242, 255, 0.18); /* JBS cyan-tinted hairline */
@@ -70,7 +70,7 @@
   --section-green:    #27c93f;
 
   /* Background gradient — dark mode hero / page wash */
-  --bg-gradient: linear-gradient(135deg, #0F1B2D 0%, #162338 50%, #0F1B2D 100%);  /* Unified palette gradient — base navy → lifted card → base navy */
+  --bg-gradient: linear-gradient(135deg, #0A1320 0%, #162338 50%, #0A1320 100%);  /* Three-tier gradient — page navy → lifted card → page navy */
 
   /* Legacy --neutral-* tokens — also flip in dark mode so inline styles
      across the landing sections (FAQ, Features, Problem, Lifecycle,
@@ -181,18 +181,17 @@ body {
    replace these with explicit dark: utilities. */
 
 [data-theme='dark'] .icareeros-topbar {
-  /* Unified: solid brand-navy, no alpha, no blur. The bottom hairline
-     is the only thing separating it from the body — same color, same
-     surface, marked by a single cyan line. */
-  background: var(--surface-page) !important;
+  /* Three-tier: chrome sits ONE step above the page so the colored
+     constellation particles can read against the deeper page navy.
+     Cyan hairline still defines the boundary. */
+  background: #0F1B2D !important;
   border-bottom: 1px solid var(--surface-border) !important;
 }
 
 [data-theme='dark'] aside.icareeros-sidebar,
 [data-theme='dark'] aside.icareeros-sidebar nav {
-  /* Unified: solid brand-navy, no alpha, no blur. The right-side border
-     is the only thing separating it from the page — single cyan hairline. */
-  background: var(--surface-page) !important;
+  /* Three-tier: chrome sits ONE step above the page (see topbar). */
+  background: #0F1B2D !important;
   border-color: var(--surface-border) !important;
 }
 
