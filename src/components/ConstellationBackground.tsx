@@ -51,7 +51,7 @@ export function ConstellationBackground() {
       // particle trail adapts when the user toggles. Light = pastel wash,
       // dark = near-black wash matching the JBS body bg.
       const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      ctx.fillStyle = isDark ? "rgba(5, 5, 5, 0.85)" : "rgba(245, 247, 255, 0.78)";
+      ctx.fillStyle = isDark ? "rgba(15, 27, 45, 0.85)" : "rgba(245, 247, 255, 0.78)"; // dark trail matches --surface-page #0F1B2D after the unified-palette PR (was #050505 from the old near-black body)
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       for (const p of pts) {
