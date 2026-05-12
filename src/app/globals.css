@@ -43,10 +43,10 @@
      preserve identity. Light mode unchanged. */
 
   /* Surfaces */
-  --surface-page:     #050505;             /* JBS body bg, near-black */
-  --surface-card:     #0F1B2D;             /* iCareerOS brand.navy, elevated card */
-  --surface-muted:    hsl(220 65% 8%);     /* between page and card */
-  --surface-border:   rgba(0, 242, 255, 0.18); /* JBS cyan-tinted border, low alpha */
+  --surface-page:     #0F1B2D;             /* Unified brand-navy: body + chrome share this color (was #050505 — see PR opening "Unified background palette" 2026-05-12) */
+  --surface-card:     #162338;             /* One tonal step lighter than the base — gives lift without a third hue */
+  --surface-muted:    #0F1B2D;             /* Collapsed onto the base; no longer a separate midtone */
+  --surface-border:   rgba(0, 242, 255, 0.18); /* JBS cyan-tinted hairline */
   --surface-overlay:  rgba(5, 5, 5, 0.92); /* modal scrim + sticky-header bg */
 
   /* Text hierarchy (JBS spec: white → light gray → muted gray).
@@ -70,7 +70,7 @@
   --section-green:    #27c93f;
 
   /* Background gradient — dark mode hero / page wash */
-  --bg-gradient: linear-gradient(135deg, #050505 0%, #0F1B2D 50%, #050505 100%);
+  --bg-gradient: linear-gradient(135deg, #0F1B2D 0%, #162338 50%, #0F1B2D 100%);  /* Unified palette gradient — base navy → lifted card → base navy */
 
   /* Legacy --neutral-* tokens — also flip in dark mode so inline styles
      across the landing sections (FAQ, Features, Problem, Lifecycle,
@@ -79,8 +79,8 @@
      without per-file changes. This is the canonical 2026-05-11 fix
      replacing the broken attribute-selector tricks that didn't match
      React's inline-style output. */
-  --neutral-100:   rgba(15, 27, 45, 0.62);   /* translucent navy card */
-  --neutral-200:   rgba(15, 27, 45, 0.55);   /* slightly fainter */
+  --neutral-100:   #162338;                  /* unified card surface (was rgba navy 0.62) */
+  --neutral-200:   #162338;                  /* same; old "slightly fainter" tier collapsed */
   --neutral-300:   rgba(0, 242, 255, 0.22);  /* cyan-tinted hairline */
   --neutral-600:   hsl(0 0% 82%);            /* readable mid-gray on dark */
   --neutral-700:   hsl(0 0% 88%);            /* body text */
@@ -181,17 +181,18 @@ body {
    replace these with explicit dark: utilities. */
 
 [data-theme='dark'] .icareeros-topbar {
-  background: rgba(15, 27, 45, 0.62) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-  border-bottom-color: var(--surface-border) !important;
+  /* Unified: solid brand-navy, no alpha, no blur. The bottom hairline
+     is the only thing separating it from the body — same color, same
+     surface, marked by a single cyan line. */
+  background: var(--surface-page) !important;
+  border-bottom: 1px solid var(--surface-border) !important;
 }
 
 [data-theme='dark'] aside.icareeros-sidebar,
 [data-theme='dark'] aside.icareeros-sidebar nav {
-  background: rgba(15, 27, 45, 0.62) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
+  /* Unified: solid brand-navy, no alpha, no blur. The right-side border
+     is the only thing separating it from the page — single cyan hairline. */
+  background: var(--surface-page) !important;
   border-color: var(--surface-border) !important;
 }
 
@@ -231,9 +232,14 @@ body {
    unchanged — these are .bg-white / .bg-gray-50 utility overrides
    scoped under [data-theme='dark']. backdrop-filter softens the
    constellation so foreground content stays readable. */
-[data-theme='dark'] .bg-white         { background-color: rgba(15, 27, 45, 0.62) !important; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-[data-theme='dark'] .bg-gray-50       { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
-[data-theme='dark'] .bg-gray-100      { background-color: rgba(15, 27, 45, 0.50) !important; backdrop-filter: blur(8px);  -webkit-backdrop-filter: blur(8px); }
+/* Unified card surface: solid lifted-navy. No alpha (so they don't
+   composite differently against the constellation). No backdrop-filter
+   (drops GPU cost + Safari quirks). One tonal step above the page
+   gives them a clear "lifted" affordance without introducing a
+   second hue. */
+[data-theme='dark'] .bg-white         { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-gray-50       { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-gray-100      { background-color: var(--surface-card) !important; }
 /* Dark-mode text-color overrides — bumped 2026-05-11 for readability.
    All values are NEUTRAL grays (no blue tint) and pass WCAG AA on the
    JBS #050505 page bg AND on the translucent navy card surface. */
@@ -491,13 +497,13 @@ body {
    keeping the hue family so the semantic meaning carries through. */
 
 /* ── Bigger gray bgs (less common, but Tailwind ramp goes higher) ─── */
-[data-theme='dark'] .bg-gray-200 { background-color: rgba(15, 27, 45, 0.55) !important; }
-[data-theme='dark'] .bg-gray-300 { background-color: rgba(15, 27, 45, 0.65) !important; }
-[data-theme='dark'] .bg-gray-400 { background-color: rgba(15, 27, 45, 0.75) !important; }
-[data-theme='dark'] .bg-slate-200 { background-color: rgba(15, 27, 45, 0.55) !important; }
-[data-theme='dark'] .bg-slate-300 { background-color: rgba(15, 27, 45, 0.65) !important; }
-[data-theme='dark'] .bg-zinc-200  { background-color: rgba(15, 27, 45, 0.55) !important; }
-[data-theme='dark'] .bg-zinc-300  { background-color: rgba(15, 27, 45, 0.65) !important; }
+[data-theme='dark'] .bg-gray-200 { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-gray-300 { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-gray-400 { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-slate-200 { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-slate-300 { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-zinc-200  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-zinc-300  { background-color: var(--surface-card) !important; }
 
 /* ── Semantic-colored backgrounds (info / warning / success / error) ─ */
 [data-theme='dark'] .bg-blue-50      { background-color: rgba(59, 130, 246, 0.12) !important; }
@@ -541,10 +547,10 @@ body {
 [data-theme='dark'] .text-stone-700     { color: hsl(0 0% 88%) !important; }
 [data-theme='dark'] .text-stone-500     { color: hsl(0 0% 75%) !important; }
 
-[data-theme='dark'] .bg-neutral-50      { background-color: rgba(15, 27, 45, 0.45) !important; }
-[data-theme='dark'] .bg-neutral-100     { background-color: rgba(15, 27, 45, 0.55) !important; }
-[data-theme='dark'] .bg-stone-50        { background-color: rgba(15, 27, 45, 0.45) !important; }
-[data-theme='dark'] .bg-stone-100       { background-color: rgba(15, 27, 45, 0.55) !important; }
+[data-theme='dark'] .bg-neutral-50      { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-neutral-100     { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-stone-50        { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-stone-100       { background-color: var(--surface-card) !important; }
 
 /* ── Hover states for backgrounds ──────────────────────────────────── */
 [data-theme='dark'] .hover\:bg-white:hover       { background-color: rgba(255, 255, 255, 0.06) !important; }
@@ -664,12 +670,12 @@ body {
    [data-theme='dark'] and route to the translucent navy surface so the
    footer + any other semi-opaque white element disappears into the
    constellation correctly. */
-[data-theme='dark'] .bg-white\/50  { background-color: rgba(15, 27, 45, 0.45) !important; }
-[data-theme='dark'] .bg-white\/60  { background-color: rgba(15, 27, 45, 0.50) !important; }
-[data-theme='dark'] .bg-white\/70  { background-color: rgba(15, 27, 45, 0.55) !important; }
-[data-theme='dark'] .bg-white\/80  { background-color: rgba(15, 27, 45, 0.62) !important; }
-[data-theme='dark'] .bg-white\/90  { background-color: rgba(15, 27, 45, 0.70) !important; }
-[data-theme='dark'] .bg-white\/95  { background-color: rgba(15, 27, 45, 0.78) !important; }
+[data-theme='dark'] .bg-white\/50  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-white\/60  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-white\/70  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-white\/80  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-white\/90  { background-color: var(--surface-card) !important; }
+[data-theme='dark'] .bg-white\/95  { background-color: var(--surface-card) !important; }
 
 /* Same for black-on-light cards used as overlays in some components. */
 [data-theme='dark'] .bg-black\/50  { background-color: rgba(0, 0, 0, 0.55) !important; }
