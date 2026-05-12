@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
+import { JobDetailDrawer } from "@/components/jobs/JobDetailDrawer";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { scoreFitBatch, type FitScore } from "@/services/ai/fitScoreService";
 import { getActiveCycle } from "@/orchestrator/careerOsOrchestrator";
@@ -57,6 +58,12 @@ export default function JobsPage() {
   const [fitScores,  setFitScores]  = useState<Record<string, FitScore>>({});
   const [scoringFit, setScoringFit] = useState(false);
   const [cycleId,    setCycleId]    = useState<string | null>(null);
+
+  // ── Wave 2: in-platform Job Detail Drawer state ─────────────────────────
+  // `selectedJob` is the OpportunityResult currently shown in the drawer,
+  // or null when the drawer is closed. URL is kept in sync via `?job=<id>`
+  // so the view is shareable + back-button-safe.
+  const [selectedJob, setSelectedJob] = useState<OpportunityResult | null>(null);
 
   // ── Load active cycle (for fit scoring) ───────────────────────────────
   useEffect(() => {
@@ -150,6 +157,37 @@ export default function JobsPage() {
       setScoringFit(false);
     }
   }, []);
+
+  // ── URL sync for the drawer (Wave 2) ────────────────────────────────────
+  // On mount and whenever results land, look at `?job=<id>` and open the
+  // matching opportunity in the drawer. Closing the drawer strips the
+  // `job` param without a navigation.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("job");
+    if (!id || results.length === 0) return;
+    const match = results.find(r => r.id === id);
+    if (match) setSelectedJob(match);
+  }, [results]);
+
+  function openJob(opp: OpportunityResult) {
+    setSelectedJob(opp);
+    if (opp.id && typeof window !== "undefined") {
+      const u = new URL(window.location.href);
+      u.searchParams.set("job", opp.id);
+      window.history.pushState({}, "", u.toString());
+    }
+  }
+
+  function closeJob() {
+    setSelectedJob(null);
+    if (typeof window !== "undefined") {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("job");
+      window.history.replaceState({}, "", u.toString());
+    }
+  }
 
   // Augment results with fit scores (non-mutating)
   const decoratedResults = results.map(r => {
@@ -298,7 +336,7 @@ export default function JobsPage() {
           </div>
           <div className="space-y-3">
             {decoratedResults.map((opp, i) => (
-              <OpportunityCard key={opp.id ?? `${opp.url}-${i}`} opportunity={opp} cycleId={cycleId} />
+              <OpportunityCard key={opp.id ?? `${opp.url}-${i}`} opportunity={opp} cycleId={cycleId} onSelect={openJob} />
             ))}
           </div>
         </>
@@ -310,6 +348,10 @@ export default function JobsPage() {
           No jobs matched. Try the “Search” mode or update your preferences.
         </div>
       )}
+
+      {/* Wave 2 — in-platform Job Detail Drawer. Renders only when
+          selectedJob is set; the drawer manages its own scrim. */}
+      <JobDetailDrawer job={selectedJob} onClose={closeJob} cycleId={cycleId} />
     </div>
   );
 }
