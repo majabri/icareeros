@@ -327,6 +327,78 @@ QUALITY
       }
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // Task 2 (post-Wave-5): always mix ATS rows into the curated feed.
+    //
+    // Until today the only path from `opportunities` (where Wave 4 ATS
+    // ingestion writes) into the curated response was the empty-fallback
+    // below — which fires only when Adzuna returns nothing. That meant
+    // ATS jobs effectively never appeared alongside Adzuna jobs.
+    //
+    // New behaviour: fetch the freshest ATS rows on every request, in
+    // parallel with everything above, merge into the curated array, dedupe
+    // by case-folded title+company, then let the existing scoring pipeline
+    // re-rank the union. No source preference — pure decisionScore wins.
+    // ──────────────────────────────────────────────────────────────
+    try {
+      const mixServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const mixClient = mixServiceKey
+        ? createServiceRoleClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            mixServiceKey,
+            { auth: { persistSession: false } },
+          )
+        : supabase;
+      const { data: atsRows } = await mixClient
+        .from("opportunities")
+        .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, is_flagged, flag_reasons, quality_score, source")
+        .eq("source", "ats")
+        .eq("is_active", true)
+        .or("is_flagged.is.null,is_flagged.eq.false")
+        .order("first_seen_at", { ascending: false })
+        .limit(50);
+      if (Array.isArray(atsRows) && atsRows.length > 0) {
+        // Build a dedupe key from title+company for the current set so we
+        // never double-list a role that appeared in both Adzuna and the
+        // ATS scrape.
+        const key = (t: string | null | undefined, c: string | null | undefined) =>
+          `${(t ?? "").trim().toLowerCase()}::${(c ?? "").trim().toLowerCase()}`;
+        const seen = new Set<string>(
+          opportunitiesWithIds.map(o => key(o.title, o.company))
+        );
+        const atsShaped = atsRows
+          .filter(r => !seen.has(key(r.title as string, r.company as string)))
+          .map(r => ({
+            id:               r.id as string,
+            title:            r.title as string,
+            company:          r.company as string,
+            location:         (r.location as string | null) ?? "",
+            description:      cleanJobDescription(r.description as string | null),
+            url:              (r.url as string | null) ?? "",
+            type:             (r.job_type as string | null) ?? "",
+            is_remote:        Boolean(r.is_remote),
+            salary_min:       (r.salary_min as number | null) ?? null,
+            salary_max:       (r.salary_max as number | null) ?? null,
+            salary_currency:  (r.salary_currency as string | null) ?? null,
+            first_seen_at:    (r.first_seen_at as string | null)
+                                ?? (r.posted_at as string | null)
+                                ?? null,
+            is_flagged:       Boolean(r.is_flagged),
+            flag_reasons:     (r.flag_reasons as string[] | null) ?? null,
+            quality_score:    (r.quality_score as number | null) ?? null,
+            // ATS rows store the company URL directly in `url`; expose it
+            // as apply_url_company so OpportunityCard renders the direct
+            // "Apply at <Company>" CTA instead of the Google fallback.
+            apply_url_company: (r.url as string | null) ?? null,
+            source:           "ats",
+          })) as typeof opportunitiesWithIds;
+        opportunitiesWithIds = [...opportunitiesWithIds, ...atsShaped];
+        console.info(`[jobs/agent] merged ${atsShaped.length} ATS rows into curated set (deduped from ${atsRows.length})`);
+      }
+    } catch (e) {
+      console.warn("[jobs/agent] ATS mix failed (non-fatal):", e instanceof Error ? e.message : e);
+    }
+
     // ── W4-B-1 (UAT 2026-05-10): curated-empty fallback ─────────────
     // If the AI plans + Adzuna + validator pipeline returned NOTHING for
     // this user, fall back to the shared `opportunities` table populated
@@ -447,6 +519,10 @@ QUALITY
       remotePreferred: Array.isArray(up?.work_mode) && (up!.work_mode as unknown as string[]).some(m => typeof m === "string" && m.toLowerCase() === "remote"),
     });
     enrichedCurated.sort((a, b) => (b.decisionScore ?? 0) - (a.decisionScore ?? 0));
+    // Task 2: cap the curated feed at the top 25 after sort. With Adzuna
+    // + ATS merged this can balloon past 30; the UI is built for ~25.
+    const TOP_N = 25;
+    enrichedCurated.length = Math.min(enrichedCurated.length, TOP_N);
     // Strip the EnrichedJob-only `flags` field (structured FakeJobFlag[])
     // before assigning back — `flag_reasons` already carries the human
     // labels the UI uses, so the structured `flags` is redundant on the
