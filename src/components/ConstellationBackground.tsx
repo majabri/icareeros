@@ -10,8 +10,9 @@ const COLORS = ["#00d9ff", "#00ff88", "#ffff00", "#ffa366", "#ff6b6b"];
 // FLASH_MS: how long the per-line flash effect lasts after the connect event.
 // 280ms ≈ 17 frames at 60fps — long enough to register, short enough to feel
 // snappy and not tail off.
-const CONNECT_DIST = 200;
-const FLASH_MS     = 280;
+const CONNECT_DIST     = 200;          // px — same threshold for line drawing + flash trigger
+const FLASH_PROB       = 0.25;         // only ~25% of new connections actually flash; rest are silent
+const FLASH_MS         = 350;          // settled fade — slightly longer than a sharp pop
 
 /**
  * Full-screen fixed constellation canvas — sits behind all page content.
@@ -113,8 +114,11 @@ export function ConstellationBackground() {
           const idx  = i * N + j;
           const dPrev = lastDist[idx];
 
-          // Edge detect: was OUTSIDE last frame, now INSIDE → spawn a flash.
-          if (dPrev > CONNECT_DIST && d <= CONNECT_DIST) {
+          // Edge detect: was OUTSIDE last frame, now INSIDE → maybe spawn a flash.
+          // FLASH_PROB gates how often the flash visibly fires; the rest of the
+          // time the line just appears via the normal distance-fade. Keeps the
+          // animation feeling alive without becoming busy.
+          if (dPrev > CONNECT_DIST && d <= CONNECT_DIST && Math.random() < FLASH_PROB) {
             flashes.set(`${i}-${j}`, now);
           }
           lastDist[idx] = d;
@@ -138,9 +142,9 @@ export function ConstellationBackground() {
           }
 
           // Stroke 1: the steady particle-color line, alpha-boosted by flash.
-          ctx.globalAlpha = Math.min(1, baseAlpha + flashT * 0.55);
+          ctx.globalAlpha = Math.min(1, baseAlpha + flashT * 0.22);  // gentler lift, was 0.55
           ctx.strokeStyle = pts[i].color;
-          ctx.lineWidth   = 0.9 + flashT * 1.4;
+          ctx.lineWidth   = 0.9 + flashT * 0.5;                     // 0.9 → 1.4px max, was 0.9 → 2.3px
           ctx.beginPath();
           ctx.moveTo(pts[i].x, pts[i].y);
           ctx.lineTo(pts[j].x, pts[j].y);
@@ -150,9 +154,9 @@ export function ConstellationBackground() {
           // Gives the visual sensation of the line "lighting up" on connect
           // before settling back to its calm steady state.
           if (flashT > 0.01) {
-            ctx.globalAlpha = 0.85 * flashT;
+            ctx.globalAlpha = 0.35 * flashT;                          // dimmer overlay, was 0.85
             ctx.strokeStyle = "#FFFFFF";
-            ctx.lineWidth   = 0.6 + flashT * 0.8;
+            ctx.lineWidth   = 0.5 + flashT * 0.3;                     // narrower, was 0.6 + 0.8
             ctx.beginPath();
             ctx.moveTo(pts[i].x, pts[i].y);
             ctx.lineTo(pts[j].x, pts[j].y);
