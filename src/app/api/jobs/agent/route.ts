@@ -28,6 +28,8 @@ import { validateJobs } from "@/services/jobs/jobValidator";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 import { chaseApplyUrlsBatch }   from "@/services/jobs/applyUrlChaser";
 import { cleanJobDescription } from "@/services/jobs/descriptionCleaner";
+import { scoreJobQuality, FILTER_THRESHOLD } from "@/services/jobs/qualityAnalyzer";
+import { scoreJobs } from "@/services/jobs/jobMatching";
 
 interface SearchPlan {
   what:        string;
@@ -394,6 +396,53 @@ QUALITY
         })) as typeof opportunitiesWithIds;
       }
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // Wave 3: quality filter + scoring enrichment (azjobs port)
+    //
+    // 1. Run every job through `scoreJobQuality` (v2 anti-fraud signals).
+    //    Drop anything < FILTER_THRESHOLD (60) from the curated feed.
+    //    Keep flag_reasons + quality_score on survivors so the UI can
+    //    surface caution chips on the rows that scraped through.
+    // 2. Enrich survivors with `scoreJobs` from jobMatching.ts — adds
+    //    responseProbability, decisionScore, effortEstimate, smartTag,
+    //    flags, trustScore, trustLevel, strategy.
+    // 3. Sort by decisionScore descending — the new primary ranking key.
+    //
+    // The AI fit-scoring pipeline (fitScoreService.scoreFitBatch) is
+    // kicked off client-side from /jobs against the IDs we return here.
+    // We do NOT clobber any fit_score the AI later writes back.
+    // ──────────────────────────────────────────────────────────────
+    const beforeQuality = opportunitiesWithIds.length;
+    const qualityFiltered = opportunitiesWithIds.flatMap(o => {
+      const q = scoreJobQuality(o);
+      if (q.quality_score < FILTER_THRESHOLD) return [];
+      // Surface any new flag reasons alongside whatever was already there.
+      const mergedFlags = Array.from(new Set([
+        ...(o.flag_reasons ?? []),
+        ...q.flag_reasons,
+      ]));
+      return [{
+        ...o,
+        quality_score: q.quality_score,
+        is_flagged:    (o.is_flagged ?? false) || q.high_risk,
+        flag_reasons:  mergedFlags.length > 0 ? mergedFlags : null,
+      }];
+    });
+    const droppedByQuality = beforeQuality - qualityFiltered.length;
+    if (droppedByQuality > 0) {
+      console.info(`[jobs/agent] quality filter dropped ${droppedByQuality}/${beforeQuality} jobs (< ${FILTER_THRESHOLD})`);
+    }
+
+    const enrichedCurated = scoreJobs({
+      jobs:    qualityFiltered,
+      skills,
+      salaryMin: undefined,
+      salaryMax: undefined,
+      remotePreferred: Array.isArray(up?.work_mode) && (up!.work_mode as unknown as string[]).some(m => typeof m === "string" && m.toLowerCase() === "remote"),
+    });
+    enrichedCurated.sort((a, b) => (b.decisionScore ?? 0) - (a.decisionScore ?? 0));
+    opportunitiesWithIds = enrichedCurated as typeof opportunitiesWithIds;
 
     return NextResponse.json({
       opportunities: opportunitiesWithIds,

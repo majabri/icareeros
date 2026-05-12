@@ -28,6 +28,7 @@ import type { OpportunityResult } from "@/services/opportunityTypes";
 import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { OutreachCard } from "./OutreachCard";
 import { CoverLetterModal } from "./CoverLetterModal";
+import { SalaryBadge } from "./SalaryBadge";
 
 export interface JobDetailDrawerProps {
   job: OpportunityResult | null;
@@ -171,11 +172,23 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
               >
                 {job.title}
               </h1>
-              {typeof job.fit_score === "number" && (
-                <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 shrink-0 border border-cyan-500/30">
-                  {job.fit_score}% match
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {typeof job.fit_score === "number" && (
+                  <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 border border-cyan-500/30">
+                    {job.fit_score}% match
+                  </span>
+                )}
+                {typeof job.responseProbability === "number" && job.responseProbability > 0 && (
+                  <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 text-[10px] font-semibold">
+                    Response {job.responseProbability}%
+                  </span>
+                )}
+                {typeof job.decisionScore === "number" && job.decisionScore > 0 && (
+                  <span className="rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-semibold">
+                    Decision {job.decisionScore}/100
+                  </span>
+                )}
+              </div>
             </div>
             <p style={{ color: "var(--text-primary, #374151)" }} className="text-sm font-medium">{companyName}</p>
             <div style={{ color: "var(--text-muted, #6b7280)" }} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -183,6 +196,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
               {job.type && <span>💼 {job.type}</span>}
               {job.is_remote && <span>🏠 Remote</span>}
               {salary && <span className="font-semibold" style={{ color: "var(--text-primary, #111827)" }}>💰 {salary}</span>}
+              {salary && <SalaryBadge salary={salary} title={job.title} />}
             </div>
             {job.match_summary && (
               <p
