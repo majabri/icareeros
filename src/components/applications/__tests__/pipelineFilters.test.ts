@@ -31,8 +31,8 @@ function makeRow(over: Partial<Application> = {}): Application {
 }
 
 describe("STATUS_ORDER + STATUS_LABEL", () => {
-  it("has the five expected statuses in order", () => {
-    expect(STATUS_ORDER).toEqual(["applied", "interviewing", "offer", "rejected", "withdrawn"]);
+  it("has the seven expected statuses in order (Wave 3.5 added researching + applying)", () => {
+    expect(STATUS_ORDER).toEqual(["researching", "applying", "applied", "interviewing", "offer", "rejected", "withdrawn"]);
   });
   it("every status has a label", () => {
     for (const s of STATUS_ORDER) {
@@ -133,13 +133,17 @@ describe("countApplications", () => {
   it("counts each bucket and total", () => {
     const c = countApplications(rows);
     expect(c).toEqual({
-      total: 6, applied: 2, interviewing: 1, offer: 1, rejected: 1, withdrawn: 1,
+      total: 6,
+      researching: 0, applying: 0,
+      applied: 2, interviewing: 1, offer: 1, rejected: 1, withdrawn: 1,
       active: 4, // applied(2) + interviewing(1) + offer(1)
     });
   });
   it("empty → all zeros", () => {
     expect(countApplications([])).toEqual({
-      total: 0, applied: 0, interviewing: 0, offer: 0, rejected: 0, withdrawn: 0,
+      total: 0,
+      researching: 0, applying: 0,
+      applied: 0, interviewing: 0, offer: 0, rejected: 0, withdrawn: 0,
       active: 0,
     });
   });

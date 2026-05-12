@@ -31,6 +31,8 @@ import {
 } from "./pipelineFilters";
 
 const STATUS_PILL: Record<ApplicationStatus, string> = {
+  researching:  "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30",
+  applying:     "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30",
   applied:      "bg-gray-100 text-gray-700 border-gray-200",
   interviewing: "bg-brand-50 text-brand-700 border-brand-200",
   offer:        "bg-green-50 text-green-700 border-green-200",

@@ -37,10 +37,10 @@ async function makeSupabaseServer() {
 }
 
 export type ApplicationStatus =
-  | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
+  | "researching" | "applying" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
 
 const VALID_STATUSES: ReadonlyArray<ApplicationStatus> =
-  ["applied", "interviewing", "offer", "rejected", "withdrawn"];
+  ["researching", "applying", "applied", "interviewing", "offer", "rejected", "withdrawn"];
 
 interface CreateBody {
   job_title:      string;

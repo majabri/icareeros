@@ -6,13 +6,15 @@
  */
 
 export type ApplicationStatus =
-  | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
+  | "researching" | "applying" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
 
 export const STATUS_ORDER: ReadonlyArray<ApplicationStatus> = [
-  "applied", "interviewing", "offer", "rejected", "withdrawn",
+  "researching", "applying", "applied", "interviewing", "offer", "rejected", "withdrawn",
 ];
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
+  researching:  "Researching",
+  applying:     "Applying",
   applied:      "Applied",
   interviewing: "Interviewing",
   offer:        "Offer",
@@ -43,6 +45,8 @@ export interface PipelineFilter {
 
 export interface PipelineCounts {
   total:        number;
+  researching:  number;
+  applying:     number;
   applied:      number;
   interviewing: number;
   offer:        number;
@@ -105,6 +109,7 @@ export function countApplications(
 ): PipelineCounts {
   const c: PipelineCounts = {
     total: rows.length,
+    researching: 0, applying: 0,
     applied: 0, interviewing: 0, offer: 0, rejected: 0, withdrawn: 0,
     active: 0,
   };
