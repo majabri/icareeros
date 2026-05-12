@@ -29,6 +29,9 @@ import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { OutreachCard } from "./OutreachCard";
 import { CoverLetterModal } from "./CoverLetterModal";
 import { SalaryBadge } from "./SalaryBadge";
+import { ApplyConfirmModal } from "./ApplyConfirmModal";
+import { PipelineSavedToast } from "./PipelineSavedToast";
+import { resolveApplyTarget } from "@/services/jobs/applyHelpers";
 
 export interface JobDetailDrawerProps {
   job: OpportunityResult | null;
@@ -53,6 +56,8 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
   // self-contained: it doesn't depend on the parent to open these.
   const [showCoverLetter, setShowCoverLetter] = useState(false);
   const [showOutreach,    setShowOutreach]    = useState(false);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: "success" | "warning" } | null>(null);
 
   // Focus the close button on open + escape-to-close.
   useEffect(() => {
@@ -287,35 +292,25 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
           )}
         </div>
 
-        {/* Sticky Apply CTA — only external link in the drawer */}
+        {/* Sticky Apply CTA — Wave 3.5 tracked apply.
+            Button is NEVER disabled. Clicking opens the confirmation
+            modal, which auto-saves to Pipeline + opens the apply URL
+            (direct company URL or Google fallback). */}
         <footer
           style={{ borderColor: "var(--surface-border, #e5e7eb)", backgroundColor: "var(--surface-card, #ffffff)" }}
           className="border-t px-6 py-4 shrink-0"
         >
-          {applyUrl ? (
-            <a
-              href={applyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors w-full"
-            >
-              ✈ Apply at {companyName} →
-            </a>
-          ) : (
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                style={{ backgroundColor: "var(--surface-muted, #f3f4f6)", color: "var(--text-muted, #9ca3af)" }}
-                className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold cursor-not-allowed w-full"
-              >
-                Apply (link unavailable)
-              </button>
-              <p style={{ color: "var(--text-muted, #9ca3af)" }} className="text-[11px]">
-                We couldn&apos;t resolve a direct application link for this listing.
-              </p>
-            </div>
+          <button
+            type="button"
+            onClick={() => setShowApplyConfirm(true)}
+            className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors w-full"
+          >
+            {resolveApplyTarget(job).label}
+          </button>
+          {!applyUrl && (
+            <p style={{ color: "var(--text-muted, #9ca3af)" }} className="mt-1 text-[11px] text-center">
+              No direct link — we&apos;ll search Google for the company&apos;s application page.
+            </p>
           )}
         </footer>
       </aside>
@@ -337,6 +332,27 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
           companyName={job.company}
           cycleId={cycleId}
           onClose={() => setShowCoverLetter(false)}
+        />
+      )}
+
+      {/* Apply confirmation + Pipeline-saved toast (Wave 3.5) */}
+      {showApplyConfirm && (
+        <ApplyConfirmModal
+          opportunity={job}
+          target={resolveApplyTarget(job)}
+          onClose={() => setShowApplyConfirm(false)}
+          onCoverLetter={() => setShowCoverLetter(true)}
+          onApplied={(saved) => setToast({
+            message: saved ? "Saved to your Pipeline" : "Opened apply link (couldn't save to Pipeline)",
+            variant: saved ? "success" : "warning",
+          })}
+        />
+      )}
+      {toast && (
+        <PipelineSavedToast
+          message={toast.message}
+          variant={toast.variant}
+          onDismiss={() => setToast(null)}
         />
       )}
     </>

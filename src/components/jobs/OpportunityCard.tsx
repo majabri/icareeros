@@ -7,6 +7,9 @@ import { OutreachCard } from "./OutreachCard";
 import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { CoverLetterModal } from "./CoverLetterModal";
 import { SalaryBadge } from "./SalaryBadge";
+import { ApplyConfirmModal } from "./ApplyConfirmModal";
+import { PipelineSavedToast } from "./PipelineSavedToast";
+import { resolveApplyTarget } from "@/services/jobs/applyHelpers";
 
 interface OpportunityCardProps {
   opportunity: OpportunityResult;
@@ -54,6 +57,8 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
   const router = useRouter();
   const [showOutreach,     setShowOutreach]     = useState(false);
   const [showCoverLetter,  setShowCoverLetter]  = useState(false);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: "success" | "warning" } | null>(null);
 
   function handleAnalyzeFit() {
     if (typeof window === "undefined") return;
@@ -229,27 +234,19 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
                 - Label always shows the company name — never the
                   aggregator's name.
                 - When no chased URL: disabled "Apply (link unavailable)". */}
-            {chasedUrl ? (
-              <a
-                href={chasedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
-                title={`Apply at ${companyName}`}
-              >
-                ✈ Apply at {companyName} →
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                title="Direct application link unavailable — open the listing for more options."
-                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
-              >
-                Apply (link unavailable)
-              </button>
-            )}
+            {/* Wave 3.5 — tracked apply.
+                Button is NEVER disabled. We always show an actionable
+                path: direct apply when we have a chased company URL;
+                "Find & Apply" Google search otherwise. The modal
+                handles the confirm + auto-save to Pipeline. */}
+            <button
+              type="button"
+              onClick={() => setShowApplyConfirm(true)}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
+              title={chasedUrl ? `Apply at ${companyName}` : `Find ${companyName}'s application via Google`}
+            >
+              {resolveApplyTarget(opp).label}
+            </button>
           </div>
         </div>
       </div>
@@ -273,6 +270,29 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
           companyName={opp.company}
           cycleId={cycleId}
           onClose={() => setShowCoverLetter(false)}
+        />
+      )}
+
+      {/* Apply confirmation modal */}
+      {showApplyConfirm && (
+        <ApplyConfirmModal
+          opportunity={opp}
+          target={resolveApplyTarget(opp)}
+          onClose={() => setShowApplyConfirm(false)}
+          onCoverLetter={() => setShowCoverLetter(true)}
+          onApplied={(saved) => setToast({
+            message: saved ? "Saved to your Pipeline" : "Opened apply link (couldn't save to Pipeline)",
+            variant: saved ? "success" : "warning",
+          })}
+        />
+      )}
+
+      {/* Auto-dismissing Pipeline-saved toast */}
+      {toast && (
+        <PipelineSavedToast
+          message={toast.message}
+          variant={toast.variant}
+          onDismiss={() => setToast(null)}
         />
       )}
     </>
