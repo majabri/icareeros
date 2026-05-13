@@ -51,18 +51,20 @@ const SEED_COMPANIES: CompanyConfig[] = [
   { name: "Vercel",    slug: "vercel",    ats: "greenhouse" },
   { name: "Anthropic", slug: "anthropic", ats: "greenhouse" },
   { name: "Figma",     slug: "figma",     ats: "greenhouse" },
+  { name: "Airtable",  slug: "airtable", ats: "greenhouse" },  // Re-probed 2026-05-13: 21 open reqs, Greenhouse confirmed (Sprint 2 W4)
   // Ashby (using api.ashbyhq.com/posting-api JSON, not the HTML scrape):
   { name: "Notion",    slug: "notion",    ats: "ashby"      },
   { name: "OpenAI",    slug: "openai",    ats: "ashby"      },
   { name: "Linear",    slug: "linear",    ats: "ashby"      },
-  // Note: Airtable / Rippling / Retool were probed for ATS/career-page
-  // ingestion but ALL THREE expose only search-interface marketing pages
-  // (no public job-listings index — actual roles are loaded over XHR
-  // from internal APIs). Even with Firecrawl's JS rendering the page
-  // markdown contains only nav + filter chrome, no job records. Dropped
-  // from this seed; they remain searchable via the Adzuna pipeline +
-  // Google "Find & Apply" fallback. Revisit after real-user data shows
-  // demand. — see docs/specs/COWORK-BRIEF-jobs-experience-v1.md backlog.
+  // Note: Re-probed 2026-05-13 for Sprint 2 W4:
+  //   • Airtable → IS on Greenhouse, slug "airtable" → ADDED above (21 reqs).
+  //   • Retool   → Next.js SPA, no public ATS endpoint (Greenhouse/Ashby/Lever
+  //                all 404). Stays in Adzuna + Google fallback.
+  //   • Rippling → uses their own Rippling Recruiting ATS. The public endpoint
+  //                api.rippling.com/platform/api/ats/v1/board/{slug}/jobs works
+  //                but returns DIFFERENT tenants per slug (multi-tenant API).
+  //                Slug for Rippling-the-company's own jobs not yet discovered.
+  //                Deferred to a future sprint — see SPRINT2-CHECKPOINTS doc.
 ];
 
 // ── Shape we normalize every scraper output into ───────────────────────────

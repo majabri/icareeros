@@ -6,6 +6,25 @@ vi.mock("@/lib/observability/logInfrastructureEvent", () => ({
   logInfrastructureEvent: (input: unknown) => logSpy(input),
 }));
 
+// Sprint 2 W2-C: route now upserts into deployment_history via Supabase.
+// Stub the client so tests don't need real credentials.
+const upsertSpy = vi.fn().mockResolvedValue({ error: null });
+const selectMaybeSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn(() => ({
+    from: vi.fn(() => ({
+      upsert: upsertSpy,
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          order: vi.fn(() => ({
+            limit: selectMaybeSpy,
+          })),
+        })),
+      })),
+    })),
+  })),
+}));
+
 import { POST } from "../route";
 
 const SECRET = "this-is-a-real-secret-with-enough-entropy";
@@ -79,5 +98,62 @@ describe("POST /api/admin/webhooks/vercel", () => {
     expect(res.status).toBe(200);
     const arg = logSpy.mock.calls[0][0];
     expect(arg.severity).toBe("info");
+  });
+
+  it("upserts into deployment_history on deployment.succeeded (W2-C)", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-test";
+    upsertSpy.mockClear();
+
+    const body = {
+      type: "deployment.succeeded",
+      id: "vercel-evt-456",
+      payload: {
+        target: "production",
+        project: { name: "icareeros" },
+        deployment: {
+          id: "dpl_abc123",
+          url: "icareeros-abc.vercel.app",
+          meta: {
+            githubCommitSha: "deadbeef",
+            githubCommitRef: "main",
+            githubCommitMessage: "Test commit",
+          },
+        },
+      },
+    };
+
+    const res = await POST(makeReq({ body }) as never);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.deployment_recorded).toBe(true);
+    expect(upsertSpy).toHaveBeenCalledOnce();
+    const upserted = upsertSpy.mock.calls[0][0];
+    expect(upserted.vercel_deployment_id).toBe("dpl_abc123");
+    expect(upserted.state).toBe("READY");
+    expect(upserted.commit_sha).toBe("deadbeef");
+    expect(upserted.gate_decision).toBe("pending");
+  });
+
+  it("marks gate_decision=fail on deployment.error (W2-C)", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-test";
+    upsertSpy.mockClear();
+
+    const body = {
+      type: "deployment.error",
+      payload: {
+        target: "production",
+        deployment: { id: "dpl_xyz", url: "x.vercel.app", meta: { githubCommitSha: "abc", githubCommitRef: "main" } },
+      },
+    };
+
+    const res = await POST(makeReq({ body }) as never);
+    expect(res.status).toBe(200);
+    expect(upsertSpy).toHaveBeenCalledOnce();
+    const upserted = upsertSpy.mock.calls[0][0];
+    expect(upserted.state).toBe("ERROR");
+    expect(upserted.gate_decision).toBe("fail");
+    expect(upserted.gate_rationale).toContain("deployment.error");
   });
 });
