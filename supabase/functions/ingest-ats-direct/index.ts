@@ -34,7 +34,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ── Seed companies (Wave 4) ────────────────────────────────────────────────
 
-type ATS = "greenhouse" | "lever" | "ashby" | "workday" | "career_page" | "careers_page_firecrawl";
+type ATS = "greenhouse" | "lever" | "ashby" | "workday" | "career_page" | "careers_page_firecrawl" | "rippling";
 
 interface CompanyConfig {
   name: string;          // Display name for the `company` field.
@@ -56,6 +56,8 @@ const SEED_COMPANIES: CompanyConfig[] = [
   { name: "Notion",    slug: "notion",    ats: "ashby"      },
   { name: "OpenAI",    slug: "openai",    ats: "ashby"      },
   { name: "Linear",    slug: "linear",    ats: "ashby"      },
+  // Rippling (own Rippling Recruiting ATS) — Sprint 3 W2, discovered 2026-05-13:
+  { name: "Rippling",  slug: "rippling", ats: "rippling"   },
   // Note: Re-probed 2026-05-13 for Sprint 2 W4:
   //   • Airtable → IS on Greenhouse, slug "airtable" → ADDED above (21 reqs).
   //   • Retool   → Next.js SPA, no public ATS endpoint (Greenhouse/Ashby/Lever
@@ -161,6 +163,7 @@ async function scrapeCompany(c: CompanyConfig, max: number): Promise<ScrapedJob[
     case "workday":     return scrapeWorkday(c, max);
     case "career_page": return scrapeCareerPage(c, max);
     case "careers_page_firecrawl": return scrapeCareersPageFirecrawl(c, max);
+    case "rippling":    return scrapeRippling(c, max);
   }
 }
 
@@ -278,6 +281,43 @@ async function _scrapeAshbyHtmlLegacy(c: CompanyConfig, max: number): Promise<Sc
       salary_currency:  j.compensationCurrency ?? null,
       apply_url:        `https://jobs.ashbyhq.com/${c.slug}/${j.id}`,
       posted_at:        j.publishedAt ? new Date(j.publishedAt).toISOString() : new Date().toISOString(),
+    });
+  }
+  return out;
+}
+
+async function scrapeRippling(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
+  // Rippling uses their own Rippling Recruiting ATS (NOT Greenhouse/Lever/Ashby).
+  // Public board endpoint returns a flat JSON array of jobs:
+  //   { uuid, name, department: {id,label}, url, workLocation: {id,label} }
+  // Apply URL pattern (in `j.url`): https://ats.rippling.com/{slug}/jobs/{uuid}
+  // Discovered 2026-05-13 (Sprint 3 W2). Generalizable to any Rippling Recruiting
+  // tenant by changing the slug — only adding rippling-the-company for now.
+  const url = `https://api.rippling.com/platform/api/ats/v1/board/${c.slug}/jobs`;
+  const res = await fetchWithUA(url);
+  if (!res.ok) throw new Error(`Rippling ${c.slug} → ${res.status}`);
+  const data = await res.json();
+  const jobs = Array.isArray(data) ? data : [];
+  const out: ScrapedJob[] = [];
+  for (const j of jobs.slice(0, max)) {
+    const title = (j?.name as string) ?? "Untitled";
+    const loc   = (j?.workLocation?.label as string) ?? "";
+    const dept  = (j?.department?.label as string) ?? "";
+    const desc  = dept ? `${dept} • ${loc}` : loc;
+    out.push({
+      source:           "rippling",
+      source_id:        `rip-${c.slug}-${j.uuid}`,
+      title:            title,
+      company:          c.name,
+      description:      desc.slice(0, 5000),
+      location:         loc,
+      is_remote:        isRemote(loc, desc),
+      job_type:         guessJobType(title, desc),
+      salary_min:       null,
+      salary_max:       null,
+      salary_currency:  null,
+      apply_url:        (j?.url as string) ?? `https://ats.rippling.com/${c.slug}/jobs/${j.uuid}`,
+      posted_at:        new Date().toISOString(),
     });
   }
   return out;
