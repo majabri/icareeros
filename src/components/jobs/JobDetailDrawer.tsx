@@ -29,6 +29,8 @@ import { writeIncomingTrack } from "@/components/applications/pipelineFilters";
 import { OutreachCard } from "./OutreachCard";
 import { CoverLetterModal } from "./CoverLetterModal";
 import { SalaryBadge } from "./SalaryBadge";
+import { DeepFitPanel } from "./DeepFitPanel";
+import type { DeepFitResult } from "@/lib/jobFitAnalysis";
 import { ApplyConfirmModal } from "./ApplyConfirmModal";
 import { PipelineSavedToast } from "./PipelineSavedToast";
 import { resolveApplyTarget } from "@/services/jobs/applyHelpers";
@@ -58,6 +60,11 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
   const [showOutreach,    setShowOutreach]    = useState(false);
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: "success" | "warning" } | null>(null);
+  // Sprint 2 W1 — Deep Fit Pro feature
+  const [deepFit,            setDeepFit]            = useState<DeepFitResult | null>(null);
+  const [deepFitLoading,     setDeepFitLoading]     = useState(false);
+  const [deepFitError,       setDeepFitError]       = useState<string | null>(null);
+  const [showUpgradeModal,   setShowUpgradeModal]   = useState(false);
 
   // Focus the close button on open + escape-to-close.
   useEffect(() => {
@@ -74,6 +81,9 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
   useEffect(() => {
     setShowCoverLetter(false);
     setShowOutreach(false);
+    setDeepFit(null);
+    setDeepFitError(null);
+    setShowUpgradeModal(false);
   }, [job?.id]);
 
   if (!job) return null;
@@ -106,7 +116,35 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
     router.push("/resumeadvisor");
   }
 
-  function handleTrack() {
+  async function handleDeepFit(opts?: { refresh?: boolean }) {
+    if (!job?.id) return;
+    setDeepFitLoading(true);
+    setDeepFitError(null);
+    try {
+      const res = await fetch("/api/jobs/deep-fit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id, refresh: opts?.refresh === true }),
+      });
+      if (res.status === 403) {
+        setShowUpgradeModal(true);
+        return;
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setDeepFitError(j?.message ?? j?.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const j = await res.json();
+      if (j?.result) setDeepFit(j.result as DeepFitResult);
+    } catch (e) {
+      setDeepFitError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setDeepFitLoading(false);
+    }
+  }
+
+    function handleTrack() {
     writeIncomingTrack({
       job_title:      job!.title || "",
       company:        job!.company || "",
@@ -231,6 +269,21 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
             >
               🎯 Analyze fit
             </button>
+            {/* Sprint 2 W1 — Deep Fit (Pro-tier) */}
+            <button
+              type="button"
+              onClick={() => handleDeepFit()}
+              disabled={deepFitLoading}
+              style={{
+                borderColor: "var(--surface-border, #e5e7eb)",
+                backgroundColor: "var(--surface-card, #ffffff)",
+                color: "var(--text-primary, #374151)",
+              }}
+              className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80 disabled:opacity-50 transition-opacity"
+              aria-label="Run deep fit analysis"
+            >
+              {deepFitLoading ? "🔬 Analyzing…" : "🔬 Deep Fit"}
+            </button>
             {job.id && (
               <button
                 type="button"
@@ -283,7 +336,20 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
             </section>
           )}
 
-          {/* Quality flags surface (if any) */}
+          {/* Sprint 2 W1 — Deep Fit panel (rendered when result loaded) */}
+          {deepFit && (
+            <DeepFitPanel
+              result={deepFit}
+              onRefresh={() => handleDeepFit({ refresh: true })}
+            />
+          )}
+          {deepFitError && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              Deep Fit failed: {deepFitError}
+            </div>
+          )}
+
+                    {/* Quality flags surface (if any) */}
           {Array.isArray(job.flag_reasons) && job.flag_reasons.length > 0 && (
             <section className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-400">
               <strong className="font-semibold">Note:</strong>{" "}
@@ -325,7 +391,54 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
           onClose={() => setShowOutreach(false)}
         />
       )}
-      {showCoverLetter && job.id && (
+      {/* Sprint 2 W1 — Deep Fit upgrade modal */}
+      {showUpgradeModal && (
+        <>
+          <div
+            aria-hidden="true"
+            onClick={() => setShowUpgradeModal(false)}
+            className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="deep-fit-upgrade-title"
+            style={{
+              backgroundColor: "var(--surface-card, #ffffff)",
+              color:           "var(--text-primary, #0f172a)",
+              borderColor:     "var(--surface-border, #e5e7eb)",
+            }}
+            className="fixed left-1/2 top-1/2 z-[91] -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md rounded-2xl border shadow-2xl p-6 space-y-4"
+          >
+            <header className="space-y-1">
+              <h2 id="deep-fit-upgrade-title" className="text-lg font-semibold">
+                🔬 Deep Fit Analysis is a Standard feature
+              </h2>
+              <p style={{ color: "var(--text-muted, #6b7280)" }} className="text-sm">
+                Upgrade to see matched skills, gaps, and interview probability for this role.
+              </p>
+            </header>
+            <div className="flex flex-col gap-2 pt-2">
+              <a
+                href="/settings/billing"
+                className="w-full rounded-xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors text-center"
+              >
+                See plans
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                style={{ color: "var(--text-muted, #6b7280)" }}
+                className="w-full rounded-xl px-4 py-2 text-xs hover:underline"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+            {showCoverLetter && job.id && (
         <CoverLetterModal
           opportunityId={job.id}
           opportunityTitle={job.title}
