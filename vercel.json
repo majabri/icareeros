@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/ingest-ats",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/check-bugs-inbox",
+      "schedule": "0,30 * * * *"
     }
   ]
 }
