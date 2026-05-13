@@ -68,6 +68,14 @@ const nextConfig = {
     ];
   },
 
+  // Redirects — convenience for common bare-route URLs
+  async redirects() {
+    return [
+      // UAT-fix 2026-05-13: `/billing` is a frequent typo for the real route.
+      { source: "/billing", destination: "/settings/billing", permanent: false },
+    ];
+  },
+
   // Image domains (add Supabase storage bucket when configured)
   images: {
     remotePatterns: [

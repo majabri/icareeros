@@ -3,13 +3,15 @@
 /**
  * Sprint 2 W2-D — Deploy history panel for /admin/system
  *
- * Reads `public.deployment_history` (RLS-gated to admins) and surfaces
- * the last N deployments with state, gate decision, and quick links to
- * Vercel + GitHub.
+ * Reads from /api/admin/deployment-history (server-side, service-role).
+ * This route handles the admin gate + bypasses RLS so the client-side
+ * read no longer depends on the deployment_history RLS policy matching
+ * the signed-in user.
+ *
+ * Rewrite 2026-05-13 — see UAT-SPRINT2-REPORT.md B1.
  */
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase";
 
 interface DeploymentRow {
   id: string;
@@ -47,23 +49,23 @@ function gateBadge(decision: string | null): { label: string; cls: string } | nu
 }
 
 export function AdminDeployHistory() {
-  const [rows, setRows]   = useState<DeploymentRow[]>([]);
+  const [rows, setRows]       = useState<DeploymentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const sb = createClient();
-        const { data, error } = await sb
-          .from("deployment_history")
-          .select("id, vercel_deployment_id, vercel_url, environment, branch, commit_sha, commit_message, state, created_at, ready_at, gate_decision, gate_rationale")
-          .order("created_at", { ascending: false })
-          .limit(20);
+        const res = await fetch("/api/admin/deployment-history", { cache: "no-store" });
         if (cancelled) return;
-        if (error) { setError(error.message); return; }
-        setRows((data as DeploymentRow[]) ?? []);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({} as { error?: string }));
+          setError(body.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        const body = await res.json() as { deployments: DeploymentRow[] };
+        setRows(body.deployments ?? []);
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
       } finally {
