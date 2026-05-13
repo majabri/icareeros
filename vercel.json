@@ -43,6 +43,14 @@
     {
       "path": "/api/cron/check-bugs-inbox",
       "schedule": "0,30 * * * *"
+    },
+    {
+      "path": "/api/cron/discover-rss",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/discover-perplexity",
+      "schedule": "0 14 * * *"
     }
   ]
 }
