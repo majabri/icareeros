@@ -42,7 +42,7 @@ export async function checkPlanLimit(
     const { data: flagData } = await supabase
       .from("feature_flags")
       .select("enabled")
-      .eq("flag_name", "monetization_enabled")
+      .eq("key", "monetization_enabled")
       .maybeSingle();
 
     if (!flagData?.enabled) return null; // pre-launch: open access
