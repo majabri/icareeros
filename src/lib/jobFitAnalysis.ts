@@ -226,7 +226,7 @@ const CAREER_LEVEL_PATTERNS: { level: string; patterns: RegExp[]; weight: number
   { level: "Mid-Level", weight: 30, patterns: [
     /\b(engineer|developer|analyst|consultant|specialist|coordinator|administrator)\b/i,
   ]},
-  { level: "Entry-Level / Junior", weight: 10, patterns: [
+  { level: "Entry-Level / Junior", weight: 35, patterns: [
     /\bjunior\b/i, /\bassociate\b/i, /\bentry[\s-]level\b/i, /\bintern\b/i,
   ]},
 ];
