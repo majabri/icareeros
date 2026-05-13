@@ -288,3 +288,6 @@ async function createGithubIssue(
     return null;
   }
 }
+
+// Vercel cron sends GET by default; mirror health-check route pattern.
+export async function GET(req: NextRequest) { return POST(req); }

@@ -141,3 +141,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(report);
 }
+
+// Vercel cron sends GET by default; mirror health-check route pattern.
+export async function GET(req: NextRequest) { return POST(req); }
