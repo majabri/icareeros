@@ -37,7 +37,7 @@ interface RunReport {
   errors:           string[];
 }
 
-async function isCronEnabled(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function isCronEnabled(sb: any): Promise<boolean> {
   const { data } = await sb
     .from("feature_flags")
     .select("enabled")

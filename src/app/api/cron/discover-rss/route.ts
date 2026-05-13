@@ -26,7 +26,7 @@ interface RunReport {
   per_source: Record<string, { fetched: number; inserted: number }>;
 }
 
-async function isCronEnabled(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function isCronEnabled(sb: any): Promise<boolean> {
   const { data } = await sb
     .from("feature_flags")
     .select("enabled")
