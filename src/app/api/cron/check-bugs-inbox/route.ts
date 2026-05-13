@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     // run_summary log at the end of POST rather than early-returning.
     // The for-loop below is a no-op when `unseen` is empty/falsy.
     // Fetch + classify + act on each
-    for (const uid of (unseen ?? [])) {
+    for (const uid of (Array.isArray(unseen) ? unseen : [])) {
       try {
         const msg = await client.fetchOne(uid, {
           envelope:  true,
