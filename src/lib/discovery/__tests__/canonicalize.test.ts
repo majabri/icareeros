@@ -17,7 +17,7 @@ describe("canonicalizeUrl", () => {
   });
 
   it("sorts surviving query params", () => {
-    expect(canonicalizeUrl("https://example.com/?b=2&a=1")).toBe("https://example.com?a=1&b=2");
+    expect(canonicalizeUrl("https://example.com/?b=2&a=1")).toBe("https://example.com/?a=1&b=2");
   });
 
   it("hashUrl gives identical hash for equivalent URLs", () => {
