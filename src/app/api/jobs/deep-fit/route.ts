@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   const { data: flag } = await supabase
     .from("feature_flags")
     .select("enabled")
-    .eq("flag_name", "monetization_enabled")
+    .eq("key", "monetization_enabled")
     .maybeSingle();
 
   if (flag?.enabled === true) {
