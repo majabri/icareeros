@@ -94,18 +94,12 @@ export async function POST(req: NextRequest) {
 
     // Fetch UIDs of unread messages
     const unseen = await client.search({ seen: false });
-    if (!unseen || unseen.length === 0) {
-      await client.logout();
-      return NextResponse.json({
-        ok:        true,
-        processed: 0,
-        elapsed_ms: Date.now() - started,
-        message: "No unread emails.",
-      });
-    }
 
+    // W1-B (Sprint 3 fix for B2): on empty INBOX, fall through to the
+    // run_summary log at the end of POST rather than early-returning.
+    // The for-loop below is a no-op when `unseen` is empty/falsy.
     // Fetch + classify + act on each
-    for (const uid of unseen) {
+    for (const uid of (Array.isArray(unseen) ? unseen : [])) {
       try {
         const msg = await client.fetchOne(uid, {
           envelope:  true,
@@ -124,12 +118,25 @@ export async function POST(req: NextRequest) {
         let issueUrl: string | null = null;
         if (severity === "P0" || severity === "P1") {
           issueUrl = await createGithubIssue(subject, body, severity, from);
-          await logInfrastructureEvent({
-            source:     "bug-inbox-cron",
-            event_type: severity === "P0" ? "bug.p0_created" : "bug.p1_created",
-            severity:   severity === "P0" ? "critical" : "error",
-            payload: { uid, subject, from, github_url: issueUrl },
-          });
+          if (issueUrl) {
+            // Successful GitHub issue creation.
+            await logInfrastructureEvent({
+              source:     "bug-inbox-cron",
+              event_type: severity === "P0" ? "bug.p0_created" : "bug.p1_created",
+              severity:   severity === "P0" ? "critical" : "error",
+              payload: { uid, subject, from, github_url: issueUrl },
+            });
+          } else {
+            // W1-A (Sprint 3 fix for B9): createGithubIssue returned null —
+            // the GitHub API call failed (missing token / 401 / 5xx). Surface
+            // this explicitly rather than logging the misleading 'created' event.
+            await logInfrastructureEvent({
+              source:     "bug-inbox-cron",
+              event_type: "bug.github_create_failed",
+              severity:   "error",
+              payload: { uid, subject, from, classified_as: severity },
+            });
+          }
         } else {
           await logInfrastructureEvent({
             source:     "bug-inbox-cron",
@@ -163,6 +170,29 @@ export async function POST(req: NextRequest) {
   } finally {
     try { await client.logout(); } catch { /* idempotent */ }
   }
+
+  // W1-B (Sprint 3 fix for B2): run_summary log so every cron tick is observable,
+  // including empty-inbox runs and runs where GitHub creation failed.
+  const p0Count = processed.filter(p => p.severity === "P0" && !p.error).length;
+  const p1Count = processed.filter(p => p.severity === "P1" && !p.error).length;
+  const p2Count = processed.filter(p => p.severity === "P2" && !p.error).length;
+  const ghCreated = processed.filter(p => (p.severity === "P0" || p.severity === "P1") && p.github_url).length;
+  const errorCount = processed.filter(p => p.error).length;
+  await logInfrastructureEvent({
+    source:     "bug-inbox-cron",
+    event_type: "bug_inbox.run_summary",
+    severity:   "info",
+    payload: {
+      emails_processed:       processed.length,
+      p0_count:               p0Count,
+      p1_count:               p1Count,
+      p2_count:               p2Count,
+      github_issues_created:  ghCreated,
+      errors:                 errorCount,
+      imap_connection_error:  connectionError ?? null,
+      elapsed_ms:             Date.now() - started,
+    },
+  });
 
   return NextResponse.json({
     ok:        connectionError == null,
