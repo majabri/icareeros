@@ -73,6 +73,8 @@ const nextConfig = {
     return [
       // UAT-fix 2026-05-13: `/billing` is a frequent typo for the real route.
       { source: "/billing", destination: "/settings/billing", permanent: false },
+      // Fix for L0 issue: `/resume` was renamed to `/resumeadvisor` on 2026-05-04
+      { source: "/resume", destination: "/resumeadvisor", permanent: false },
     ];
   },
 
