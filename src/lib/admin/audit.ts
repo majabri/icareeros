@@ -17,7 +17,8 @@
  */
 
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { readRequestContext, type AdminContext } from "./permissions";
+import { readRequestContext } from "./permissions.server";
+import type { AdminContext } from "./permissions";
 
 export interface LogAdminActionParams {
   /** Admin who performed the action — from requirePermission's ctx. */
