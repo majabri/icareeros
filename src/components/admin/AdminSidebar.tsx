@@ -1,30 +1,58 @@
 "use client";
 
 /**
- * Sprint 4 W2-A — Admin sidebar
+ * Sprint 4 W4 (layout parity) — Admin Sidebar.
  *
- * Changes from pre-Sprint-4:
- *   • Accepts `adminRole` prop (5-tier from W1) — filters NAV items
- *     using hasPermission() so a `viewer` doesn't see flag toggles.
- *   • Mobile drawer: < md hides the persistent aside and shows a
- *     hamburger button in the topbar (rendered by layout.tsx).
- *     `isOpen` / `onClose` props control the drawer state.
- *   • `soon` badges retained for stubs that aren't built yet
- *     (sidebar items the user explicitly chose to keep).
+ * Visually identical to AppSidebar: white background, gray-200 border-r,
+ * shadow-sm, sticky below the 72px topbar, 224px expanded / 64px collapsed,
+ * brand-50 active-row tint, same SVG-stroke icons, same item spacing. The
+ * ONLY admin-specific behavior is permission filtering — items the current
+ * adminRole can't access don't appear.
+ *
+ * Replaces the dark-shell version from W2-A. We chose visual parity over
+ * darker-equals-admin theming because the job-seeker app already has a
+ * mature visual language and a separate-looking shell felt jarring.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { hasPermission, type AdminRole, type Permission } from "@/lib/admin/permissions";
 
+// ── SVG icons (mirrors AppSidebar's `Ic` component) ──────────────────────────
+const Ic = ({ d, size = 18 }: { d: string; size?: number }) => (
+  <svg
+    width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" className="shrink-0"
+  >
+    <path d={d} />
+  </svg>
+);
+
+const ICONS = {
+  command:   "M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z",
+  users:     "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+  ticket:    "M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z M14 5v14",
+  monitor:   "M9 12l2 2 4-4 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+  console:   "M8 9l3 3-3 3 M13 15h3 M3 4h18v16H3z",
+  audit:     "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
+  flag:      "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22V15",
+  briefcase: "M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16",
+  key:       "M21 2l-9.6 9.6 M15.5 7.5l3 3L22 7l-3-3 M11.4 11.6a5 5 0 1 1-7 7 5 5 0 0 1 7-7z",
+  menu:      "M3 12h18 M3 6h18 M3 18h18",
+  close:     "M18 6L6 18 M6 6l12 12",
+  back:      "M19 12H5 M12 19l-7-7 7-7",
+  signout:   "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9",
+} as const;
+
+type IconKey = keyof typeof ICONS;
+
 interface NavItem {
   label:       string;
   href:        string;
-  icon:        string;
-  /** When provided, the item is only shown if the role passes this check. */
+  icon:        IconKey;
   permission?: Permission;
-  badge?:      string;
 }
 interface NavGroup {
   group: string;
@@ -35,37 +63,37 @@ const NAV: NavGroup[] = [
   {
     group: "Overview",
     items: [
-      { label: "Command Center", href: "/admin", icon: "⊞", permission: "system.view_metrics" },
+      { label: "Command Center", href: "/admin", icon: "command", permission: "system.view_metrics" },
     ],
   },
   {
     group: "User Management",
     items: [
-      { label: "Users",         href: "/admin/users",   icon: "👥", permission: "users.view_list" },
-      { label: "Support Inbox", href: "/admin/tickets", icon: "🎫", permission: "support.view_tickets" },
+      { label: "Users",         href: "/admin/users",   icon: "users",  permission: "users.view_list" },
+      { label: "Support Inbox", href: "/admin/tickets", icon: "ticket", permission: "support.view_tickets" },
     ],
   },
   {
     group: "System & Monitoring",
     items: [
-      { label: "System Monitor", href: "/admin/system",  icon: "🛡", permission: "system.view_metrics" },
-      { label: "Console",        href: "/admin/console", icon: "⌨",  permission: "system.run_console_cmd" },
-      { label: "Audit Log",      href: "/admin/audit",   icon: "📋", permission: "audit.view" },
+      { label: "System Monitor", href: "/admin/system",  icon: "monitor", permission: "system.view_metrics" },
+      { label: "Console",        href: "/admin/console", icon: "console", permission: "system.run_console_cmd" },
+      { label: "Audit Log",      href: "/admin/audit",   icon: "audit",   permission: "audit.view" },
     ],
   },
   {
     group: "Platform",
     items: [
-      { label: "Feature Flags",  href: "/admin/flags",         icon: "🚩", permission: "system.toggle_flags" },
-      { label: "Opportunities",  href: "/admin/opportunities", icon: "💼", permission: "opportunities.view" },
-      { label: "Role Management", href: "/admin/roles",        icon: "🔑", permission: "roles.assign" },
+      { label: "Feature Flags",   href: "/admin/flags",         icon: "flag",      permission: "system.toggle_flags" },
+      { label: "Opportunities",   href: "/admin/opportunities", icon: "briefcase", permission: "opportunities.view" },
+      { label: "Role Management", href: "/admin/roles",         icon: "key",       permission: "roles.assign" },
     ],
   },
 ];
 
 export interface AdminSidebarProps {
   adminRole:  AdminRole;
-  /** Mobile drawer state — controlled by the parent layout. Desktop ignores. */
+  /** Mobile drawer state — controlled by the parent layout. */
   isOpen?:    boolean;
   onClose?:   () => void;
 }
@@ -73,11 +101,11 @@ export interface AdminSidebarProps {
 export default function AdminSidebar({ adminRole, isOpen = false, onClose }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
   // Close drawer on route change (mobile)
@@ -91,89 +119,76 @@ export default function AdminSidebar({ adminRole, isOpen = false, onClose }: Adm
     router.push("/auth/login");
   }
 
-  // Filter NAV by permission so users only see what they can access
   const visibleNav = NAV
     .map(g => ({ ...g, items: g.items.filter(it => !it.permission || hasPermission(adminRole, it.permission)) }))
     .filter(g => g.items.length > 0);
 
-  return (
-    <>
-      {/* Mobile backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
+  // ── Shared nav body ─────────────────────────────────────────────────────
+  function NavContent({ mobile = false }: { mobile?: boolean }) {
+    const show = !collapsed || mobile;
 
-      <aside
-        className={`
-          flex flex-col bg-gray-900 text-gray-100 transition-all duration-200 flex-shrink-0
-          ${collapsed ? "md:w-14" : "md:w-56"}
-          fixed inset-y-0 left-0 z-50 w-64 transform
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
-          md:relative md:translate-x-0 md:min-h-screen
-        `}
-        aria-label="Admin navigation"
-      >
-        {/* Logo */}
-        <div className={`flex items-center gap-2 px-3 py-5 ${collapsed ? "md:justify-center" : ""}`}>
-          <div className="w-8 h-8 bg-red-600/80 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-sm font-bold">A</span>
+    return (
+      <>
+        {/* Collapse toggle — desktop only */}
+        {!mobile && (
+          <div className="flex h-10 items-center justify-end px-3 border-b border-gray-100 shrink-0">
+            <button
+              onClick={() => setCollapsed(c => !c)}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors"
+            >
+              <Ic d={ICONS.menu} size={16} />
+            </button>
           </div>
-          {!collapsed && <span className="font-bold text-white tracking-tight">Admin</span>}
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            className="ml-auto text-gray-500 hover:text-white transition-colors text-xs hidden md:inline-flex"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? "▶" : "◀"}
-          </button>
-          <button
-            onClick={onClose}
-            className="ml-auto text-gray-500 hover:text-white transition-colors md:hidden"
-            aria-label="Close menu"
-          >✕</button>
-        </div>
+        )}
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2 pb-4">
+        {/* Mobile drawer header */}
+        {mobile && (
+          <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100 shrink-0">
+            <span style={{
+              fontSize: "1rem", fontWeight: 800, letterSpacing: "-0.5px",
+              background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--tertiary) 100%)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+            }}>
+              iCareerOS · Admin
+            </span>
+            <button
+              onClick={onClose}
+              aria-label="Close menu"
+              className="rounded-md p-1.5 text-gray-400 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <Ic d={ICONS.close} size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable nav */}
+        <nav aria-label="Admin navigation" className="flex-1 overflow-y-auto py-2 px-2">
           {visibleNav.map(({ group, items }) => (
-            <div key={group} className="mt-4">
-              {!collapsed && (
-                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+            <div key={group} className="mb-3">
+              {show && (
+                <p className="px-3 mt-2 mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
                   {group}
                 </p>
               )}
-              {items.map(({ label, href, icon, badge }) => {
+              {items.map(({ label, href, icon }) => {
                 const active = isActive(href);
-                const isSoon = badge === "soon";
                 return (
                   <button
                     key={href}
-                    onClick={() => !isSoon && router.push(href)}
+                    onClick={() => router.push(href)}
                     title={collapsed ? label : undefined}
-                    disabled={isSoon}
-                    className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors mb-0.5
+                    className={`group w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-0.5 text-sm font-medium transition-colors
                       ${active
-                        ? "bg-red-700/30 text-red-300 border-l-2 border-red-400 pl-[6px]"
-                        : isSoon
-                          ? "text-gray-600 cursor-default"
-                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                      }`}
+                        ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200"
+                        : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"}`}
+                    aria-current={active ? "page" : undefined}
                   >
-                    <span className="text-base leading-none flex-shrink-0">{icon}</span>
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 text-left truncate">{label}</span>
-                        {badge && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-gray-700 text-gray-500 uppercase tracking-wide">
-                            {badge}
-                          </span>
-                        )}
-                      </>
-                    )}
+                    <span className={active ? "text-brand-600 dark:text-brand-300" : "text-gray-400 group-hover:text-gray-600 dark:text-gray-500"}>
+                      <Ic d={ICONS[icon]} size={18} />
+                    </span>
+                    {show && <span className="flex-1 text-left truncate">{label}</span>}
                   </button>
                 );
               })}
@@ -181,29 +196,71 @@ export default function AdminSidebar({ adminRole, isOpen = false, onClose }: Adm
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-2 py-3 border-t border-gray-800 space-y-1">
+        {/* Footer — Back to App + Sign out */}
+        <div className="border-t border-gray-100 px-2 py-2 shrink-0">
           <button
             onClick={() => router.push("/dashboard")}
             title={collapsed ? "Back to App" : undefined}
-            className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+            className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5 transition-colors"
           >
-            <span className="text-base leading-none">←</span>
-            {!collapsed && <span>Back to App</span>}
+            <span className="text-gray-400 dark:text-gray-500"><Ic d={ICONS.back} size={18} /></span>
+            {show && <span>Back to App</span>}
           </button>
           <button
             onClick={handleSignOut}
             title={collapsed ? "Sign Out" : undefined}
-            className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-red-400/70 hover:bg-red-900/20 hover:text-red-300 transition-colors"
+            className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-900/20 transition-colors"
           >
-            <span className="text-base leading-none">↪</span>
-            {!collapsed && <span>Sign Out</span>}
+            <span className="text-rose-400 dark:text-rose-300/70"><Ic d={ICONS.signout} size={18} /></span>
+            {show && <span>Sign Out</span>}
           </button>
-          {!collapsed && (
-            <p className="px-2 pt-1 text-[10px] text-gray-600">iCareerOS Admin · {adminRole}</p>
+          {show && (
+            <p className="px-3 pt-2 pb-1 text-[10px] text-gray-400 dark:text-gray-500">
+              {adminRole}
+            </p>
           )}
         </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Desktop sidebar — same sticky-below-72px contract as AppSidebar */}
+      <aside
+        aria-label="Admin sidebar"
+        className="icareeros-sidebar hidden md:flex flex-col shrink-0 shadow-sm bg-white border-r border-gray-200 dark:bg-[var(--surface-card,#162338)] dark:border-[var(--surface-border,#243653)]"
+        style={{
+          position: "sticky",
+          top: 72,
+          height: "calc(100vh - 72px)",
+          width: collapsed ? 64 : 224,
+          transition: "width 300ms ease",
+          overflow: "hidden",
+        }}
+      >
+        <NavContent />
       </aside>
+
+      {/* Mobile: full-screen overlay drawer */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[150] flex md:hidden"
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Admin navigation drawer"
+        >
+          <div
+            className="icareeros-sidebar flex flex-col bg-white border-r border-gray-200 shadow-xl overflow-hidden dark:bg-[var(--surface-card,#162338)] dark:border-[var(--surface-border,#243653)]"
+            style={{ width: 256, height: "100%" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <NavContent mobile />
+          </div>
+          <div className="flex-1 bg-black/30" aria-hidden="true" />
+        </div>
+      )}
     </>
   );
 }
