@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchJobFromUrl, stripHtml } from "../fetchJobFromUrl";
 
 /**
@@ -9,11 +9,7 @@ import { fetchJobFromUrl, stripHtml } from "../fetchJobFromUrl";
 
 const originalFetch = globalThis.fetch;
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
 afterEach(() => {
-  vi.useRealTimers();
   globalThis.fetch = originalFetch;
 });
 
@@ -158,7 +154,9 @@ describe("stripHtml", () => {
   });
 
   it("decodes core entities", () => {
+    // Whitespace runs are collapsed to a single space (intentional — keeps
+    // LLM context tidy), so the &nbsp; between D and E becomes one space.
     expect(stripHtml("<p>A &amp; B &lt; C &gt; D &nbsp;E &#39;F&#39;</p>"))
-      .toBe("A & B < C > D  E 'F'");
+      .toBe("A & B < C > D E 'F'");
   });
 });
