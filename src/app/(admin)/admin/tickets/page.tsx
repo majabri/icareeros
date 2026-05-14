@@ -8,9 +8,11 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
 import { priorityBadgeClass } from "@/services/supportService";
 import type { TicketPriority, TicketStatus } from "@/services/supportService";
 import { TicketStatusSelect } from "@/components/admin/TicketStatusSelect";
+import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Support Inbox — iCareerOS Admin" };
@@ -210,9 +212,12 @@ function TicketCard({ ticket, compact = false }: { ticket: AdminTicket; compact?
     <li className={`rounded-xl border border-gray-200 bg-white shadow-sm ${compact ? "px-4 py-3" : "p-4"}`}>
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-sm"}`}>
+          <Link
+            href={`/admin/tickets/${ticket.id}`}
+            className={`font-semibold text-gray-900 hover:text-brand-600 hover:underline ${compact ? "text-sm" : "text-sm"} dark:text-gray-100 dark:hover:text-brand-400`}
+          >
             {ticket.subject}
-          </p>
+          </Link>
           {!compact && (
             <p className="mt-1 text-xs text-gray-500 line-clamp-4 whitespace-pre-wrap">{ticket.body}</p>
           )}

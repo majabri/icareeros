@@ -166,12 +166,141 @@ export async function updateTicketStatus(
   const auth = await requireAdmin();
   if ("error" in auth) return { error: auth.error };
   const svc = makeSvc();
+  const { data: before } = await svc
+    .from("support_tickets").select("status").eq("id", ticketId).maybeSingle();
+  const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  if (status === "resolved" || status === "closed") {
+    patch.resolved_at = new Date().toISOString();
+  }
+  const { error } = await svc
+    .from("support_tickets").update(patch).eq("id", ticketId);
+  if (error) return { error: error.message };
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "support.ticket_status_changed",
+    target_table: "support_tickets", target_id: ticketId,
+    before_value: { status: before?.status ?? null },
+    after_value: { status },
+  });
+  revalidatePath("/admin/tickets");
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  return {};
+}
+
+/**
+ * Append an inline admin reply: stores the reply in support_tickets.admin_notes
+ * as a timestamped, author-tagged entry, AND sends the body to the user via
+ * the existing Bluehost SMTP mailer.
+ *
+ * Why admin_notes (not a separate ticket_messages table)? The current schema
+ * doesn't have a thread table; admin_notes is the canonical place for
+ * everything the admin has said. Each entry is prefixed with a header line
+ * so the rendering layer can split them.
+ *
+ * Audit logged as 'support.ticket_replied' with reply length + user email.
+ */
+export async function sendTicketReply(
+  ticketId: string,
+  body: string,
+): Promise<{ error?: string }> {
+  const auth = await requireAdmin();
+  if ("error" in auth) return { error: auth.error };
+  const trimmed = body.trim();
+  if (trimmed.length < 5) return { error: "Reply too short (5+ chars required)" };
+
+  const svc = makeSvc();
+  // Need the ticket subject + user email to send the message
+  const { data: ticket } = await svc
+    .from("support_tickets")
+    .select("id, subject, status, admin_notes, user_id")
+    .eq("id", ticketId)
+    .maybeSingle();
+  if (!ticket) return { error: "Ticket not found" };
+
+  // Look up user email
+  const { data: { user: au }, error: auErr } = await svc.auth.admin.getUserById(ticket.user_id);
+  if (auErr || !au?.email) return { error: "User email not on file — cannot send reply" };
+
+  // Compose the append entry for admin_notes
+  const ts = new Date().toISOString();
+  const header = `[REPLY ${ts} by ${auth.email}]`;
+  const newEntry = `${header}
+${trimmed}`;
+  const newNotes = ticket.admin_notes ? `${ticket.admin_notes}
+
+${newEntry}` : newEntry;
+
+  // Send the email first; only persist the reply if the send succeeded
+  const { sendMail, getFromAddress } = await import("@/lib/mailer");
+  const sendResult = await sendMail({
+    to:      au.email,
+    from:    getFromAddress(),
+    subject: `Re: ${ticket.subject}`,
+    text:    trimmed,
+  });
+  if (!sendResult || sendResult.error) {
+    return { error: `Email send failed: ${sendResult?.error ?? "unknown"}` };
+  }
+
+  // Persist the reply + bump status to in_progress (if it was open)
+  const newStatus = ticket.status === "open" ? "in_progress" : ticket.status;
   const { error } = await svc
     .from("support_tickets")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ admin_notes: newNotes, status: newStatus, updated_at: ts })
+    .eq("id", ticketId);
+  if (error) return { error: `Reply sent but DB update failed: ${error.message}` };
+
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "support.ticket_replied",
+    target_table: "support_tickets", target_id: ticketId,
+    after_value: { reply_length: trimmed.length, recipient: au.email, status_after: newStatus },
+  });
+
+  revalidatePath("/admin/tickets");
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  return {};
+}
+
+/**
+ * Append an internal note — not sent to the user. Stored in admin_notes
+ * with a [NOTE …] header so the rendering layer can distinguish replies
+ * from internal commentary.
+ */
+export async function addTicketInternalNote(
+  ticketId: string,
+  note: string,
+): Promise<{ error?: string }> {
+  const auth = await requireAdmin();
+  if ("error" in auth) return { error: auth.error };
+  const trimmed = note.trim();
+  if (trimmed.length < 2) return { error: "Note too short" };
+
+  const svc = makeSvc();
+  const { data: ticket } = await svc
+    .from("support_tickets").select("admin_notes").eq("id", ticketId).maybeSingle();
+  if (!ticket) return { error: "Ticket not found" };
+
+  const ts = new Date().toISOString();
+  const header = `[NOTE ${ts} by ${auth.email}]`;
+  const newEntry = `${header}
+${trimmed}`;
+  const newNotes = ticket.admin_notes ? `${ticket.admin_notes}
+
+${newEntry}` : newEntry;
+
+  const { error } = await svc
+    .from("support_tickets")
+    .update({ admin_notes: newNotes, updated_at: ts })
     .eq("id", ticketId);
   if (error) return { error: error.message };
+
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "support.internal_note_added",
+    target_table: "support_tickets", target_id: ticketId,
+    after_value: { note_length: trimmed.length },
+  });
+
   revalidatePath("/admin/tickets");
+  revalidatePath(`/admin/tickets/${ticketId}`);
   return {};
 }
 
