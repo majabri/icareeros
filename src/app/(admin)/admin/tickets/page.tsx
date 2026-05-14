@@ -209,26 +209,31 @@ function TicketCard({ ticket, compact = false }: { ticket: AdminTicket; compact?
   const hasAi = ticket.classification != null;
 
   return (
-    <li className={`rounded-xl border border-gray-200 bg-white shadow-sm ${compact ? "px-4 py-3" : "p-4"}`}>
+    <li className={`rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-gray-300 transition-shadow ${compact ? "px-4 py-3" : "p-4"} dark:bg-[var(--surface-card,#162338)] dark:border-[var(--surface-border,#243653)] dark:hover:border-gray-500`}>
       <div className="flex flex-wrap items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <Link
-            href={`/admin/tickets/${ticket.id}`}
-            className={`font-semibold text-gray-900 hover:text-brand-600 hover:underline ${compact ? "text-sm" : "text-sm"} dark:text-gray-100 dark:hover:text-brand-400`}
-          >
+        {/* The entire left side is a Link to the detail view. Status select stays
+            outside the Link so its dropdown clicks don't get intercepted. */}
+        <Link
+          href={`/admin/tickets/${ticket.id}`}
+          prefetch={false}
+          data-testid="ticket-card-link"
+          className="flex-1 min-w-0 block group"
+          aria-label={`Open ticket: ${ticket.subject}`}
+        >
+          <span className={`block font-semibold text-gray-900 group-hover:text-brand-600 group-hover:underline ${compact ? "text-sm" : "text-sm"} dark:text-gray-100 dark:group-hover:text-brand-400`}>
             {ticket.subject}
-          </Link>
+          </span>
           {!compact && (
-            <p className="mt-1 text-xs text-gray-500 line-clamp-4 whitespace-pre-wrap">{ticket.body}</p>
+            <span className="mt-1 block text-xs text-gray-500 line-clamp-4 whitespace-pre-wrap dark:text-gray-400">{ticket.body}</span>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${priorityBadgeClass(ticket.priority)}`}>
               {ticket.priority}
             </span>
             <span>{new Date(ticket.created_at).toLocaleString()}</span>
             {!compact && <span className="font-mono truncate max-w-[200px]">uid: {ticket.user_id}</span>}
-          </div>
-        </div>
+          </span>
+        </Link>
 
         <div className="flex-shrink-0 pt-0.5">
           <TicketStatusSelect ticketId={ticket.id} currentStatus={ticket.status as TicketStatus} />
