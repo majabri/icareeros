@@ -34,7 +34,7 @@ describe("fetchJobFromUrl — Greenhouse", () => {
         title:        "Senior Engineer",
         company_name: "Stripe",
         location:     { name: "Remote — US" },
-        content:      "<p>Build payment infrastructure.</p><ul><li>Strong Go</li><li>Experience with Postgres</li></ul>",
+        content:      "<p>Build payment infrastructure that scales to handle billions of transactions per year.</p><ul><li>Strong Go and TypeScript experience required</li><li>Experience with Postgres, Redis, and distributed systems</li></ul>",
       });
     }) as unknown as typeof fetch;
 
