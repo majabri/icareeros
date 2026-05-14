@@ -117,10 +117,14 @@ export async function middleware(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, admin_role")
       .eq("user_id", user.id)
       .maybeSingle();
-    isAdmin = profile?.role === "admin";
+    // Sprint 4 W1-C: 5-tier admin_role wins. Backward compat: legacy
+    // role='admin' (binary, pre-Sprint-4) still grants admin access. Once
+    // every admin has an explicit admin_role, the `role === 'admin'`
+    // fallback can be removed.
+    isAdmin = Boolean(profile?.admin_role) || profile?.role === "admin";
   }
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAdminProtected = ADMIN_PROTECTED.some((p) => pathname.startsWith(p));
