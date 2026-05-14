@@ -59,10 +59,10 @@ export async function fetchJobFromUrl(rawUrl: string): Promise<FetchJobResult> {
   return fetchAndExtractHtml(url).then(maybeWrap("html"));
 }
 
-function maybeWrap<T extends Omit<FetchedJob, "source" | "ok">>(source: FetchedJob["source"]) {
-  return (r: T | FetchedJobError): FetchJobResult => {
+function maybeWrap(source: FetchedJob["source"]) {
+  return (r: Partial<FetchedJob> | FetchedJobError): FetchJobResult => {
     if ("ok" in r && r.ok === false) return r;
-    const j = r as T;
+    const j = r as Partial<FetchedJob>;
     if (!j.description || j.description.trim().length < 80) {
       return { ok: false, error: "Could not extract a usable job description from this URL." };
     }
