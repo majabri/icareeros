@@ -112,6 +112,18 @@ export default function ResumeAdvisorPage() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
 
+  // 2026-05-14 — Job URL fetch state. When jobSource === "url" we resolve
+  // the URL server-side once (via /api/resume/fetch-job-url) and cache the
+  // resulting text in `urlFetchedJD`. All downstream actions (fit-check /
+  // rewrite / critique / cover letter) then use the SAME resolved text so
+  // we don't re-fetch on every action and so they all see identical JDs.
+  const [urlFetching,   setUrlFetching]   = useState(false);
+  const [urlFetchedJD,  setUrlFetchedJD]  = useState<string | null>(null);
+  const [urlFetchMeta,  setUrlFetchMeta]  = useState<{
+    title?: string; company?: string; location?: string; source: string;
+  } | null>(null);
+  const [urlFetchError, setUrlFetchError] = useState<string | null>(null);
+
   // Fit check state
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<FitCheckResult | null>(null);
@@ -256,6 +268,68 @@ export default function ResumeAdvisorPage() {
   const canCheck = hasResume && hasJob && !checking;
 
   // ── Fit check ──────────────────────────────────────────────────────────
+  /**
+   * Resolve the JD text the LLM will see. For "paste" mode it's the
+   * textarea value. For "url" mode we (a) use a cached fetch if we
+   * already resolved this URL, otherwise (b) call /api/resume/fetch-job-url
+   * to scrape it. Sets urlFetchMeta + urlFetchError so the UI can show a
+   * confirmation banner or an inline error. Returns null if we couldn't
+   * resolve a usable JD (caller should abort).
+   */
+  async function resolveJobText(): Promise<string | null> {
+    if (jobSource === "paste") {
+      const t = jobDescription.trim();
+      if (!t) {
+        setError("Paste a job description first.");
+        return null;
+      }
+      return t;
+    }
+    // url mode
+    const url = jobUrl.trim();
+    if (!url) {
+      setError("Paste a job URL first.");
+      return null;
+    }
+    // Use cached fetch if URL hasn't changed
+    if (urlFetchedJD && urlFetchMeta) return urlFetchedJD;
+
+    setUrlFetching(true);
+    setUrlFetchError(null);
+    try {
+      const res = await fetch("/api/resume/fetch-job-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const j = await res.json() as {
+        ok?: boolean; error?: string; source?: string;
+        title?: string; company?: string; location?: string; description?: string;
+      };
+      if (!res.ok || j.ok === false || !j.description) {
+        const msg = j.error ?? `Fetch failed: HTTP ${res.status}`;
+        setUrlFetchError(msg);
+        setError(msg);
+        return null;
+      }
+      setUrlFetchedJD(j.description);
+      setUrlFetchMeta({
+        title:    j.title,
+        company:  j.company,
+        location: j.location,
+        source:   j.source ?? "html",
+      });
+      return j.description;
+    } catch (e) {
+      const msg = (e as Error).message;
+      setUrlFetchError(msg);
+      setError(msg);
+      return null;
+    } finally {
+      setUrlFetching(false);
+    }
+  }
+
   async function handleCheck() {
     setChecking(true); setError(null); setResult(null); setRewriteResult(null);
     setCritique(null); setCoverLetter(null);
@@ -278,7 +352,11 @@ export default function ResumeAdvisorPage() {
       if (!resumeText) throw new Error("Could not extract resume text.");
       setResolvedResumeText(resumeText);
 
-      const jobText = jobSource === "url" ? `Job URL: ${jobUrl}\n\n(Assess based on the URL context provided)` : jobDescription;
+      // 2026-05-14 — URL mode: resolve the URL to real job text via the
+      // server route. Previously this passed only "Job URL: <url>" to the
+      // LLM, which had no way to fetch and produced nonsense analyses.
+      const jobText = await resolveJobText();
+      if (jobText === null) { setChecking(false); return; }
       const { data, error: fnError } = await supabase.functions.invoke("fit-check", {
         body: { resumeText, jobDescription: jobText },
       });
@@ -295,11 +373,15 @@ export default function ResumeAdvisorPage() {
   // ── Rewrite ────────────────────────────────────────────────────────────
   async function handleRewrite() {
     if (!resolvedResumeText) return;
+    // 2026-05-14 — pass real JD text. For "url" mode this uses the cached
+    // fetch from /api/resume/fetch-job-url so we don't re-fetch on every
+    // downstream action.
+    const jd = jobSource === "url" ? urlFetchedJD : jobDescription.trim();
     setRewriting(true);
     try {
       const rr = await rewriteResume({
         resumeText: resolvedResumeText,
-        jobDescription: jobSource === "paste" ? jobDescription : undefined,
+        jobDescription: jd && jd.length > 0 ? jd : undefined,
       });
       setRewriteResult(rr);
     } catch (e) {
@@ -448,11 +530,16 @@ export default function ResumeAdvisorPage() {
       setCoverLetterError("Run the fit analysis first so we have your resume text.");
       return;
     }
-    // UAT fix: accept URL mode. In paste mode we send the full JD; in URL
-    // mode we send the URL as context — Claude can extract company/role.
-    const jdForCoverLetter = jobSource === "paste"
-      ? jobDescription.trim()
-      : (jobUrl.trim() ? `Job URL: ${jobUrl.trim()}` : "");
+    // 2026-05-14 — URL mode now uses the real fetched JD (cached by
+    // resolveJobText() / handleCheck). Falls back to triggering a fresh
+    // fetch if the user clicks Cover Letter before running Fit Analysis.
+    let jdForCoverLetter: string;
+    if (jobSource === "paste") {
+      jdForCoverLetter = jobDescription.trim();
+    } else {
+      const resolved = await resolveJobText();
+      jdForCoverLetter = resolved ?? "";
+    }
     if (!jdForCoverLetter) {
       setCoverLetterError("Paste a job description or job URL above first.");
       return;
@@ -506,9 +593,12 @@ export default function ResumeAdvisorPage() {
     // mount and clears the keys after consuming.
     if (typeof window !== "undefined") {
       try {
+        // 2026-05-14 — URL mode now uses the real fetched JD when available.
+        // The interview page can do far better setup with the actual JD than
+        // with just a URL string.
         const jdForInterview = jobSource === "paste"
           ? jobDescription
-          : jobUrl ? `Job URL: ${jobUrl}` : "";
+          : (urlFetchedJD ?? (jobUrl ? `Job URL: ${jobUrl}` : ""));
         if (jdForInterview) sessionStorage.setItem("interviewPrep:jd", jdForInterview);
         if (resolvedResumeText) sessionStorage.setItem("interviewPrep:resume", resolvedResumeText);
       } catch { /* sessionStorage may be unavailable in some environments */ }
@@ -667,7 +757,40 @@ export default function ResumeAdvisorPage() {
               <button onClick={() => { setJobSource("url"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${jobSource === "url" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>🔗 Job URL</button>
             </div>
             {jobSource === "paste" ? <textarea value={jobDescription} onChange={(e) => { setJobDescription(e.target.value); setResult(null); }} placeholder="Paste the full job description here…" rows={8} className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-            : <input type="url" value={jobUrl} onChange={(e) => { setJobUrl(e.target.value); setResult(null); }} placeholder="https://www.linkedin.com/jobs/view/..." className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />}
+            : <div className="space-y-2">
+                <input
+                  type="url"
+                  value={jobUrl}
+                  onChange={(e) => {
+                    setJobUrl(e.target.value);
+                    setResult(null);
+                    // 2026-05-14 — invalidate any cached fetch when the URL changes
+                    setUrlFetchedJD(null);
+                    setUrlFetchMeta(null);
+                    setUrlFetchError(null);
+                  }}
+                  placeholder="https://boards.greenhouse.io/<company>/jobs/<id> · jobs.lever.co/... · job posting URL"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+                {urlFetching && (
+                  <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                    Fetching job description from URL…
+                  </p>
+                )}
+                {urlFetchMeta && !urlFetchError && (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                    <span className="font-semibold">✓ Fetched ({urlFetchMeta.source}):</span>{" "}
+                    {urlFetchMeta.title || "job description"}
+                    {urlFetchMeta.company && <> · <span className="font-medium">{urlFetchMeta.company}</span></>}
+                    {urlFetchMeta.location && <> · {urlFetchMeta.location}</>}
+                  </div>
+                )}
+                {urlFetchError && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Couldn\'t fetch the URL: {urlFetchError}. Paste the job description manually instead.
+                  </p>
+                )}
+              </div>}
           </section>
 
           {/* CTA */}
