@@ -143,7 +143,7 @@ export function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
     .replace(/\([^)]*\)/g, " ")
-    .replace(/\b(senior|sr\.?|junior|jr\.?|staff|principal|lead|i{2,3}|iv|v)\b/g, " ")
+    .replace(/\b(senior|sr\.?|junior|jr\.?|staff|principal|lead)\b\.?|\b(i{2,3}|iv|v)\b/g, " ")
     .replace(/[^\p{L}\p{N}\s+#./-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
