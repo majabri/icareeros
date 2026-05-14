@@ -74,7 +74,7 @@ export default function FoundingCheckoutPage() {
       // Record consent at click time (matches FoundingLifetime banner
       // pattern). If checkout fails later, we still have an audit row
       // showing the user agreed to the founding terms at this moment.
-      await recordFoundingConsent();
+      await recordFoundingConsent({ userId, email: userEmail ?? undefined });
 
       const url = await createCheckoutSession({ addon: "founding_lifetime" });
       if (url) {
