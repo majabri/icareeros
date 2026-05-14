@@ -14,6 +14,14 @@ vi.mock("next/headers", () => ({
     set: vi.fn(),
     delete: vi.fn(),
   }),
+  headers: vi.fn().mockResolvedValue({
+    get: vi.fn().mockReturnValue(null),
+  }),
+}));
+
+// ── Sprint 4 W3-B audit logging — fire-and-forget no-op for tests ─────────
+vi.mock("@/lib/admin/audit", () => ({
+  logAdminAction: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ── @supabase/ssr — used by requireAdmin() to identify the user ──────────────
@@ -58,7 +66,7 @@ beforeEach(() => {
   mockEq.mockResolvedValue({ error: null });
   mockUpdate.mockReturnValue({ eq: mockEq });
   // Default: requireAdmin's profile lookup returns admin
-  mockMaybeSingle.mockResolvedValue({ data: { role: "admin" }, error: null });
+  mockMaybeSingle.mockResolvedValue({ data: { role: "admin", admin_role: "super_admin" }, error: null });
   mockFrom.mockReturnValue({ update: mockUpdate, select: mockSelect });
   mockSelect.mockReturnValue(mockSelectChain);
 });
