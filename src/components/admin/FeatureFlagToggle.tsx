@@ -172,7 +172,7 @@ export function FeatureFlagToggle({ initial }: { initial: Flag[] }) {
       <AdminConfirmDialog
         open={confirming !== null}
         onClose={() => setConfirming(null)}
-        onConfirm={() => confirming && doToggle(confirming.key, confirming.nextState)}
+        onConfirm={() => { if (confirming) doToggle(confirming.key, confirming.nextState); }}
         title={`${confirming?.nextState ? "Enable" : "Disable"} production flag?`}
         description={
           <>
