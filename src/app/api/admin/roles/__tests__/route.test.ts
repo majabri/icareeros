@@ -14,27 +14,38 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Stub requirePermission ────────────────────────────────────────────────
 // Default: caller is super_admin. Individual tests override.
-const requirePermissionSpy = vi.fn().mockResolvedValue({
-  ok: true,
-  ctx: { user_id: "caller-uuid", email: "caller@icareeros.com", admin_role: "super_admin" },
-});
-const permissionErrorResponseSpy = vi.fn((r: { status: number; error: string }) =>
-  new Response(JSON.stringify({ error: r.error }), { status: r.status }),
-);
+// vi.hoisted() is required because vi.mock() factories are hoisted above
+// the rest of the file — without hoisting these spies the factory can't
+// see them at evaluation time.
+const { requirePermissionSpy, permissionErrorResponseSpy, logSpy } = vi.hoisted(() => ({
+  requirePermissionSpy: vi.fn().mockResolvedValue({
+    ok: true,
+    ctx: { user_id: "caller-uuid", email: "caller@icareeros.com", admin_role: "super_admin" },
+  }),
+  permissionErrorResponseSpy: vi.fn((r: { status: number; error: string }) =>
+    new Response(JSON.stringify({ error: r.error }), { status: r.status }),
+  ),
+  logSpy: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/admin/permissions.server", () => ({
   requirePermission:        requirePermissionSpy,
   permissionErrorResponse:  permissionErrorResponseSpy,
 }));
 
-// ── Stub logAdminAction ───────────────────────────────────────────────────
-const logSpy = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/admin/audit", () => ({ logAdminAction: logSpy }));
 
 // ── Stub Supabase service client ──────────────────────────────────────────
-// Test setup sets `targetRow` + `superAdminCount` per test.
-let targetRow: Record<string, unknown> | null = null;
-let superAdminCount = 2;
-const updateOutcome = { data: null as Record<string, unknown> | null, error: null as { message: string } | null };
+// Test setup sets `state.targetRow` + `state.superAdminCount` per test.
+// Hoisted so the mock factory's closure can see it at hoist time.
+const state = vi.hoisted(() => ({
+  targetRow: null as Record<string, unknown> | null,
+  superAdminCount: 2,
+  updateOutcome: {
+    data: null as Record<string, unknown> | null,
+    error: null as { message: string } | null,
+  },
+}));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
@@ -43,22 +54,22 @@ vi.mock("@supabase/supabase-js", () => ({
         // Branch 1: counting super_admins (uses head:true)
         if (opts?.head) {
           return {
-            eq: () => Promise.resolve({ count: superAdminCount, error: null }),
+            eq: () => Promise.resolve({ count: state.superAdminCount, error: null }),
           };
         }
         // Branch 2: looking up the target row
         return {
           eq: () => ({
-            maybeSingle: () => Promise.resolve({ data: targetRow, error: null }),
+            maybeSingle: () => Promise.resolve({ data: state.targetRow, error: null }),
           }),
         };
       },
       update: () => ({
         eq: () => ({
           select: () => ({
-            single: () => Promise.resolve(updateOutcome.data
-              ? { data: updateOutcome.data,  error: null }
-              : { data: null,                error: updateOutcome.error ?? { message: "no-update-data" } },
+            single: () => Promise.resolve(state.updateOutcome.data
+              ? { data: state.updateOutcome.data,  error: null }
+              : { data: null,                      error: state.updateOutcome.error ?? { message: "no-update-data" } },
             ),
           }),
         }),
@@ -86,20 +97,20 @@ beforeEach(() => {
     ok: true,
     ctx: { user_id: "caller-uuid", email: "caller@icareeros.com", admin_role: "super_admin" },
   });
-  targetRow = {
+  state.targetRow = {
     user_id:    "target-uuid",
     email:      "target@icareeros.com",
     role:       "admin",
     admin_role: "admin",
   };
-  superAdminCount = 2;
-  updateOutcome.data  = {
+  state.superAdminCount = 2;
+  state.updateOutcome.data  = {
     user_id: "target-uuid",
     email:   "target@icareeros.com",
     role:    "admin",
     admin_role: "support_l2",
   };
-  updateOutcome.error = null;
+  state.updateOutcome.error = null;
 });
 
 describe("PATCH /api/admin/roles — safety rules", () => {
@@ -131,13 +142,13 @@ describe("PATCH /api/admin/roles — safety rules", () => {
   });
 
   it("blocks demoting the last super_admin (count==1)", async () => {
-    targetRow = {
+    state.targetRow = {
       user_id:    "target-uuid",
       email:      "lone@icareeros.com",
       role:       null,
       admin_role: "super_admin",
     };
-    superAdminCount = 1;
+    state.superAdminCount = 1;
     const res = await PATCH(makeReq({ user_id: "target-uuid", admin_role: "admin" }) as never);
     expect(res.status).toBe(409);
     const body = await res.json();
@@ -146,14 +157,14 @@ describe("PATCH /api/admin/roles — safety rules", () => {
   });
 
   it("allows demoting one of multiple super_admins (count==2)", async () => {
-    targetRow = {
+    state.targetRow = {
       user_id:    "target-uuid",
       email:      "second@icareeros.com",
       role:       null,
       admin_role: "super_admin",
     };
-    superAdminCount = 2;
-    updateOutcome.data = {
+    state.superAdminCount = 2;
+    state.updateOutcome.data = {
       user_id: "target-uuid", email: "second@icareeros.com",
       role: null, admin_role: "admin",
     };
@@ -167,7 +178,7 @@ describe("PATCH /api/admin/roles — safety rules", () => {
   });
 
   it("logs roles.cleared when admin_role is set to null", async () => {
-    updateOutcome.data = {
+    state.updateOutcome.data = {
       user_id: "target-uuid", email: "target@icareeros.com",
       role: "user", admin_role: null,
     };
@@ -178,7 +189,7 @@ describe("PATCH /api/admin/roles — safety rules", () => {
   });
 
   it("returns 404 when target user does not exist", async () => {
-    targetRow = null;
+    state.targetRow = null;
     const res = await PATCH(makeReq({ user_id: "missing-uuid", admin_role: "viewer" }) as never);
     expect(res.status).toBe(404);
     expect(logSpy).not.toHaveBeenCalled();
