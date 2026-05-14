@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       after_value: { triggered: false, upstream_status: 0, network_error: msg },
     });
     return NextResponse.json(
-      { ok: false, error: \`Network error reaching upstream: \${msg}\` },
+      { ok: false, error: `Network error reaching upstream: ${msg}` },
       { status: 502 },
     );
   }
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: \`Upstream cron route returned HTTP \${upstreamStatus}\`,
+        error: `Upstream cron route returned HTTP ${upstreamStatus}`,
         upstream_status: upstreamStatus,
         upstream_body: upstreamBody || undefined,
       },
