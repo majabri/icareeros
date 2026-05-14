@@ -24,8 +24,16 @@ export default function AdminQuickActions() {
     setIngestState({ status: "loading" });
     try {
       const res = await fetch("/api/admin/force-ingest-ats", { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json().catch(() => ({}));
+      const j = await res.json().catch(() => ({} as { ok?: boolean; error?: string; message?: string; upstream_status?: number }));
+      // Sprint 4 W3-A fix: check both res.ok AND the API's own `ok` flag —
+      // the admin route now returns the upstream HTTP status on failure, so
+      // res.ok would already be false, but we keep the explicit check for
+      // defense against future routes that always return 2xx with ok:false.
+      if (!res.ok || j.ok === false) {
+        const msg = j.error ?? j.message ?? `HTTP ${res.status}`;
+        setIngestState({ status: "err", message: msg });
+        return;
+      }
       setIngestState({ status: "ok", message: j.message ?? "Triggered" });
     } catch (e) {
       setIngestState({ status: "err", message: (e as Error).message });
@@ -36,8 +44,11 @@ export default function AdminQuickActions() {
     setMaintState({ status: "loading" });
     try {
       const res = await fetch("/api/admin/maintenance/toggle", { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json().catch(() => ({}));
+      const j = await res.json().catch(() => ({} as { ok?: boolean; enabled?: boolean; error?: string }));
+      if (!res.ok || j.ok === false) {
+        setMaintState({ status: "err", message: j.error ?? `HTTP ${res.status}` });
+        return;
+      }
       setMaintState({ status: "ok", message: j.enabled ? "ON" : "OFF" });
     } catch (e) {
       setMaintState({ status: "err", message: (e as Error).message });
