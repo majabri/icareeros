@@ -43,7 +43,8 @@ interface RunReport {
   disabled:  boolean;
 }
 
-async function isCronEnabled(sb: ReturnType<typeof createClient>): Promise<boolean> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function isCronEnabled(sb: any): Promise<boolean> {
   const { data } = await sb
     .from("feature_flags")
     .select("enabled")
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
       source: "cron.enrich-salaries", event_type: "run_summary",
       severity: "warning", payload: { ...report, detail: "ADZUNA_APP_ID / ADZUNA_APP_KEY not configured" },
     });
-    return NextResponse.json({ ok: false, ...report }, { status: 503 });
+    return NextResponse.json({ ...report, ok: false }, { status: 503 });
   }
 
   // Select the next batch — the partial index makes this fast.
@@ -146,7 +147,7 @@ export async function POST(req: NextRequest) {
     payload:  { ...report },
   });
 
-  return NextResponse.json({ ok: report.ok, ...report });
+  return NextResponse.json({ ...report, ok: report.ok });
 }
 
 export async function GET(req: NextRequest) { return POST(req); }
