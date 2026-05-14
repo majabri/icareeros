@@ -200,7 +200,10 @@ export default function CareerProfilePage() {
   // ── Save profile ─────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
-    if (!userId) return;
+    if (!userId) {
+      setProfileMsg({ type: "error", text: "Please sign in again and retry." });
+      return;
+    }
     setSaving(true); setProfileMsg(null);
     try {
       const { error } = await supabase.from("career_profiles").upsert(
@@ -497,7 +500,7 @@ export default function CareerProfilePage() {
       {showResumeConsent && (
         <ResumeUploadConsent onAccept={onResumeConsentAccept} onDecline={onResumeConsentDecline} />
       )}
-      <form onSubmit={e => void handleSaveProfile(e)}>
+      <form noValidate onSubmit={e => void handleSaveProfile(e)}>
         {/* ── Page header with completeness ──────────────────────────── */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1">
