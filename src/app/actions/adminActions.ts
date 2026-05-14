@@ -2,6 +2,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import type { AdminRole, AdminContext } from "@/lib/admin/permissions";
+import { logAdminAction } from "@/lib/admin/audit";
 
 function makeSvc() {
   return createClient(
@@ -20,7 +22,9 @@ function makeSvc() {
 // action because actions can be invoked directly by anyone who knows the
 // action ID.
 
-async function requireAdmin(): Promise<{ id: string; email: string } | { error: string }> {
+type RequireAdminResult = (AdminContext & { id: string }) | { error: string };
+
+async function requireAdmin(): Promise<RequireAdminResult> {
   const { cookies } = await import("next/headers");
   const { createServerClient } = await import("@supabase/ssr");
   const cookieStore = await cookies();
@@ -37,19 +41,35 @@ async function requireAdmin(): Promise<{ id: string; email: string } | { error: 
   const { data: { user } } = await ssr.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  // Use the service-role client to bypass RLS — the user might not have
-  // SELECT permission on their own profiles row depending on policy.
+  // Service-role to bypass profile RLS.
   const svc = makeSvc();
   const { data: profile } = await svc
     .from("profiles")
-    .select("role")
+    .select("role, admin_role")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!profile || profile.role !== "admin") {
-    return { error: "Forbidden — admin access required" };
+  // Sprint 4 W3-B: resolve effective admin_role for audit logging.
+  // Explicit admin_role wins. Legacy role='admin' falls back to super_admin.
+  let admin_role: AdminRole | null = null;
+  if (profile?.admin_role && ["super_admin","admin","support_l2","support_l1","viewer"].includes(profile.admin_role)) {
+    admin_role = profile.admin_role as AdminRole;
+  } else if (profile?.role === "admin") {
+    admin_role = "super_admin";
   }
-  return { id: user.id, email: user.email ?? "" };
+  if (!admin_role) return { error: "Forbidden — admin access required" };
+
+  return {
+    id: user.id,
+    user_id: user.id,
+    email: user.email ?? "",
+    admin_role,
+  };
+}
+
+/** Build an AdminContext for logAdminAction from a successful requireAdmin() result. */
+function ctxOf(auth: Exclude<RequireAdminResult, { error: string }>): AdminContext {
+  return { user_id: auth.user_id, email: auth.email, admin_role: auth.admin_role };
 }
 
 export type UserRole = "user" | "moderator" | "admin";
@@ -65,11 +85,19 @@ export async function setUserPlan(
   const auth = await requireAdmin();
   if ("error" in auth) return { error: auth.error };
   const svc = makeSvc();
+  const { data: before } = await svc
+    .from("user_subscriptions").select("plan, status").eq("user_id", userId).maybeSingle();
   const { error } = await svc
     .from("user_subscriptions")
     .update({ plan, status: "active", updated_at: new Date().toISOString() })
     .eq("user_id", userId);
   if (error) return { error: error.message };
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.plan_changed",
+    target_table: "user_subscriptions", target_id: userId,
+    before_value: before ?? null,
+    after_value: { plan, status: "active" },
+  });
   revalidatePath("/admin/users");
   return {};
 }
@@ -91,11 +119,19 @@ export async function setUserRole(
   const auth = await requireAdmin();
   if ("error" in auth) return { error: auth.error };
   const svc = makeSvc();
+  const { data: before } = await svc
+    .from("profiles").select("role").eq("user_id", userId).maybeSingle();
   const { error } = await svc
     .from("profiles")
     .update({ role, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
   if (error) return { error: error.message };
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.role_changed",
+    target_table: "profiles", target_id: userId,
+    before_value: { role: before?.role ?? null },
+    after_value: { role },
+  });
   revalidatePath("/admin/users");
   return {};
 }
@@ -111,6 +147,11 @@ export async function confirmUserEmail(userId: string): Promise<{ error?: string
     email_confirm: true,
   });
   if (error) return { error: error.message };
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.email_confirmed",
+    target_table: "auth.users", target_id: userId,
+    after_value: { email_confirmed_at: new Date().toISOString() },
+  });
   revalidatePath("/admin/users");
   return {};
 }
@@ -151,8 +192,16 @@ export async function deleteUser(userId: string): Promise<{ error?: string }> {
     return { error: "Cannot delete your own admin account" };
   }
   const svc = makeSvc();
+  const { data: beforeProfile } = await svc
+    .from("profiles").select("email, full_name, role")
+    .eq("user_id", userId).maybeSingle();
   const { error } = await svc.auth.admin.deleteUser(userId);
   if (error) return { error: error.message };
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.deleted",
+    target_table: "auth.users", target_id: userId,
+    before_value: beforeProfile ?? null,
+  });
   revalidatePath("/admin/users");
   return {};
 }
@@ -189,6 +238,11 @@ export async function deleteUsers(userIds: string[]): Promise<BulkResult> {
       result.succeeded.push(id);
     }
   }
+
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.bulk_deleted",
+    after_value: { requested: userIds.length, succeeded: result.succeeded.length, failed: result.failed.length },
+  });
 
   // Surface filtered self-target as a "failed" row so the UI can explain why
   if (callerId && userIds.includes(callerId)) {
@@ -275,6 +329,12 @@ export async function setUsersRole(
       error: "Cannot demote your own admin account to user (self-protection)",
     });
   }
+
+  await logAdminAction({
+    ctx: ctxOf(auth), action: "users.bulk_role_changed",
+    target_table: "profiles",
+    after_value: { role, requested: userIds.length, succeeded: result.succeeded.length, failed: result.failed.length },
+  });
 
   revalidatePath("/admin/users");
   return result;
