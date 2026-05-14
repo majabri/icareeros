@@ -229,16 +229,24 @@ ${trimmed}`;
 
 ${newEntry}` : newEntry;
 
-  // Send the email first; only persist the reply if the send succeeded
-  const { sendMail, getFromAddress } = await import("@/lib/mailer");
+  // Send the email first; only persist the reply if the send succeeded.
+  // MailOptions requires `html` — escape minimal HTML chars; mailer sets `from`
+  // internally via ALERT_FROM_EMAIL / BLUEHOST_SMTP_USER, so we don't pass it.
+  const { sendMail } = await import("@/lib/mailer");
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const htmlBody = `<pre style="font-family:system-ui,sans-serif;white-space:pre-wrap;">${escapeHtml(trimmed)}</pre>`;
   const sendResult = await sendMail({
     to:      au.email,
-    from:    getFromAddress(),
     subject: `Re: ${ticket.subject}`,
     text:    trimmed,
+    html:    htmlBody,
   });
-  if (!sendResult || sendResult.error) {
-    return { error: `Email send failed: ${sendResult?.error ?? "unknown"}` };
+  if (!sendResult) {
+    return { error: "Email send failed: SMTP env vars not configured" };
+  }
+  if (sendResult.rejected && sendResult.rejected.length > 0) {
+    return { error: `Email send failed: recipient rejected (${sendResult.rejected.join(", ")})` };
   }
 
   // Persist the reply + bump status to in_progress (if it was open)
