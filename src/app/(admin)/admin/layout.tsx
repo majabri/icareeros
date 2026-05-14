@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { CookieOptions } from "@supabase/ssr";
-import AdminSidebar from "@/components/admin/AdminSidebar";
-
+import AdminLayoutClient from "@/components/admin/AdminLayoutClient";
+import type { AdminRole } from "@/lib/admin/permissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -21,30 +22,45 @@ async function getSupabase() {
   );
 }
 
+function isValidAdminRole(s: string | null | undefined): s is AdminRole {
+  return s === "super_admin" || s === "admin" || s === "support_l2" || s === "support_l1" || s === "viewer";
+}
+
 export default async function AdminRootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?redirect=/admin");
-  // Check role from public.profiles — single source of truth
-  const { data: profile } = await supabase
+
+  // Sprint 4 W2-A: read admin_role (5-tier) + legacy role (binary, backward compat)
+  // via service-role to bypass profile RLS.
+  const svc = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+  const { data: profile } = await svc
     .from("profiles")
-    .select("role")
+    .select("role, admin_role")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (profile?.role !== "admin") redirect("/dashboard");
+
+  // Resolve effective admin_role with the same rules as requirePermission():
+  // explicit admin_role wins; legacy role='admin' falls back to super_admin.
+  let adminRole: AdminRole | null = null;
+  if (profile?.admin_role && isValidAdminRole(profile.admin_role)) {
+    adminRole = profile.admin_role as AdminRole;
+  } else if (profile?.role === "admin") {
+    adminRole = "super_admin";
+  }
+
+  if (!adminRole) redirect("/dashboard");
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar />
-      <div className="flex flex-1 flex-col min-w-0">
-        <header className="h-14 flex items-center justify-between border-b border-gray-200 bg-white/90 backdrop-blur-sm sticky top-0 z-40 px-4">
-          <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
-            ⚠ Admin Mode
-          </span>
-          <span className="text-xs text-gray-400 font-mono">{user.email}</span>
-        </header>
-        <main className="flex-1 overflow-auto">{children}</main>
-      </div>
-    </div>
+    <AdminLayoutClient
+      adminEmail={user.email ?? ""}
+      adminRole={adminRole}
+    >
+      {children}
+    </AdminLayoutClient>
   );
 }

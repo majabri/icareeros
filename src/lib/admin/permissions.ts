@@ -1,24 +1,13 @@
 /**
- * Sprint 4 W1-B — Admin role + permission helper
+ * Sprint 4 W1-B — Admin role + permission helper (CLIENT-SAFE module)
  *
  * 5-tier role model (admin_role column in public.profiles):
  *   super_admin > admin > support_l2 > support_l1 > viewer
  *
- * Permission checks are role-based, not user-based. A permission is allowed
- * if the user's role is in the permission's allowlist. NULL admin_role means
- * "not an admin at all" — every check returns false.
- *
- * Backward compatibility: existing rows with `role='admin'` (the binary
- * pre-Sprint-4 model) are treated as `admin_role='super_admin'` if the
- * `admin_role` column is NULL. This keeps the platform working during
- * the rollout window — once every admin has an explicit admin_role,
- * the `role='admin'` fallback can be removed.
+ * This file is safe to import from both client and server components.
+ * Server-only helpers (requirePermission, readRequestContext) live in
+ * `permissions.server.ts` to keep `next/headers` out of the client bundle.
  */
-
-import { cookies, headers } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -38,7 +27,6 @@ export const ROLE_HIERARCHY: Record<AdminRole, number> = {
 };
 
 // ── Permission matrix ────────────────────────────────────────────────────
-// Each permission key lists the roles that hold it. Order doesn't matter.
 
 export const PERMISSIONS = {
   // System / observability
@@ -78,7 +66,7 @@ export const PERMISSIONS = {
 
 export type Permission = keyof typeof PERMISSIONS;
 
-// ── Pure synchronous check (used in UI render decisions) ────────────────
+// ── Pure synchronous check ────────────────────────────────────────────────
 
 export function hasPermission(
   role: AdminRole | null | undefined,
@@ -94,7 +82,11 @@ export function roleAtLeast(a: AdminRole | null | undefined, b: AdminRole): bool
   return ROLE_HIERARCHY[a] >= ROLE_HIERARCHY[b];
 }
 
-// ── Server-side permission gate ─────────────────────────────────────────
+export function isValidAdminRole(s: string | null | undefined): s is AdminRole {
+  return s === "super_admin" || s === "admin" || s === "support_l2" || s === "support_l1" || s === "viewer";
+}
+
+// ── Shared context type (used by server helper) ─────────────────────────
 
 export interface AdminContext {
   user_id:     string;
@@ -106,99 +98,7 @@ export type RequirePermissionResult =
   | { ok: true;  ctx: AdminContext }
   | { ok: false; status: 401 | 403; error: string };
 
-/**
- * Server-side check used by API routes and server actions.
- *
- *   const r = await requirePermission("users.change_plan");
- *   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
- *   // r.ctx.admin_role is now safe to read
- */
-export async function requirePermission(
-  permission: Permission,
-): Promise<RequirePermissionResult> {
-  const cookieStore = await cookies();
-  const ssr = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll() { /* readonly in this context */ },
-      },
-    },
-  );
-
-  const { data: { user } } = await ssr.auth.getUser();
-  if (!user) return { ok: false, status: 401, error: "Not authenticated" };
-
-  // Service-role to bypass profile-table RLS — the user might not be able
-  // to SELECT their own profile row.
-  const svc = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const { data: profile } = await svc
-    .from("profiles")
-    .select("admin_role, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  // Resolve effective admin_role:
-  //   - new admin_role column wins
-  //   - fall back to binary `role='admin'` → super_admin (backward compat)
-  let admin_role: AdminRole | null = null;
-  if (profile?.admin_role && isValidAdminRole(profile.admin_role)) {
-    admin_role = profile.admin_role as AdminRole;
-  } else if (profile?.role === "admin") {
-    admin_role = "super_admin";
-  }
-
-  if (!admin_role) {
-    return { ok: false, status: 403, error: "Forbidden — no admin role" };
-  }
-
-  if (!hasPermission(admin_role, permission)) {
-    return {
-      ok: false,
-      status: 403,
-      error: `Forbidden — '${permission}' requires one of: ${PERMISSIONS[permission].join(", ")}`,
-    };
-  }
-
-  return {
-    ok: true,
-    ctx: { user_id: user.id, email: user.email ?? "", admin_role },
-  };
-}
-
-function isValidAdminRole(s: string): s is AdminRole {
-  return s === "super_admin" || s === "admin" || s === "support_l2" || s === "support_l1" || s === "viewer";
-}
-
-// ── Convenience: build a 401/403 NextResponse from a failed gate ────────
-
-export function permissionErrorResponse(
-  r: Extract<RequirePermissionResult, { ok: false }>,
-): NextResponse {
-  return NextResponse.json({ error: r.error }, { status: r.status });
-}
-
-// ── Capture request context (IP, UA) for audit logs ────────────────────
-
 export interface RequestContext {
   ip_address: string | null;
   user_agent: string | null;
-}
-
-export async function readRequestContext(): Promise<RequestContext> {
-  const h = await headers();
-  const ip =
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    h.get("x-real-ip") ??
-    null;
-  return {
-    ip_address: ip,
-    user_agent: h.get("user-agent") ?? null,
-  };
 }

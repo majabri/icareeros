@@ -40,6 +40,24 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    // Sprint 4 W2-C: cross-browser foundation
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
+    },
+    // Mobile viewports (Safari engine on iOS; Chrome engine on Android)
+    {
+      name: "mobile-safari",
+      use: { ...devices["iPhone 14"] },
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 7"] },
+    },
   ],
 
   // Only start local dev server when NOT in CI (CI uses the live Vercel deployment)
