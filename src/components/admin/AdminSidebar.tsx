@@ -46,19 +46,10 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    group: "AI & Automation",
-    items: [
-      { label: "The Crew Status", href: "/admin/agents",     icon: "🤖", permission: "system.view_metrics", badge: "soon" },
-      { label: "Agent Runs",      href: "/admin/agent-runs", icon: "⚡", permission: "system.view_metrics", badge: "soon" },
-      { label: "Queue",           href: "/admin/queue",      icon: "📋", permission: "system.view_metrics", badge: "soon" },
-    ],
-  },
-  {
     group: "System & Monitoring",
     items: [
       { label: "System Monitor", href: "/admin/system",  icon: "🛡", permission: "system.view_metrics" },
       { label: "Console",        href: "/admin/console", icon: "⌨",  permission: "system.run_console_cmd" },
-      { label: "Event Log",      href: "/admin/logs",    icon: "📜", permission: "system.view_metrics", badge: "soon" },
       { label: "Audit Log",      href: "/admin/audit",   icon: "📋", permission: "audit.view" },
     ],
   },
@@ -68,13 +59,6 @@ const NAV: NavGroup[] = [
       { label: "Feature Flags",  href: "/admin/flags",         icon: "🚩", permission: "system.toggle_flags" },
       { label: "Opportunities",  href: "/admin/opportunities", icon: "💼", permission: "opportunities.view" },
       { label: "Role Management", href: "/admin/roles",        icon: "🔑", permission: "roles.assign" },
-    ],
-  },
-  {
-    group: "Account",
-    items: [
-      { label: "Settings",   href: "/admin/settings", icon: "⚙️",  permission: "system.view_metrics", badge: "soon" },
-      { label: "My Profile", href: "/admin/profile",  icon: "👤", permission: "system.view_metrics", badge: "soon" },
     ],
   },
 ];

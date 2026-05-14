@@ -28,6 +28,7 @@ export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   let triggered = false;
   let upstreamStatus = 0;
+  let upstreamBody = "";
   try {
     const res = await fetch(`${origin}/api/cron/ingest-ats`, {
       method: "POST",
@@ -35,20 +36,50 @@ export async function POST(req: Request) {
     });
     upstreamStatus = res.status;
     triggered = res.ok;
+    if (!res.ok) {
+      // Capture upstream error body (first 500 chars) for the audit log
+      // and the response shown to the admin.
+      upstreamBody = (await res.text().catch(() => "")).slice(0, 500);
+    }
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    const msg = (e as Error).message;
+    await logAdminAction({
+      ctx: r.ctx,
+      action: "opportunities.ingest_triggered",
+      target_table: "opportunities",
+      after_value: { triggered: false, upstream_status: 0, network_error: msg },
+    });
+    return NextResponse.json(
+      { ok: false, error: `Network error reaching upstream: ${msg}` },
+      { status: 502 },
+    );
   }
 
   await logAdminAction({
     ctx: r.ctx,
     action: "opportunities.ingest_triggered",
     target_table: "opportunities",
-    after_value: { triggered, upstream_status: upstreamStatus },
+    after_value: { triggered, upstream_status: upstreamStatus, upstream_body: upstreamBody || undefined },
   });
 
+  // Surface the actual upstream failure to the admin as a non-2xx response
+  // so the client UI can render an error state. Status mirrors the upstream
+  // for transparency (502/500/etc.).
+  if (!triggered) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Upstream cron route returned HTTP ${upstreamStatus}`,
+        upstream_status: upstreamStatus,
+        upstream_body: upstreamBody || undefined,
+      },
+      { status: upstreamStatus >= 400 ? upstreamStatus : 502 },
+    );
+  }
+
   return NextResponse.json({
-    ok: triggered,
-    message: triggered ? "Ingest triggered" : `Upstream HTTP ${upstreamStatus}`,
+    ok: true,
+    message: "Ingest triggered",
     upstream_status: upstreamStatus,
   });
 }
