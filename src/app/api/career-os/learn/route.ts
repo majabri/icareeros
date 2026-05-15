@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { LearnResult } from "@/services/ai/learnService";
 import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
+import { stripJsonFences } from "@/lib/career-os/stripJsonFences";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
@@ -103,14 +104,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "cycle_id is required" }, { status: 400 });
     }
 
-    // 3. Load completed Evaluate + Advise notes for this cycle
+    // 3. Load Evaluate + Advise notes for this cycle.
+    // Sprint 5 hotfix (2026-05-15) — Drop the `.eq("status","completed")`
+    // filter; stage rows often stay at 'in_progress' even after a
+    // successful run. Use non-empty notes as the real prerequisite signal
+    // instead — that's what actually proves the upstream stage produced
+    // output for this cycle.
     const { data: stageRows, error: stageErr } = await supabase
       .from("career_os_stages")
       .select("stage, notes")
       .eq("user_id", user.id)
       .eq("cycle_id", cycleId)
-      .in("stage", ["evaluate", "advise"])
-      .eq("status", "completed");
+      .in("stage", ["evaluate", "advise"]);
 
     if (stageErr) {
       return NextResponse.json({ error: stageErr.message }, { status: 500 });
@@ -119,21 +124,24 @@ export async function POST(req: Request) {
     const evaluateRow = stageRows?.find((r) => r.stage === "evaluate");
     const adviseRow   = stageRows?.find((r) => r.stage === "advise");
 
-    if (!evaluateRow?.notes) {
+    const evaluateNotes = evaluateRow?.notes as Record<string, unknown> | null;
+    const adviseNotes   = adviseRow?.notes   as Record<string, unknown> | null;
+
+    if (!evaluateNotes || Object.keys(evaluateNotes).length === 0) {
       return NextResponse.json(
-        { error: "Evaluate stage must be completed before running Learn." },
+        { error: "Run Evaluate first — Learn needs your evaluation as input." },
         { status: 422 }
       );
     }
-    if (!adviseRow?.notes) {
+    if (!adviseNotes || Object.keys(adviseNotes).length === 0) {
       return NextResponse.json(
-        { error: "Advise stage must be completed before running Learn." },
+        { error: "Run Advise first — Learn needs your career-path advice as input." },
         { status: 422 }
       );
     }
 
-    const evaluation = evaluateRow.notes as unknown as EvaluationResult;
-    const advice     = adviseRow.notes   as unknown as AdviceResult;
+    const evaluation = evaluateNotes as unknown as EvaluationResult;
+    const advice     = adviseNotes   as unknown as AdviceResult;
 
     // 4. Build user message
     const topPaths = advice.recommendedPaths
@@ -174,7 +182,7 @@ export async function POST(req: Request) {
 
     let result: LearnResult;
     try {
-      result = JSON.parse(raw.text) as LearnResult;
+      result = JSON.parse(stripJsonFences(raw.text)) as LearnResult;
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

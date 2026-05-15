@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
+import { stripJsonFences } from "@/lib/career-os/stripJsonFences";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
 
@@ -100,28 +101,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "cycle_id is required" }, { status: 400 });
     }
 
-    // 3. Load completed Evaluate notes for this cycle
+    // 3. Load Evaluate notes for this cycle.
+    // Sprint 5 hotfix (2026-05-15) — Drop the `.eq("status","completed")`
+    // filter; stage rows often stay at 'in_progress' even after a successful
+    // run (the orchestrator's status transition is fire-and-forget). Use
+    // non-empty notes as the real prerequisite signal instead — that's what
+    // actually proves Evaluate produced output for this cycle.
     const { data: stageRow, error: stageErr } = await supabase
       .from("career_os_stages")
       .select("notes")
       .eq("user_id", user.id)
       .eq("cycle_id", cycleId)
       .eq("stage", "evaluate")
-      .eq("status", "completed")
       .maybeSingle();
 
     if (stageErr) {
       return NextResponse.json({ error: stageErr.message }, { status: 500 });
     }
 
-    if (!stageRow?.notes) {
+    const evaluateNotes = stageRow?.notes as Record<string, unknown> | null;
+    if (!evaluateNotes || Object.keys(evaluateNotes).length === 0) {
       return NextResponse.json(
-        { error: "Evaluate stage must be completed before running Advise." },
+        { error: "Run Evaluate first — Advise needs your evaluation as input." },
         { status: 422 }
       );
     }
 
-    const evaluation = stageRow.notes as unknown as EvaluationResult;
+    const evaluation = evaluateNotes as unknown as EvaluationResult;
 
     // 4. Build user message
     const userMessage = [
@@ -154,7 +160,7 @@ export async function POST(req: Request) {
 
     let result: AdviceResult;
     try {
-      result = JSON.parse(raw.text) as AdviceResult;
+      result = JSON.parse(stripJsonFences(raw.text)) as AdviceResult;
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

@@ -32,6 +32,35 @@ export interface StageDataState<T> {
   setOutput: (next: T | null) => void;
 }
 
+/**
+ * Sprint 5 hotfix (2026-05-15) — `career_os_stages.notes` defaults to
+ * `'{}'::jsonb`, so every freshly-seeded stage row arrives with notes set
+ * to an EMPTY OBJECT, not null. Without this guard the hook would return
+ * `output = {}` for any stage the user hasn't run yet, hasOutput would be
+ * truthy, and the OutputPanel would crash on the first unguarded property
+ * access (e.g. `result.skills.length` → TypeError on undefined).
+ *
+ * Required fields per stage — narrow guard before we treat the candidate
+ * as a valid stored output. Anything missing → return null and show the
+ * empty state instead.
+ */
+const STAGE_REQUIRED_FIELDS: Record<CareerOsStage, readonly string[]> = {
+  evaluate: ["skills", "gaps", "summary"],
+  advise:   ["recommendedPaths", "nextActions", "summary"],
+  learn:    ["resources", "topSkillGaps", "summary"],
+  act:      ["jobSearchQueries", "applicationPriority", "summary"],
+  coach:    [],   // coach has its own page + special {brief, briefHistory} shape
+  achieve:  ["accomplishments", "celebrationMessage", "milestoneType"],
+} as const;
+
+function isValidStageOutput(stage: CareerOsStage, candidate: unknown): boolean {
+  if (!candidate || typeof candidate !== "object") return false;
+  const obj = candidate as Record<string, unknown>;
+  const required = STAGE_REQUIRED_FIELDS[stage];
+  if (required.length === 0) return Object.keys(obj).length > 0;   // coach: just non-empty
+  return required.every((k) => k in obj);
+}
+
 export function useStageData<T>(stage: CareerOsStage): StageDataState<T> {
   const [loading, setLoading] = useState(true);
   const [userId,  setUserId]  = useState<string | null>(null);
@@ -65,9 +94,12 @@ export function useStageData<T>(stage: CareerOsStage): StageDataState<T> {
     const raw = (stageRow?.notes ?? null) as Record<string, unknown> | null;
     const candidate =
       (raw && typeof raw === "object" && stage in raw)
-        ? (raw[stage] as T)
-        : (raw as T | null);
-    setOutput(candidate ?? null);
+        ? (raw[stage] as unknown)
+        : (raw as unknown);
+
+    // Sprint 5 hotfix — empty `{}` (DB default) or shape-mismatched object
+    // would crash the OutputPanel. Validate before exposing as output.
+    setOutput(isValidStageOutput(stage, candidate) ? (candidate as T) : null);
     setLoading(false);
   }
 

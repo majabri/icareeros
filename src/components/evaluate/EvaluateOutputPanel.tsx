@@ -10,6 +10,10 @@
  */
 
 import type { EvaluationResult, LinkedInAnalysis, LinkedInGated } from "@/services/ai/evaluateService";
+import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
+import { useProfileSkills } from "@/components/career-os/useProfileSkills";
+import { AddSkillPill } from "@/components/career-os/AddSkillPill";
+import { useSyncSkillLists } from "@/components/career-os/useSyncSkillLists";
 
 export interface EvaluateOutputPanelProps {
   result:      EvaluationResult;
@@ -21,6 +25,18 @@ function isGated(x: EvaluationResult["linkedinAnalysis"]): x is LinkedInGated {
 }
 
 export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanelProps) {
+  // Sprint 5 hotfix (2026-05-15) — Each gap pill exposes TWO actions:
+  // 🎯 add to target_skills (want to learn) and ✅ add to skills (have).
+  // Independent state per skill, one-click each.
+  const targetSkills  = useTargetSkills();
+  // Sprint 5 hotfix (2026-05-15) — Adding to profile auto-removes from
+  // target_skills (server-side); the onAdd callback keeps the target
+  // hook's local state in sync.
+  const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
+  // Sprint 5 hotfix (2026-05-15) — One-shot cleanup of stale
+  // overlap between target_skills and skills on page mount.
+  useSyncSkillLists(targetSkills, profileSkills);
+
   const score = Math.max(0, Math.min(100, result.marketFitScore));
   const scoreColor =
     score >= 80 ? "text-emerald-600" :
@@ -86,11 +102,22 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
             {result.gaps.length === 0 ? (
               <p className="text-sm text-gray-400">No critical gaps identified for your target.</p>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {result.gaps.map((g) => (
-                  <span key={g} className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">{g}</span>
-                ))}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.gaps.map((g) => (
+                    <AddSkillPill
+                      key={g}
+                      skill={g}
+                      targetSkills={targetSkills}
+                      profileSkills={profileSkills}
+                      variant="gap"
+                    />
+                  ))}
+                </div>
+                {(targetSkills.error || profileSkills.error) && (
+                  <p className="mt-2 text-xs text-red-600">{targetSkills.error ?? profileSkills.error}</p>
+                )}
+              </>
             )}
           </div>
         </div>

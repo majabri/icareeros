@@ -43,6 +43,7 @@ export function ActPageInner() {
       title="Action Plan"
       subtitle="Job-search + networking plan"
       stageLabel="Act"
+      outputNoun="Action plan"
       loading={loading}
       noCycle={!loading && !cycle}
       hasOutput={!!output}

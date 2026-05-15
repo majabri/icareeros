@@ -48,6 +48,14 @@ export interface StagePageScaffoldProps {
    * silently.
    */
   cycleInfo?:   { cycleNumber: number; goal: string | null } | null;
+  /**
+   * Sprint 5 hotfix (2026-05-15) — Noun used in the prominent section header
+   * above the output, e.g. "Evaluation", "Advice", "Learning plan". When
+   * combined with cycleInfo it produces:
+   *   "Cycle #2 · Director of information technology — Evaluation"
+   * so the user sees the output is connected to their goal, not generic.
+   */
+  outputNoun?:  string;
   /** The actual output panel (rendered when hasOutput is true). */
   children?:    ReactNode;
 }
@@ -111,7 +119,9 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
   if (props.hasOutput) {
     return (
       <div className="space-y-6">
-        {props.cycleInfo && <CycleContextBadge info={props.cycleInfo} />}
+        {props.cycleInfo && (
+          <CycleGoalHeader info={props.cycleInfo} noun={props.outputNoun ?? props.stageLabel} />
+        )}
         {props.children}
 
         {/* Re-run with inline confirmation (P3-3) */}
@@ -176,7 +186,13 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
   // No output yet — show empty state with initial Run button
   return (
     <div className="space-y-5">
-      {props.cycleInfo && <CycleContextBadge info={props.cycleInfo} />}
+      {props.cycleInfo && (
+        <CycleGoalHeader
+          info={props.cycleInfo}
+          noun={props.outputNoun ?? props.stageLabel}
+          subtle
+        />
+      )}
       {props.profileIncomplete && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Your career profile isn't fully filled in yet. You can still run {props.stageLabel}, but{" "}
@@ -207,23 +223,59 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
 }
 
 /**
- * Sprint 5 P2-fix — Small badge that tells the user which cycle's output
- * they're viewing. Important when the user has multiple active cycles —
- * useStageData picks the most recent via getActiveCycle, and without this
- * badge the user has no way to tell which one is rendered.
+ * Sprint 5 hotfix (2026-05-15) — Prominent goal-aware header above the
+ * output. Replaces the small CycleContextBadge. Format:
+ *   "Cycle #2 · Director of information technology — Evaluation"
+ * so the user sees the output is connected to the goal they're working
+ * toward, not a generic dump.
+ *
+ * Falls back gracefully when goal is null (just "Cycle #2 — Evaluation").
+ * `subtle` variant for the pre-run empty state to avoid shouting.
  */
-function CycleContextBadge({ info }: { info: { cycleNumber: number; goal: string | null } }) {
+function CycleGoalHeader({
+  info,
+  noun,
+  subtle = false,
+}: {
+  info:   { cycleNumber: number; goal: string | null };
+  noun:   string;
+  subtle?: boolean;
+}) {
+  const goalText = info.goal?.trim();
+  const cap = noun.charAt(0).toUpperCase() + noun.slice(1);
+
+  if (subtle) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600 flex items-center gap-2">
+        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700">
+          Cycle #{info.cycleNumber}
+        </span>
+        {goalText && (
+          <>
+            <span className="text-gray-400">·</span>
+            <span className="truncate">{goalText}</span>
+            <span className="text-gray-400">—</span>
+            <span className="font-medium text-gray-700">{cap}</span>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600 flex items-center gap-2">
-      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700">
-        Cycle #{info.cycleNumber}
-      </span>
-      {info.goal && (
-        <>
-          <span className="text-gray-400">·</span>
-          <span className="truncate">{info.goal}</span>
-        </>
-      )}
-    </div>
+    <header className="rounded-xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-5 py-4">
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+        <span className="rounded-full bg-brand-100 px-2 py-0.5">Cycle #{info.cycleNumber}</span>
+        {goalText && (
+          <>
+            <span className="text-brand-400">·</span>
+            <span className="truncate text-gray-700 normal-case font-medium">{goalText}</span>
+          </>
+        )}
+      </div>
+      <h2 className="mt-1 text-xl font-semibold text-gray-900">
+        {goalText ? <>{goalText} <span className="text-gray-400">—</span> {cap}</> : <>{cap}</>}
+      </h2>
+    </header>
   );
 }

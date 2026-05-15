@@ -159,6 +159,114 @@ async function loadProfileReady(userId: string): Promise<boolean> {
   );
 }
 
+function CycleManagementPanel({
+  cycles, selectedId, onSwitch, onAbandon,
+}: {
+  cycles:     Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
+  selectedId: string;
+  /** Called with the cycle being switched to so the parent can route to its current stage. */
+  onSwitch:   (cycle: { id: string; current_stage: string }) => void;
+  onAbandon:  (id: string) => Promise<void>;
+}) {
+  const [open, setOpen]           = useState(false);
+  const [confirming, setConfirm]  = useState<string | null>(null);
+  const [busy, setBusy]           = useState<string | null>(null);
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        aria-expanded={open}
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          Your active cycles ({cycles.length})
+        </span>
+        <span className="text-sm text-gray-400" aria-hidden>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 divide-y divide-gray-100">
+          {cycles.map((c) => {
+            const selected = c.id === selectedId;
+            const isConfirming = confirming === c.id;
+            const isBusy = busy === c.id;
+            return (
+              <div
+                key={c.id}
+                className={`flex items-center gap-3 px-4 py-3 ${selected ? "bg-brand-50" : ""}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold ${selected ? "text-brand-700" : "text-gray-900"}`}>
+                      Cycle #{c.cycle_number}
+                    </span>
+                    {selected && (
+                      <span className="rounded-full bg-brand-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-800">
+                        Selected
+                      </span>
+                    )}
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400">
+                      stage: {c.current_stage}
+                    </span>
+                  </div>
+                  {c.goal && (
+                    <p className="text-xs text-gray-600 truncate mt-0.5" title={c.goal}>{c.goal}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!selected && !isConfirming && (
+                    <button
+                      type="button"
+                      onClick={() => onSwitch({ id: c.id, current_stage: c.current_stage })}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-white"
+                    >
+                      Switch
+                    </button>
+                  )}
+                  {!isConfirming ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirm(c.id)}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-gray-600">Abandon this cycle?</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setBusy(c.id);
+                          try { await onAbandon(c.id); }
+                          finally { setBusy(null); setConfirm(null); }
+                        }}
+                        disabled={isBusy}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {isBusy ? "Deleting…" : "Yes, delete"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirm(null)}
+                        disabled={isBusy}
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CareerOsDashboard() {
   const router = useRouter();
   const [userId, setUserId]           = useState<string | null>(null);
@@ -535,33 +643,40 @@ export function CareerOsDashboard() {
         </div>
       )}
 
-      {/* Multi-cycle picker (only shown if user has 2+ active cycles) */}
+      {/* Sprint 5 fix-pack — Multi-cycle picker as expandable panel. Collapsed
+          by default; expand shows a row per cycle with Switch + soft-Delete
+          (status='abandoned' — recoverable). Selected cycle is highlighted. */}
       {activeCycles.length > 1 && cycle && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Your active cycles ({activeCycles.length})
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {activeCycles.map(c => {
-              const selected = c.id === cycle.id;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => userId && void refreshCycle(userId, c.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-                    selected
-                      ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                  title={c.goal ?? `Cycle #${c.cycle_number}`}
-                >
-                  <span className="font-semibold">#{c.cycle_number}</span>
-                  {c.goal && <span className="ml-1.5 max-w-[200px] truncate inline-block align-bottom">— {c.goal}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <CycleManagementPanel
+          cycles={activeCycles}
+          selectedId={cycle.id}
+          onSwitch={(c) => {
+            if (!userId) return;
+            void (async () => {
+              await refreshCycle(userId, c.id);
+              // Sprint 5 hotfix (2026-05-15) — After switching, route the
+              // user straight to the stage they're currently working on for
+              // that cycle. Without this they stay on the dashboard and have
+              // to click into the stage manually, which makes Switch feel
+              // like a no-op.
+              const stage = c.current_stage as CareerOsStage;
+              const href = STAGE_HREF[stage];
+              if (href) router.push(href);
+            })();
+          }}
+          onAbandon={async (id) => {
+            if (!userId) return;
+            const sb = createClient();
+            await sb
+              .from("career_os_cycles")
+              .update({ status: "abandoned" })
+              .eq("id", id)
+              .eq("user_id", userId);
+            // Refresh the active list; if we just abandoned the currently-
+            // selected one, refreshCycle picks the next-most-recent active.
+            await refreshCycle(userId);
+          }}
+        />
       )}
 
       {/* Active cycle */}

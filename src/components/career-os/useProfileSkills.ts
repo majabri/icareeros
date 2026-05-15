@@ -1,0 +1,147 @@
+"use client";
+
+/**
+ * Sprint 5 hotfix (2026-05-15) — Client-side hook that owns the user's
+ * `career_profiles.skills` set ("skills I already have"). Parallel to
+ * useTargetSkills.
+ *
+ * Loads once on mount from GET /api/career-os/add-profile-skill, then
+ * applies optimistic updates: adds skills to local state immediately
+ * and reconciles with the server response (or reverts on error).
+ *
+ * Dedupe is case-insensitive (matches the server) and is exposed via
+ * `has(skill)` so pills can render a ✓ vs ✅ button independently of
+ * the target-skill state.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+export interface UseProfileSkills {
+  skills:    string[];
+  has:       (skill: string) => boolean;
+  add:       (skills: string[]) => Promise<{ added: string[]; skipped: string[] }>;
+  loading:   boolean;
+  error:     string | null;
+}
+
+export interface UseProfileSkillsOptions {
+  /**
+   * Sprint 5 hotfix (2026-05-15) — fired with the list of skills that
+   * were ACTUALLY added (server-confirmed) on each successful add().
+   * The page passes `targetSkills.remove` here so that adding a skill
+   * to the profile also drops it from target_skills (a skill you have
+   * is no longer a target). Idempotent: the server's add-profile-skill
+   * route already removes the same skills atomically, so this is just
+   * a local-state sync — but going through the proper remove() keeps
+   * useTargetSkills' optimistic + error-handling paths in one place.
+   */
+  onAdd?: (skills: string[]) => unknown | Promise<unknown>;
+}
+
+export function useProfileSkills(opts: UseProfileSkillsOptions = {}): UseProfileSkills {
+  const [skills,  setSkills]  = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/career-os/add-profile-skill", {
+          method: "GET",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+        const json = await res.json() as { skills?: string[] };
+        if (!cancelled) {
+          setSkills(Array.isArray(json.skills) ? json.skills : []);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const skillsLower = useMemo(
+    () => new Set(skills.map((s) => s.toLowerCase().trim())),
+    [skills],
+  );
+
+  const has = useCallback(
+    (skill: string) => skillsLower.has(skill.toLowerCase().trim()),
+    [skillsLower],
+  );
+
+  const add = useCallback(async (incoming: string[]): Promise<{ added: string[]; skipped: string[] }> => {
+    const lowerNow = new Set(skills.map((s) => s.toLowerCase().trim()));
+    const seenBatch = new Set<string>();
+    const optimisticNew: string[] = [];
+    for (const raw of incoming) {
+      const t = raw.trim();
+      if (!t) continue;
+      const k = t.toLowerCase();
+      if (!lowerNow.has(k) && !seenBatch.has(k)) {
+        optimisticNew.push(t);
+        seenBatch.add(k);
+      }
+    }
+
+    if (optimisticNew.length > 0) {
+      setSkills((prev) => [...prev, ...optimisticNew]);
+    }
+
+    setError(null);
+
+    try {
+      const res = await fetch("/api/career-os/add-profile-skill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ skills: incoming }),
+      });
+      const json = await res.json().catch(() => ({})) as {
+        added?: string[]; skipped?: string[]; skills?: string[]; error?: string;
+      };
+      if (!res.ok) {
+        if (optimisticNew.length > 0) {
+          const revertKeys = new Set(optimisticNew.map((s) => s.toLowerCase()));
+          setSkills((prev) => prev.filter((s) => !revertKeys.has(s.toLowerCase())));
+        }
+        setError(json.error ?? `Could not add skill${incoming.length === 1 ? "" : "s"}.`);
+        return { added: [], skipped: incoming };
+      }
+      if (Array.isArray(json.skills)) {
+        setSkills(json.skills);
+      }
+      const serverAdded = Array.isArray(json.added) ? json.added : optimisticNew;
+      const serverSkipped = Array.isArray(json.skipped) ? json.skipped : [];
+
+      // Fire the onAdd callback so the parent can keep target_skills
+      // in sync ("once you have a skill, it's no longer a target").
+      if (serverAdded.length > 0 && opts.onAdd) {
+        try {
+          await opts.onAdd(serverAdded);
+        } catch {
+          // Callback failure shouldn't fail the add itself.
+        }
+      }
+
+      return { added: serverAdded, skipped: serverSkipped };
+    } catch (e) {
+      if (optimisticNew.length > 0) {
+        const revertKeys = new Set(optimisticNew.map((s) => s.toLowerCase()));
+        setSkills((prev) => prev.filter((s) => !revertKeys.has(s.toLowerCase())));
+      }
+      setError(e instanceof Error ? e.message : "Network error — try again.");
+      return { added: [], skipped: incoming };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skills, opts.onAdd]);
+
+  return { skills, has, add, loading, error };
+}

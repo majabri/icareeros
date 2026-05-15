@@ -8,10 +8,10 @@
  * result into each CycleStageCard's emptyStateCta prop.
  *
  * Mapping rules (matching the brief):
- *   evaluate (no profile)  → "Complete your Career Profile first" (disabled)
- *   evaluate (profile ok)  → "Upload your resume to get started →" /mycareer/profile
- *   advise                 → disabled "Complete Evaluate first..."
- *   learn                  → disabled "Complete Advise..."
+ *   evaluate (no profile)  → "Complete your Career Profile" /mycareer/profile (warning-only, clickable)
+ *   evaluate (profile ok)  → "Open Evaluate →" /evaluate
+ *   advise                 → "Open Career Advice →" /advise (no longer a hard block on Evaluate)
+ *   learn                  → "Open Learning Plan →" /learn (no longer a hard block on Advise)
  *   act                    → "Browse matching opportunities →" /jobs
  *   coach (free)           → "Upgrade to chat with your coach →" /settings/billing
  *   coach (paid)           → "Chat with your coach →" /coach
@@ -49,28 +49,36 @@ export function emptyStateCta(input: EmptyStateCtaInput): EmptyStateCta | null {
 
   switch (stage) {
     case "evaluate":
+      // Sprint 5 fix-pack — profile-not-ready is now a soft warning, not a
+      // blocker. The actual stage page (/evaluate) already shows an amber
+      // banner if the profile is incomplete and still lets the user run.
       if (!profileReady) {
         return {
-          label:    "Complete your Career Profile first",
-          disabled: true,
-          helper:   "Add a headline and at least 3 skills so Evaluate has material to score.",
+          label:  "Complete your Career Profile →",
+          href:   "/mycareer/profile",
+          helper: "Add a headline and at least 3 skills so Evaluate has material to score.",
         };
       }
       return {
-        label: "Upload your resume to get started →",
-        href:  "/mycareer/profile",
+        label: "Open Evaluate →",
+        href:  "/evaluate",
       };
 
     case "advise":
+      // Sprint 5 fix-pack — was a disabled blocker telling the user to do
+      // Evaluate first. Now a clickable link to /advise. The stage page
+      // surfaces the actual error if Evaluate notes are missing.
       return {
-        label:    "Complete Evaluate first to unlock career advice",
-        disabled: true,
+        label: "Open Career Advice →",
+        href:  "/advise",
       };
 
     case "learn":
+      // Sprint 5 fix-pack — was a disabled blocker. Now a clickable link
+      // to the stage page so the user can try.
       return {
-        label:    "Complete Advise to see your learning recommendations",
-        disabled: true,
+        label: "Open Learning Plan →",
+        href:  "/learn",
       };
 
     case "act":
@@ -92,9 +100,12 @@ export function emptyStateCta(input: EmptyStateCtaInput): EmptyStateCta | null {
       };
 
     case "achieve":
+      // Sprint 5 fix-pack — clickable link to /achieve so users can record
+      // milestones without waiting for the full cycle.
       return {
-        label:    "Your achievements will appear here when you land a role",
-        disabled: true,
+        label: "Open Achieve →",
+        href:  "/achieve",
+        helper: "Record a milestone or wrap up the cycle.",
       };
 
     default:

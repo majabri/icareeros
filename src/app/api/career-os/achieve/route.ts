@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { AchieveResult } from "@/services/ai/achieveService";
 import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
+import { stripJsonFences } from "@/lib/career-os/stripJsonFences";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
@@ -207,7 +208,7 @@ export async function POST(req: Request) {
 
     let aiResult: Omit<AchieveResult, "milestoneRecorded" | "notificationSent" | "achievedAt">;
     try {
-      aiResult = JSON.parse(raw.text) as typeof aiResult;
+      aiResult = JSON.parse(stripJsonFences(raw.text)) as typeof aiResult;
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

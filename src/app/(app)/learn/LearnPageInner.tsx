@@ -4,6 +4,10 @@ import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { generateLearningPlan, type LearnResult, type LearningResource } from "@/services/ai/learnService";
+import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
+import { useProfileSkills } from "@/components/career-os/useProfileSkills";
+import { AddSkillPill } from "@/components/career-os/AddSkillPill";
+import { useSyncSkillLists } from "@/components/career-os/useSyncSkillLists";
 
 interface StoredLearn extends LearnResult {
   generatedAt?: string;
@@ -42,6 +46,7 @@ export function LearnPageInner() {
       title="Learning Plan"
       subtitle="Top resources for your gaps"
       stageLabel="Learn"
+      outputNoun="Learning plan"
       loading={loading}
       noCycle={!loading && !cycle}
       hasOutput={!!output}
@@ -59,6 +64,18 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
   const sorted    = [...result.resources].sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
   const [expanded, setExpanded] = useState(false);
   const visible   = expanded ? sorted : sorted.slice(0, 6);
+
+  // Sprint 5 hotfix (2026-05-15) — Per-skill dual buttons: 🎯 (want
+  // to learn) and ✅ (already have). Independent state per skill;
+  // AddSkillPill dispatches to both hooks.
+  const targetSkills  = useTargetSkills();
+  // Sprint 5 hotfix (2026-05-15) — Adding to profile auto-removes from
+  // target_skills (server-side); the onAdd callback keeps the target
+  // hook's local state in sync.
+  const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
+  // Sprint 5 hotfix (2026-05-15) — One-shot cleanup of stale
+  // overlap between target_skills and skills on page mount.
+  useSyncSkillLists(targetSkills, profileSkills);
 
   return (
     <div className="space-y-6">
@@ -81,9 +98,18 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Top skill gaps</p>
             <div className="flex flex-wrap gap-1.5">
               {result.topSkillGaps.map((s) => (
-                <span key={s} className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">{s}</span>
+                <AddSkillPill
+                  key={s}
+                  skill={s}
+                  targetSkills={targetSkills}
+                  profileSkills={profileSkills}
+                  variant="gap"
+                />
               ))}
             </div>
+            {(targetSkills.error || profileSkills.error) && (
+              <p className="mt-2 text-xs text-red-600">{targetSkills.error ?? profileSkills.error}</p>
+            )}
           </div>
         )}
       </div>
@@ -103,17 +129,36 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
           )}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          {visible.map((r, i) => <ResourceCard key={`${r.title}-${i}`} r={r} />)}
+          {visible.map((r, i) => (
+            <ResourceCard
+              key={`${r.title}-${i}`}
+              r={r}
+              targetSkills={targetSkills}
+              profileSkills={profileSkills}
+            />
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function ResourceCard({ r }: { r: LearningResource }) {
+function ResourceCard({
+  r,
+  targetSkills,
+  profileSkills,
+}: {
+  r: LearningResource;
+  targetSkills:  ReturnType<typeof useTargetSkills>;
+  profileSkills: ReturnType<typeof useProfileSkills>;
+}) {
   const TitleEl = r.url ? "a" : "div";
   const titleProps = r.url ? { href: r.url, target: "_blank", rel: "noopener noreferrer" } : {};
   const score = Math.max(0, Math.min(100, r.priorityScore ?? 0));
+
+  // Sprint 5 hotfix (2026-05-15) — Each skillsCovered chip is now an
+  // individually clickable AddSkillPill (`+` to add, `✓` when present on
+  // the target list). No per-card bulk CTA.
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-start gap-3">
@@ -128,8 +173,18 @@ function ResourceCard({ r }: { r: LearningResource }) {
           {r.skillsCovered.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {r.skillsCovered.slice(0, 4).map((s) => (
-                <span key={s} className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-800">{s}</span>
+                <AddSkillPill
+                  key={s}
+                  skill={s}
+                  targetSkills={targetSkills}
+                  profileSkills={profileSkills}
+                  variant="covered"
+                  size="sm"
+                />
               ))}
+              {r.skillsCovered.length > 4 && (
+                <span className="text-[10px] text-gray-500 self-center">+{r.skillsCovered.length - 4}</span>
+              )}
             </div>
           )}
           <div className="mt-2 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
