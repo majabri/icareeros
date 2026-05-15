@@ -10,7 +10,8 @@
  */
 
 import type { EvaluationResult, LinkedInAnalysis, LinkedInGated } from "@/services/ai/evaluateService";
-import { useTargetSkills } from "@/components/career-os/useTargetSkills";
+import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
+import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
 
 export interface EvaluateOutputPanelProps {
@@ -23,9 +24,11 @@ function isGated(x: EvaluationResult["linkedinAnalysis"]): x is LinkedInGated {
 }
 
 export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanelProps) {
-  // Sprint 5 hotfix (2026-05-15) — Each gap pill is individually
-  // clickable; the user wants to add skills one at a time, no bulk button.
-  const targetSkills = useTargetSkills();
+  // Sprint 5 hotfix (2026-05-15) — Each gap pill exposes TWO actions:
+  // 🎯 add to target_skills (want to learn) and ✅ add to skills (have).
+  // Independent state per skill, one-click each.
+  const targetSkills  = useTargetSkills();
+  const profileSkills = useProfileSkills();
 
   const score = Math.max(0, Math.min(100, result.marketFitScore));
   const scoreColor =
@@ -95,11 +98,17 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
               <>
                 <div className="flex flex-wrap gap-1.5">
                   {result.gaps.map((g) => (
-                    <AddSkillPill key={g} skill={g} targetSkills={targetSkills} variant="gap" />
+                    <AddSkillPill
+                      key={g}
+                      skill={g}
+                      targetSkills={targetSkills}
+                      profileSkills={profileSkills}
+                      variant="gap"
+                    />
                   ))}
                 </div>
-                {targetSkills.error && (
-                  <p className="mt-2 text-xs text-red-600">{targetSkills.error}</p>
+                {(targetSkills.error || profileSkills.error) && (
+                  <p className="mt-2 text-xs text-red-600">{targetSkills.error ?? profileSkills.error}</p>
                 )}
               </>
             )}

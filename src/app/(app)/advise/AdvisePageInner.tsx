@@ -5,6 +5,9 @@ import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { generateAdvice, type AdviceResult, type CareerPath } from "@/services/ai/adviseService";
+import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
+import { useProfileSkills } from "@/components/career-os/useProfileSkills";
+import { AddSkillPill } from "@/components/career-os/AddSkillPill";
 
 interface StoredAdvice extends AdviceResult {
   generatedAt?: string;
@@ -50,6 +53,11 @@ export function AdvisePageInner() {
 
 function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
   const top4 = result.recommendedPaths.slice(0, 4);
+  // Sprint 5 hotfix (2026-05-15) — gapSkills chips on each CareerPath
+  // expose the same dual-button pill (🎯 target / ✅ profile) used on
+  // /evaluate and /learn so the user can add a gap with one click.
+  const targetSkills  = useTargetSkills();
+  const profileSkills = useProfileSkills();
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">
@@ -65,9 +73,20 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
       <section>
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Recommended paths</h3>
         <div className="grid gap-4 md:grid-cols-2">
-          {top4.map((p) => <CareerPathCard key={p.title} path={p} />)}
+          {top4.map((p) => (
+            <CareerPathCard
+              key={p.title}
+              path={p}
+              targetSkills={targetSkills}
+              profileSkills={profileSkills}
+            />
+          ))}
         </div>
       </section>
+
+      {(targetSkills.error || profileSkills.error) && (
+        <p className="text-xs text-red-600">{targetSkills.error ?? profileSkills.error}</p>
+      )}
 
       <section className="rounded-xl border border-gray-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Next actions</h3>
@@ -84,7 +103,15 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
   );
 }
 
-function CareerPathCard({ path }: { path: CareerPath }) {
+function CareerPathCard({
+  path,
+  targetSkills,
+  profileSkills,
+}: {
+  path: CareerPath;
+  targetSkills:  ReturnType<typeof useTargetSkills>;
+  profileSkills: ReturnType<typeof useProfileSkills>;
+}) {
   const score = Math.max(0, Math.min(100, path.matchScore));
   const barColor = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
   return (
@@ -112,7 +139,14 @@ function CareerPathCard({ path }: { path: CareerPath }) {
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Gaps</p>
           <div className="flex flex-wrap gap-1">
             {path.gapSkills.slice(0, 6).map((s) => (
-              <span key={s} className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">{s}</span>
+              <AddSkillPill
+                key={s}
+                skill={s}
+                targetSkills={targetSkills}
+                profileSkills={profileSkills}
+                variant="gap"
+                size="sm"
+              />
             ))}
           </div>
         </div>

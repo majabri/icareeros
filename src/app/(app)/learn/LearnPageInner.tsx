@@ -4,7 +4,8 @@ import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { generateLearningPlan, type LearnResult, type LearningResource } from "@/services/ai/learnService";
-import { useTargetSkills } from "@/components/career-os/useTargetSkills";
+import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
+import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
 
 interface StoredLearn extends LearnResult {
@@ -63,9 +64,11 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
   const [expanded, setExpanded] = useState(false);
   const visible   = expanded ? sorted : sorted.slice(0, 6);
 
-  // Sprint 5 hotfix (2026-05-15) — Per-skill `+` only; no bulk add. The hook
-  // owns optimistic state + server reconciliation; AddSkillPill dispatches.
-  const targetSkills = useTargetSkills();
+  // Sprint 5 hotfix (2026-05-15) — Per-skill dual buttons: 🎯 (want
+  // to learn) and ✅ (already have). Independent state per skill;
+  // AddSkillPill dispatches to both hooks.
+  const targetSkills  = useTargetSkills();
+  const profileSkills = useProfileSkills();
 
   return (
     <div className="space-y-6">
@@ -88,11 +91,17 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Top skill gaps</p>
             <div className="flex flex-wrap gap-1.5">
               {result.topSkillGaps.map((s) => (
-                <AddSkillPill key={s} skill={s} targetSkills={targetSkills} variant="gap" />
+                <AddSkillPill
+                  key={s}
+                  skill={s}
+                  targetSkills={targetSkills}
+                  profileSkills={profileSkills}
+                  variant="gap"
+                />
               ))}
             </div>
-            {targetSkills.error && (
-              <p className="mt-2 text-xs text-red-600">{targetSkills.error}</p>
+            {(targetSkills.error || profileSkills.error) && (
+              <p className="mt-2 text-xs text-red-600">{targetSkills.error ?? profileSkills.error}</p>
             )}
           </div>
         )}
@@ -113,7 +122,14 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
           )}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          {visible.map((r, i) => <ResourceCard key={`${r.title}-${i}`} r={r} targetSkills={targetSkills} />)}
+          {visible.map((r, i) => (
+            <ResourceCard
+              key={`${r.title}-${i}`}
+              r={r}
+              targetSkills={targetSkills}
+              profileSkills={profileSkills}
+            />
+          ))}
         </div>
       </section>
     </div>
@@ -123,9 +139,11 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
 function ResourceCard({
   r,
   targetSkills,
+  profileSkills,
 }: {
   r: LearningResource;
-  targetSkills: ReturnType<typeof useTargetSkills>;
+  targetSkills:  ReturnType<typeof useTargetSkills>;
+  profileSkills: ReturnType<typeof useProfileSkills>;
 }) {
   const TitleEl = r.url ? "a" : "div";
   const titleProps = r.url ? { href: r.url, target: "_blank", rel: "noopener noreferrer" } : {};
@@ -152,6 +170,7 @@ function ResourceCard({
                   key={s}
                   skill={s}
                   targetSkills={targetSkills}
+                  profileSkills={profileSkills}
                   variant="covered"
                   size="sm"
                 />

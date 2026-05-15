@@ -2,97 +2,175 @@
 
 /**
  * Sprint 5 hotfix (2026-05-15) — Reusable pill that lets the user push
- * a single skill onto `career_profiles.target_skills` with one click.
+ * a single skill onto EITHER `career_profiles.target_skills` ("want to
+ * learn this") OR `career_profiles.skills` ("already have this") —
+ * independently. Both, either, or neither.
  *
- * Shared by /evaluate (skill gaps) and /learn (top gaps + resource
- * card skillsCovered) so the interaction looks identical everywhere.
+ * Shared by /evaluate (skill gaps), /advise (CareerPath gapSkills), and
+ * /learn (top gaps + resource-card skillsCovered) so the interaction is
+ * identical everywhere.
  *
- * States:
- *   • Not added → coral pill with a tiny `+` badge, button.
- *   • Just added → teal pill with brief "Added" flash.
- *   • Already added → teal pill with checkmark, not interactive.
+ * Layout:
+ *   ┌─────────────────────────────────────────────────┐
+ *   │ <skill_text>   [🎯 / ✓ teal]   [✅ / ✓ green]    │
+ *   └─────────────────────────────────────────────────┘
+ *
+ * 🎯 button — target_skills (I want to learn this)
+ *   • Default: muted gray bg with 🎯
+ *   • Added:   teal-100 bg with ✓ (and short "Just added" flash)
+ *
+ * ✅ button — skills (I already have this)
+ *   • Default: muted gray bg with ✅
+ *   • Added:   emerald-100 bg with ✓ (and short "Just added" flash)
  */
 
 import { useState } from "react";
-import type { UseTargetSkills } from "./useTargetSkills";
+import type { UseTargetSkills }  from "./useTargetSkills";
+import type { UseProfileSkills } from "./useProfileSkills";
 
 export interface AddSkillPillProps {
-  skill:        string;
-  targetSkills: UseTargetSkills;
-  /** Style preset — different colour for the two contexts. */
-  variant?:     "gap" | "covered";
-  /** Visual size; "sm" matches the covered-skills chips on /learn cards. */
-  size?:        "md" | "sm";
+  skill:         string;
+  targetSkills:  UseTargetSkills;
+  profileSkills: UseProfileSkills;
+  /** Visual context — drives the pill's base background. */
+  variant?:      "gap" | "covered";
+  /** Pill size — "sm" matches the covered-skills chips on /learn cards. */
+  size?:         "md" | "sm";
 }
 
-const VARIANT_NOT_ADDED: Record<NonNullable<AddSkillPillProps["variant"]>, string> = {
-  gap:     "bg-red-100  text-red-700  hover:bg-red-200",
-  covered: "bg-teal-100 text-teal-800 hover:bg-teal-200",
+const PILL_BASE: Record<NonNullable<AddSkillPillProps["variant"]>, string> = {
+  gap:     "bg-red-50  text-red-700",
+  covered: "bg-gray-50 text-gray-700",
 };
-const VARIANT_ADDED: Record<NonNullable<AddSkillPillProps["variant"]>, string> = {
-  gap:     "bg-teal-100    text-teal-800",
-  covered: "bg-emerald-100 text-emerald-800",
-};
+
 const SIZE_CLS: Record<NonNullable<AddSkillPillProps["size"]>, string> = {
   md: "px-2.5 py-1 text-xs",
   sm: "px-2 py-0.5 text-[10px]",
 };
-const PLUS_SIZE: Record<NonNullable<AddSkillPillProps["size"]>, string> = {
-  md: "h-4 w-4 text-[11px]",
-  sm: "h-3.5 w-3.5 text-[10px]",
+
+const ICON_BTN_SIZE: Record<NonNullable<AddSkillPillProps["size"]>, string> = {
+  md: "h-5 min-w-[1.25rem] text-[11px]",
+  sm: "h-4 min-w-[1rem]    text-[9px]",
 };
 
 export function AddSkillPill({
   skill,
   targetSkills,
+  profileSkills,
   variant = "gap",
   size    = "md",
 }: AddSkillPillProps) {
-  const alreadyAdded = targetSkills.has(skill);
-  const [busy,      setBusy] = useState(false);
-  const [justAdded, setJust] = useState(false);
+  const inTarget  = targetSkills.has(skill);
+  const inProfile = profileSkills.has(skill);
 
-  async function handle() {
-    if (alreadyAdded || busy) return;
-    setBusy(true);
+  const [busyT, setBusyT] = useState(false);
+  const [busyP, setBusyP] = useState(false);
+  const [justT, setJustT] = useState(false);
+  const [justP, setJustP] = useState(false);
+
+  async function addToTarget() {
+    if (inTarget || busyT) return;
+    setBusyT(true);
     const { added } = await targetSkills.add([skill]);
-    setBusy(false);
+    setBusyT(false);
     if (added.length > 0) {
-      setJust(true);
-      window.setTimeout(() => setJust(false), 2200);
+      setJustT(true);
+      window.setTimeout(() => setJustT(false), 2200);
     }
   }
 
-  const baseSize = SIZE_CLS[size];
-
-  if (alreadyAdded) {
-    return (
-      <span
-        title="Already on your target skills"
-        className={`inline-flex items-center gap-1 rounded-full font-medium ${VARIANT_ADDED[variant]} ${baseSize}`}
-      >
-        <span aria-hidden>✓</span>
-        {skill}
-        {justAdded && <span className="ml-1 text-[10px] font-semibold text-emerald-700">Added</span>}
-      </span>
-    );
+  async function addToProfile() {
+    if (inProfile || busyP) return;
+    setBusyP(true);
+    const { added } = await profileSkills.add([skill]);
+    setBusyP(false);
+    if (added.length > 0) {
+      setJustP(true);
+      window.setTimeout(() => setJustP(false), 2200);
+    }
   }
 
   return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full font-medium ${PILL_BASE[variant]} ${SIZE_CLS[size]}`}
+    >
+      <span>{skill}</span>
+      <ActionButton
+        active={inTarget}
+        justFlashed={justT}
+        busy={busyT}
+        onClick={addToTarget}
+        addedTitle="Already on target skills"
+        addTitle="Add to target skills (I want to learn this)"
+        addIcon="🎯"
+        activeBg="bg-teal-100 text-teal-800"
+        sizeCls={ICON_BTN_SIZE[size]}
+      />
+      <ActionButton
+        active={inProfile}
+        justFlashed={justP}
+        busy={busyP}
+        onClick={addToProfile}
+        addedTitle="Already on your profile"
+        addTitle="Add to profile (I already have this)"
+        addIcon="✅"
+        activeBg="bg-emerald-100 text-emerald-800"
+        sizeCls={ICON_BTN_SIZE[size]}
+      />
+    </span>
+  );
+}
+
+/**
+ * One of the two per-skill action buttons. Renders the add-icon by
+ * default; flips to a solid-colored ✓ when the parent reports the
+ * skill is already present.
+ */
+function ActionButton({
+  active,
+  justFlashed,
+  busy,
+  onClick,
+  addedTitle,
+  addTitle,
+  addIcon,
+  activeBg,
+  sizeCls,
+}: {
+  active:       boolean;
+  justFlashed:  boolean;
+  busy:         boolean;
+  onClick:      () => void | Promise<void>;
+  addedTitle:   string;
+  addTitle:     string;
+  addIcon:      string;
+  activeBg:     string;
+  sizeCls:      string;
+}) {
+  if (active) {
+    return (
+      <span
+        title={addedTitle}
+        aria-label={addedTitle}
+        className={`inline-flex items-center justify-center rounded-full px-1 font-bold ${activeBg} ${sizeCls}`}
+      >
+        <span aria-hidden>✓</span>
+        {justFlashed && (
+          <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider">added</span>
+        )}
+      </span>
+    );
+  }
+  return (
     <button
       type="button"
-      onClick={() => void handle()}
-      disabled={busy || targetSkills.loading}
-      title="Add to your target skills"
-      className={`inline-flex items-center gap-1 rounded-full font-medium ${VARIANT_NOT_ADDED[variant]} ${baseSize} disabled:opacity-60`}
+      onClick={() => void onClick()}
+      disabled={busy}
+      title={addTitle}
+      aria-label={addTitle}
+      className={`inline-flex items-center justify-center rounded-full px-1 bg-white/80 hover:bg-white text-gray-700 hover:text-gray-900 border border-gray-200 disabled:opacity-50 ${sizeCls}`}
     >
-      {skill}
-      <span
-        aria-hidden
-        className={`inline-flex items-center justify-center rounded-full bg-white/70 font-bold ${PLUS_SIZE[size]} ${variant === "gap" ? "text-red-700" : "text-teal-700"}`}
-      >
-        +
-      </span>
+      {busy ? <span aria-hidden>…</span> : <span aria-hidden>{addIcon}</span>}
     </button>
   );
 }
