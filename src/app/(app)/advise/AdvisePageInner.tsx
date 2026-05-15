@@ -8,6 +8,7 @@ import { generateAdvice, type AdviceResult, type CareerPath } from "@/services/a
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
+import { useSyncSkillLists } from "@/components/career-os/useSyncSkillLists";
 
 interface StoredAdvice extends AdviceResult {
   generatedAt?: string;
@@ -61,6 +62,9 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
   // target_skills (server-side); the onAdd callback keeps the target
   // hook's local state in sync.
   const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
+  // Sprint 5 hotfix (2026-05-15) — One-shot cleanup of stale
+  // overlap between target_skills and skills on page mount.
+  useSyncSkillLists(targetSkills, profileSkills);
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">

@@ -7,6 +7,7 @@ import { generateLearningPlan, type LearnResult, type LearningResource } from "@
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
+import { useSyncSkillLists } from "@/components/career-os/useSyncSkillLists";
 
 interface StoredLearn extends LearnResult {
   generatedAt?: string;
@@ -72,6 +73,9 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
   // target_skills (server-side); the onAdd callback keeps the target
   // hook's local state in sync.
   const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
+  // Sprint 5 hotfix (2026-05-15) — One-shot cleanup of stale
+  // overlap between target_skills and skills on page mount.
+  useSyncSkillLists(targetSkills, profileSkills);
 
   return (
     <div className="space-y-6">

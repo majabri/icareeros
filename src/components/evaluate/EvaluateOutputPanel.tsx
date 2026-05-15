@@ -13,6 +13,7 @@ import type { EvaluationResult, LinkedInAnalysis, LinkedInGated } from "@/servic
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
+import { useSyncSkillLists } from "@/components/career-os/useSyncSkillLists";
 
 export interface EvaluateOutputPanelProps {
   result:      EvaluationResult;
@@ -32,6 +33,9 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
   // target_skills (server-side); the onAdd callback keeps the target
   // hook's local state in sync.
   const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
+  // Sprint 5 hotfix (2026-05-15) — One-shot cleanup of stale
+  // overlap between target_skills and skills on page mount.
+  useSyncSkillLists(targetSkills, profileSkills);
 
   const score = Math.max(0, Math.min(100, result.marketFitScore));
   const scoreColor =
