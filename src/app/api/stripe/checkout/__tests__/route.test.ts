@@ -52,6 +52,20 @@ vi.mock("@/lib/stripe", () => ({
     checkout:  { sessions: { create: mockCreateCheckout } },
   })),
   isFoundingPriceId: vi.fn((id: string) => id === "price_founding"),
+  resolvePriceId: vi.fn((opts: { plan?: string; cycle?: string; addon?: string }) => {
+    if (opts.plan && opts.cycle) {
+      const map: Record<string, string> = {
+        starter_monthly:  "price_starter_m",
+        starter_annual:   "price_starter_a",
+        standard_monthly: "price_standard_m",
+        pro_monthly:      "price_pro_m",
+      };
+      return map[`${opts.plan}_${opts.cycle}`] ?? null;
+    }
+    if (opts.addon === "founding_lifetime") return "price_founding";
+    if (opts.addon === "sprint")            return "price_sprint";
+    return null;
+  }),
 }));
 
 beforeEach(() => {
@@ -154,6 +168,78 @@ describe("POST /api/stripe/checkout", () => {
     expect(mockCreateCheckout).toHaveBeenCalledWith(
       expect.objectContaining({ customer: "cus_existing" }),
     );
+  });
+
+  // ── New 2026-05-14 — server-side price resolution from plan/cycle or addon ──
+
+  it("resolves plan+cycle body → priceId via resolvePriceId (subscription)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    pushFrom("user_subscriptions", { data: { stripe_customer_id: "cus_x" }, error: null });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_p1" });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      plan: "starter", cycle: "monthly",
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
+    }));
+    expect(res.status).toBe(200);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "subscription",
+      line_items: [{ price: "price_starter_m", quantity: 1 }],
+    }));
+  });
+
+  it("resolves addon=founding_lifetime body → payment mode + price_founding", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    pushFrom("feature_flags",       { data: { value: 100, enabled: true }, error: null });
+    pushFrom("user_subscriptions",  { data: { stripe_customer_id: "cus_x" }, error: null });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_f1" });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      addon: "founding_lifetime",
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
+    }));
+    expect(res.status).toBe(200);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "payment",
+      line_items: [{ price: "price_founding", quantity: 1 }],
+    }));
+  });
+
+  it("resolves addon=sprint body → payment mode + price_sprint", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    pushFrom("user_subscriptions", { data: { stripe_customer_id: "cus_x" }, error: null });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_sp" });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      addon: "sprint",
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
+    }));
+    expect(res.status).toBe(200);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "payment",
+      line_items: [{ price: "price_sprint", quantity: 1 }],
+    }));
+  });
+
+  it("422 price_not_configured when plan/cycle has no matching env var", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      plan: "pro", cycle: "annual",
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
+    }));
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBe("price_not_configured");
+  });
+
+  it("400 when none of priceId/plan/addon are present", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
+    }));
+    expect(res.status).toBe(400);
   });
 
   it("500 when Stripe SDK throws", async () => {

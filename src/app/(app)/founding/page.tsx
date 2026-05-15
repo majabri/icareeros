@@ -1,25 +1,48 @@
 "use client";
 
 /**
- * Founding Lifetime Access — checkout shell.
+ * Founding Lifetime Access — checkout page.
  *
- * Per COWORK-BRIEF-legal-deploy-v1 Phase 4 (reconciled with Amir 2026-05-07):
- *   Build the UI + consent gating now. Payment button is a console.log stub.
- *   Stripe wiring deferred until 2026-05-31 (NEXT_PUBLIC_MONETIZATION_ENABLED=true).
+ * Wired through createCheckoutSession({ addon: "founding_lifetime" }), which
+ * resolves to STRIPE_PRICE_FOUNDING (one-time $89). The Stripe webhook
+ * handler (src/app/api/stripe/webhook/route.ts) sets plan='pro' on success
+ * and atomically decrements feature_flags.founding_seats_remaining.
  *
- * When Stripe goes live, replace the stub onPurchase() with the real Stripe
- * checkout-session call, and move recordFoundingConsent() into the post-
- * payment webhook handler (payment_intent.succeeded) so the consent_records
- * row only lands when payment actually clears.
+ * Gating
+ * ──────
+ * NEXT_PUBLIC_MONETIZATION_ENABLED guards the actual Stripe call:
+ *   • off → button disabled, label "Coming soon", matches the
+ *           /settings/billing FoundingLifetime banner pattern
+ *   • on  → real Stripe checkout redirect
+ *
+ * Pre-flight requirements
+ * ───────────────────────
+ *   • user must be signed in (auth check via supabase.auth.getUser())
+ *   • user must check the Founding Member consent box
+ *   • feature_flags.founding_seats_remaining > 0 (enforced server-side
+ *     in the webhook + by /api/stripe/founding-status surface)
+ *
+ * Consent recording
+ * ─────────────────
+ * Consent is recorded on click via recordFoundingConsent() — matches the
+ * existing "consent at click time" pattern used by FoundingLifetime banner.
+ * The Stripe webhook handles seat-counter decrement on payment_intent
+ * succeeded; if payment fails, the consent record stays (acceptable —
+ * we logged that the user agreed at that moment, even if checkout was
+ * abandoned).
  */
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { FoundingOfferConsent } from "@/components/legal/FoundingOfferConsent";
 import { recordFoundingConsent } from "@/app/actions/consentActions";
+import { createCheckoutSession } from "@/services/billing/subscriptionService";
 
 const FOUNDING_PRICE_USD = 89.0;
 const FOUNDING_SEATS_TOTAL = 1000;
+
+const MONETIZATION_ENABLED =
+  process.env.NEXT_PUBLIC_MONETIZATION_ENABLED === "true";
 
 export default function FoundingCheckoutPage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -43,48 +66,38 @@ export default function FoundingCheckoutPage() {
   }, []);
 
   async function onPurchase() {
-    if (!consented) return;
+    if (!consented || !userId) return;
     setLoading(true);
     setStatusMsg(null);
 
     try {
-      // TODO: wire Stripe when NEXT_PUBLIC_MONETIZATION_ENABLED=true (target: 2026-05-31)
-      //   When enabled, replace the console.log + stub-success below with:
-      //   1. Create a Stripe Checkout Session for the $89 one-time founding pass.
-      //   2. Redirect to Stripe Checkout.
-      //   3. After payment_intent.succeeded webhook, call recordFoundingConsent
-      //      (move this OUT of the client and into the webhook handler so the
-      //      consent_records row only lands on actual successful payment).
-      console.log("[founding-offer] Stripe checkout would launch here", {
-        userId,
-        userEmail,
-        consented,
-        priceUsd: FOUNDING_PRICE_USD,
-      });
+      // Record consent at click time (matches FoundingLifetime banner
+      // pattern). If checkout fails later, we still have an audit row
+      // showing the user agreed to the founding terms at this moment.
+      await recordFoundingConsent({ userId, email: userEmail ?? undefined });
 
+      const url = await createCheckoutSession({ addon: "founding_lifetime" });
+      if (url) {
+        window.location.href = url;
+        return;          // intentional — we redirected
+      }
       setStatusMsg(
-        "Founding offer checkout is not yet enabled. Coming May 31, 2026 — you'll be able to complete this purchase then.",
+        "Checkout is not available right now. Please try again in a moment.",
       );
-
-      // Audit-trail note: when Stripe is live, recordFoundingConsent moves
-      // into the webhook handler. For now, do NOT record consent — payment
-      // didn't actually happen.
     } catch (err) {
-      console.error("[founding-offer] stub error:", err);
+      console.error("[founding] checkout error:", err);
       setStatusMsg("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
-  // Exposed for tests + future webhook handler verification:
-  // calling recordFoundingConsent on a user is the right behavior post-payment.
-  // We reference it here so the build keeps a real import (otherwise
-  // unused imports get flagged) and so the call site is documented.
-  const _stubRecordConsentRef: typeof recordFoundingConsent = recordFoundingConsent;
-  void _stubRecordConsentRef;
-
-  const buttonDisabled = !consented || loading || !userId;
+  // The button is disabled when (a) the user hasn't consented, (b) they're
+  // not signed in, (c) we're in flight, OR (d) monetization is off entirely
+  // (preview-only UAT or pre-launch). The label below reflects (d) explicitly
+  // so users understand why the button is greyed.
+  const monetizationOff = !MONETIZATION_ENABLED;
+  const buttonDisabled  = !consented || loading || !userId || monetizationOff;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
@@ -123,9 +136,19 @@ export default function FoundingCheckoutPage() {
                      disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500
                      focus:outline-none focus:ring-2 focus:ring-amber-400 transition-colors"
         >
-          {loading ? "Processing…" : `Purchase Lifetime Access — $${FOUNDING_PRICE_USD.toFixed(2)}`}
+          {monetizationOff
+            ? "Coming soon"
+            : loading
+            ? "Processing…"
+            : `Purchase Lifetime Access — $${FOUNDING_PRICE_USD.toFixed(2)}`}
         </button>
-        {!userId && (
+        {monetizationOff && (
+          <p className="mt-2 text-center text-xs text-gray-500">
+            Founding offer checkout will open when Stripe billing goes live. Your seat is not yet
+            reserved — check back after the May 31, 2026 launch.
+          </p>
+        )}
+        {!userId && !monetizationOff && (
           <p className="mt-2 text-center text-xs text-gray-500">
             Sign in to complete your purchase.
           </p>

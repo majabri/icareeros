@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase";
-import { RECURRING_ADDONS } from "./types";
 import type {
   UserSubscription,
   SubscriptionPlan,
@@ -60,25 +59,31 @@ export async function createCheckoutSession(
 ): Promise<string | null> {
   if (!isMonetizationEnabled()) return null;
 
-  // Read NEXT_PUBLIC_-prefixed price ids; only public ones can be exposed
-  // to the browser. STRIPE_PRICE_* (no NEXT_PUBLIC_) are server-only.
-  const priceId = resolvePublicPriceId(opts);
-  if (!priceId) return null;
-
   const baseUrl =
     process.env.NEXT_PUBLIC_BASE_URL ??
     (typeof window !== "undefined" ? window.location.origin : "");
   const successUrl = opts.successUrl ?? `${baseUrl}/settings/billing?status=success`;
   const cancelUrl  = opts.cancelUrl  ?? `${baseUrl}/settings/billing?status=canceled`;
-  const mode: "subscription" | "payment" =
-    opts.addon
-      ? (RECURRING_ADDONS.has(opts.addon) ? "subscription" : "payment")
-      : "subscription";
+
+  // 2026-05-14 — price resolution moved server-side so we don't need a
+  // duplicate NEXT_PUBLIC_STRIPE_PRICE_* env var per tier in Vercel. The
+  // server reads STRIPE_PRICE_<TIER>_<CYCLE> / STRIPE_PRICE_<ADDON> from
+  // its env and looks them up via resolvePriceId() in src/lib/stripe.ts.
+  // Client just sends the semantic intent.
+  const payload: Record<string, unknown> = { successUrl, cancelUrl };
+  if (opts.addon) {
+    payload.addon = opts.addon;
+  } else if (opts.plan && opts.cycle) {
+    payload.plan  = opts.plan;
+    payload.cycle = opts.cycle;
+  } else {
+    return null;
+  }
 
   const res = await fetch("/api/stripe/checkout", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ priceId, mode, successUrl, cancelUrl }),
+    body:    JSON.stringify(payload),
   });
   if (!res.ok) {
     console.error("createCheckoutSession error:", res.status, await res.text());
@@ -101,31 +106,7 @@ export async function createCheckoutSession(
  * This map enumerates every combination so each access is direct, which is
  * what Next.js needs.
  */
-const PUBLIC_PLAN_CYCLE_PRICE_MAP: Record<string, string | undefined> = {
-  starter_monthly:  process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_MONTHLY,
-  starter_annual:   process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_ANNUAL,
-  standard_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD_MONTHLY,
-  standard_annual:  process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD_ANNUAL,
-  pro_monthly:      process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
-  pro_annual:       process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
-};
 
-function resolvePublicPriceId(opts: CreateCheckoutOpts): string | null {
-  if (opts.addon) {
-    const map: Record<AddonKey, string | undefined> = {
-      sprint:            process.env.NEXT_PUBLIC_STRIPE_PRICE_SPRINT,
-      interview_pack:    process.env.NEXT_PUBLIC_STRIPE_PRICE_INTERVIEW_PACK,
-      negotiation_pack:  process.env.NEXT_PUBLIC_STRIPE_PRICE_NEGOTIATION_PACK,
-      founding_lifetime: process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING,
-    };
-    return map[opts.addon] ?? null;
-  }
-  if (opts.plan && opts.cycle) {
-    const key = `${opts.plan}_${opts.cycle}`;
-    return PUBLIC_PLAN_CYCLE_PRICE_MAP[key] ?? null;
-  }
-  return null;
-}
 
 /**
  * Open the Stripe Customer Portal.
