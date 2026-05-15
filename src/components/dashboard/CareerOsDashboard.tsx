@@ -36,6 +36,22 @@ import type { SubscriptionPlan } from "@/services/billing/types";
 import type { AchieveResult } from "@/services/ai/achieveService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 
+/**
+ * Sprint 5 Phase 2 — Dashboard 'Run' button + 'View details →' link
+ * both route to the stage's dedicated page. Single source of truth
+ * for those routes is right here so /coach (which has had its own page
+ * since Sprint 3) stays consistent with /evaluate /advise /learn /act
+ * /achieve added in Sprint 5 Phase 1.
+ */
+const STAGE_HREF: Record<CareerOsStage, string> = {
+  evaluate: "/evaluate",
+  advise:   "/advise",
+  learn:    "/learn",
+  act:      "/act",
+  coach:    "/coach",
+  achieve:  "/achieve",
+};
+
 interface ActiveCycle {
   id: string;
   cycle_number: number;
@@ -315,7 +331,14 @@ export function CareerOsDashboard() {
     }
   }, [userId, refreshCycle]);
 
-  const handleAdvanceStage = useCallback(async () => {
+  /**
+   * @deprecated Sprint 5 Phase 2 — dashboard 'Run' now routes to the stage
+   * page via router.push(STAGE_HREF[stage]) so the user sees the actual AI
+   * output rendered. Kept here as the previous inline-execute path; underscore
+   * prefix to silence noUnusedLocals.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps
+  const _handleAdvanceStage = useCallback(async () => {
     if (!userId || !cycle) return;
     const currentStage = cycle.current_stage as CareerOsStage;
     setRunning(true);
@@ -685,8 +708,13 @@ export function CareerOsDashboard() {
                 status={stageStatus[stage]}
                 isCurrentStage={stage === currentStage && !cycleComplete}
                 onRun={
+                  // Sprint 5 Phase 2 — clicking "Run" on a stage card routes
+                  // the user to the stage's dedicated page (where the actual
+                  // Run button lives + the AI output renders). Keeps cycle
+                  // control in one place per stage. Coach already worked this
+                  // way; this brings the other 5 stages into parity.
                   stage === currentStage && !cycleComplete
-                    ? handleAdvanceStage
+                    ? () => router.push(STAGE_HREF[stage])
                     : undefined
                 }
                 running={running}

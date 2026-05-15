@@ -78,7 +78,11 @@ describe("subscriptionService — monetization enabled", () => {
     process.env.NEXT_PUBLIC_BASE_URL = "https://icareeros.test";
   });
 
-  it("createCheckoutSession POSTs to /api/stripe/checkout with the resolved price id", async () => {
+  it("createCheckoutSession POSTs plan+cycle (server resolves the priceId)", async () => {
+    // 2026-05-14 — price resolution moved server-side, so the client now
+    // sends semantic intent { plan, cycle } and the route at
+    // /api/stripe/checkout looks up STRIPE_PRICE_<TIER>_<CYCLE> via
+    // resolvePriceId(). No NEXT_PUBLIC_STRIPE_PRICE_* env var required.
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ checkoutUrl: "https://stripe.test/c_123" }),
@@ -93,12 +97,13 @@ describe("subscriptionService — monetization enabled", () => {
     );
     const call = fetchSpy.mock.calls[0];
     const body = JSON.parse(call[1].body);
-    expect(body.priceId).toBe("price_starter_m");
-    expect(body.mode).toBe("subscription");
+    expect(body.plan).toBe("starter");
+    expect(body.cycle).toBe("monthly");
+    expect(body.successUrl).toMatch(/settings\/billing\?status=success$/);
+    expect(body.cancelUrl).toMatch(/settings\/billing\?status=canceled$/);
   });
 
-  it("createCheckoutSession with addon switches mode to 'payment'", async () => {
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_FOUNDING = "price_founding";
+  it("createCheckoutSession with addon sends addon key (server picks mode + priceId)", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ checkoutUrl: "https://stripe.test/p_1" }),
@@ -108,16 +113,18 @@ describe("subscriptionService — monetization enabled", () => {
     const url = await svc.createCheckoutSession({ addon: "founding_lifetime" });
     expect(url).toBe("https://stripe.test/p_1");
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.mode).toBe("payment");
-    expect(body.priceId).toBe("price_founding");
+    expect(body.addon).toBe("founding_lifetime");
+    // Mode is no longer client-decided.
+    expect(body.mode).toBeUndefined();
+    expect(body.priceId).toBeUndefined();
   });
 
-  it("createCheckoutSession returns null when env var for the price is unset", async () => {
-    delete process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER_MONTHLY;
+  it("createCheckoutSession returns null when neither plan/cycle nor addon is provided", async () => {
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy as unknown as typeof fetch;
     const svc = await loadService();
-    const url = await svc.createCheckoutSession({ plan: "starter", cycle: "monthly" });
+    // No plan, no cycle, no addon → service short-circuits before any fetch.
+    const url = await svc.createCheckoutSession({} as unknown as Parameters<typeof svc.createCheckoutSession>[0]);
     expect(url).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });

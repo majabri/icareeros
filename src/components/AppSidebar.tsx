@@ -74,36 +74,51 @@ type StageSection = {
 
 const STAGES: StageSection[] = [
   {
+    // Sprint 5 Phase 1 — Evaluate now has its own AI-output page; the
+    // Career Profile entry remains as the data-entry surface beneath it.
     stage: "evaluate", num: 1, label: "Evaluate", icon: "profile",
-    items: [{ href: "/mycareer", label: "Career Profile", icon: "profile" }],
+    items: [
+      { href: "/evaluate", label: "Evaluate",       icon: "profile" },
+      { href: "/mycareer", label: "Career Profile", icon: "profile" },
+    ],
   },
   {
     stage: "advise", num: 2, label: "Advise", icon: "resume",
-    items: [{ href: "/resumeadvisor", label: "Resume Advisor", icon: "resume" }],
+    items: [
+      { href: "/advise",        label: "Career Advice",  icon: "resume" },
+      { href: "/resumeadvisor", label: "Resume Advisor", icon: "resume" },
+    ],
   },
   {
     stage: "learn", num: 3, label: "Learn", icon: "store",
     items: [
-      { href: "/targetskills", label: "Target Skills", icon: "target" },
+      { href: "/learn",        label: "Learning Plan",  icon: "store"  },
+      { href: "/targetskills", label: "Target Skills",  icon: "target" },
     ],
   },
   {
     stage: "act", num: 4, label: "Act", icon: "jobs",
     items: [
-      { href: "/jobs",         label: "Opportunities", icon: "jobs"       },
+      { href: "/act",          label: "Action Plan",   icon: "target"    },
+      { href: "/jobs",         label: "Opportunities", icon: "jobs"      },
+      { href: "/applications", label: "Pipeline",      icon: "pipeline"  },
+      { href: "/interview",    label: "Interview",     icon: "interview" },
+      { href: "/offers",       label: "Offer Desk",    icon: "offers"    },
       { href: "/auto-apply",   label: "Autopilot",     icon: "autopilot", comingSoon: true },
-      { href: "/applications", label: "Pipeline",      icon: "pipeline"   },
-      { href: "/interview",    label: "Interview",     icon: "interview"  },
-      { href: "/offers",       label: "Offer Desk",    icon: "offers"     },
     ],
   },
   {
+    // Sprint 5 — Coach was already live at /coach; the comingSoon flag
+    // was stale and is removed here.
     stage: "coach", num: 5, label: "Coach", icon: "coach",
-    items: [], comingSoon: true,
+    items: [{ href: "/coach", label: "Coach", icon: "coach" }],
   },
   {
     stage: "achieve", num: 6, label: "Achieve", icon: "achieve",
-    items: [{ href: "/career", label: "Flight Plan", icon: "achieve", comingSoon: true }],
+    items: [
+      { href: "/achieve", label: "Achieve",     icon: "achieve" },
+      { href: "/career",  label: "Flight Plan", icon: "achieve", comingSoon: true },
+    ],
   },
 ];
 

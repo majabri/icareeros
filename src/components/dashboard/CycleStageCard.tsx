@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
@@ -7,6 +8,20 @@ import type { LearnResult } from "@/services/ai/learnService";
 import type { ActResult } from "@/services/ai/actService";
 import type { CoachResult } from "@/services/ai/coachService";
 import type { AchieveResult } from "@/services/ai/achieveService";
+
+/**
+ * Sprint 5 Phase 2 — Stage-page hrefs used by the "View details →" link
+ * that appears at the bottom of the card whenever notes exist OR the stage
+ * is completed. Mirrors the same map in CareerOsDashboard.
+ */
+const STAGE_HREF: Record<CareerOsStage, string> = {
+  evaluate: "/evaluate",
+  advise:   "/advise",
+  learn:    "/learn",
+  act:      "/act",
+  coach:    "/coach",
+  achieve:  "/achieve",
+};
 
 interface StageConfig {
   label: string;
@@ -690,6 +705,22 @@ export function CycleStageCard({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
           Stage complete
+        </div>
+      )}
+
+      {/*
+        Sprint 5 Phase 2 — "View details →" link. Shows when the stage has
+        notes persisted OR is marked completed. Hides on pending/future
+        stages with no output (nothing meaningful to link to yet).
+      */}
+      {(status === "completed" || (!!notes && Object.keys(notes ?? {}).length > 0)) && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <Link
+            href={STAGE_HREF[stage]}
+            className="inline-flex items-center text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          >
+            View details →
+          </Link>
         </div>
       )}
     </div>

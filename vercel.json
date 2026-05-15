@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/discover-perplexity",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/enrich-salaries",
+      "schedule": "0 3 * * *"
     }
   ]
 }
