@@ -47,6 +47,7 @@ export function ActPageInner() {
       hasOutput={!!output}
       error={error}
       running={running}
+      cycleInfo={cycle ? { cycleNumber: cycle.cycle_number, goal: cycle.goal } : null}
       onRun={handleRun}
     >
       {output && <ActOutputPanel result={output} />}

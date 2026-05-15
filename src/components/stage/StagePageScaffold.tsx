@@ -41,6 +41,13 @@ export interface StagePageScaffoldProps {
   planGate?:    ReactNode;
   /** Called when the user confirms "Run" (or "Re-run"). */
   onRun:        () => void | Promise<void>;
+  /**
+   * Sprint 5 P2-fix — Active cycle context shown above the output so the
+   * user knows which cycle is being read. Users with >1 active cycle would
+   * otherwise be confused when getActiveCycle returns the most recent one
+   * silently.
+   */
+  cycleInfo?:   { cycleNumber: number; goal: string | null } | null;
   /** The actual output panel (rendered when hasOutput is true). */
   children?:    ReactNode;
 }
@@ -80,6 +87,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
   if (props.hasOutput) {
     return (
       <div className="space-y-6">
+        {props.cycleInfo && <CycleContextBadge info={props.cycleInfo} />}
         {props.children}
 
         {/* Re-run with inline confirmation (P3-3) */}
@@ -137,6 +145,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
   // No output yet — show empty state with initial Run button
   return (
     <div className="space-y-5">
+      {props.cycleInfo && <CycleContextBadge info={props.cycleInfo} />}
       {props.profileIncomplete && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Your career profile isn't fully filled in yet. You can still run {props.stageLabel}, but{" "}
@@ -162,6 +171,28 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Sprint 5 P2-fix — Small badge that tells the user which cycle's output
+ * they're viewing. Important when the user has multiple active cycles —
+ * useStageData picks the most recent via getActiveCycle, and without this
+ * badge the user has no way to tell which one is rendered.
+ */
+function CycleContextBadge({ info }: { info: { cycleNumber: number; goal: string | null } }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600 flex items-center gap-2">
+      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700">
+        Cycle #{info.cycleNumber}
+      </span>
+      {info.goal && (
+        <>
+          <span className="text-gray-400">·</span>
+          <span className="truncate">{info.goal}</span>
+        </>
+      )}
     </div>
   );
 }
