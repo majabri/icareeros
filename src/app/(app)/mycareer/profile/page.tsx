@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
+import { getAuthedUser } from "@/lib/supabaseAuth";
 import {
   parseResumeFile,
   saveResumeVersion,
@@ -140,12 +141,20 @@ export default function CareerProfilePage() {
   const [exportMsg, setExportMsg]             = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  async function ensureUser(): Promise<{ id: string; email: string } | null> {
+    if (userId) return { id: userId, email: userEmail };
+    const user = await getAuthedUser(supabase);
+    if (!user) return null;
+    setUserId(user.id);
+    setUserEmail(user.email ?? "");
+    return { id: user.id, email: user.email ?? "" };
+  }
+
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        const u = data.user;
+        const u = await getAuthedUser(supabase);
         if (!u) return;
         setUserId(u.id);
         setUserEmail(u.email ?? "");
@@ -200,12 +209,16 @@ export default function CareerProfilePage() {
   // ── Save profile ─────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
-    if (!userId) return;
+    const u = await ensureUser();
+    if (!u?.id) {
+      setProfileMsg({ type: "error", text: "Your session isn't available. Please refresh and sign in again." });
+      return;
+    }
     setSaving(true); setProfileMsg(null);
     try {
       const { error } = await supabase.from("career_profiles").upsert(
         {
-          user_id:         userId,
+          user_id:         u.id,
           full_name:       fullName.trim() || null,
           phone:           phone.trim() || null,
           contact_email:   contactEmail.trim() || null,
@@ -224,8 +237,8 @@ export default function CareerProfilePage() {
       );
       if (error) throw new Error(error.message);
       setProfileMsg({ type: "success", text: "Profile saved." });
-      if (userId && cycleId) {
-        void advanceStage(userId, cycleId, "evaluate").catch(() => {});
+      if (u.id && cycleId) {
+        void advanceStage(u.id, cycleId, "evaluate").catch(() => {});
       }
     } catch (err) {
       setProfileMsg({ type: "error", text: (err as Error).message });
@@ -430,7 +443,11 @@ export default function CareerProfilePage() {
   }
 
   async function handleClearProfile() {
-    if (!userId) return;
+    const u = await ensureUser();
+    if (!u?.id) {
+      setProfileMsg({ type: "error", text: "Your session isn't available. Please refresh and sign in again." });
+      return;
+    }
     setClearing(true);
     try {
       // Delete all resume versions
@@ -442,7 +459,7 @@ export default function CareerProfilePage() {
       // /settings/account for display identity) is NOT touched.
       await supabase.from("career_profiles").upsert(
         {
-          user_id:         userId,
+          user_id:         u.id,
           full_name:       null,
           phone:           null,
           contact_email:   null,
