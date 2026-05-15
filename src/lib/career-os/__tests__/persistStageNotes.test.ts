@@ -19,16 +19,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ── Mock client builder ──────────────────────────────────────────────────
 
+type SpyFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
+
 interface MockChain {
   selectOut?:    { data: unknown; error: unknown };
   insertOut?:    { error: unknown };
   updateOut?:    { error: unknown };
   // Spies populated automatically so each test can assert call args
   spies: {
-    select: ReturnType<typeof vi.fn>;
-    insert: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    eq:     ReturnType<typeof vi.fn>;
+    select: SpyFn;
+    insert: SpyFn;
+    update: SpyFn;
+    eq:     SpyFn;
   };
 }
 
