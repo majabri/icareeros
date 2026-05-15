@@ -164,7 +164,8 @@ function CycleManagementPanel({
 }: {
   cycles:     Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
   selectedId: string;
-  onSwitch:   (id: string) => void;
+  /** Called with the cycle being switched to so the parent can route to its current stage. */
+  onSwitch:   (cycle: { id: string; current_stage: string }) => void;
   onAbandon:  (id: string) => Promise<void>;
 }) {
   const [open, setOpen]           = useState(false);
@@ -217,7 +218,7 @@ function CycleManagementPanel({
                   {!selected && !isConfirming && (
                     <button
                       type="button"
-                      onClick={() => onSwitch(c.id)}
+                      onClick={() => onSwitch({ id: c.id, current_stage: c.current_stage })}
                       className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-white"
                     >
                       Switch
@@ -649,7 +650,20 @@ export function CareerOsDashboard() {
         <CycleManagementPanel
           cycles={activeCycles}
           selectedId={cycle.id}
-          onSwitch={(id) => userId && void refreshCycle(userId, id)}
+          onSwitch={(c) => {
+            if (!userId) return;
+            void (async () => {
+              await refreshCycle(userId, c.id);
+              // Sprint 5 hotfix (2026-05-15) — After switching, route the
+              // user straight to the stage they're currently working on for
+              // that cycle. Without this they stay on the dashboard and have
+              // to click into the stage manually, which makes Switch feel
+              // like a no-op.
+              const stage = c.current_stage as CareerOsStage;
+              const href = STAGE_HREF[stage];
+              if (href) router.push(href);
+            })();
+          }}
           onAbandon={async (id) => {
             if (!userId) return;
             const sb = createClient();

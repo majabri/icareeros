@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { ActResult } from "@/services/ai/actService";
 import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
+import { stripJsonFences } from "@/lib/career-os/stripJsonFences";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import type { LearnResult } from "@/services/ai/learnService";
@@ -207,7 +208,7 @@ export async function POST(req: Request) {
 
     let result: ActResult;
     try {
-      result = JSON.parse(raw.text) as ActResult;
+      result = JSON.parse(stripJsonFences(raw.text)) as ActResult;
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
+import { stripJsonFences } from "@/lib/career-os/stripJsonFences";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -208,7 +209,7 @@ export async function POST(req: Request) {
 
     let result: EvaluationResult;
     try {
-      result = JSON.parse(raw.text) as EvaluationResult;
+      result = JSON.parse(stripJsonFences(raw.text)) as EvaluationResult;
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }
@@ -261,7 +262,7 @@ export async function POST(req: Request) {
 
           const liRaw = liMessage.content[0];
           if (liRaw.type === "text") {
-            const parsed = JSON.parse(liRaw.text);
+            const parsed = JSON.parse(stripJsonFences(liRaw.text));
             if (parsed && typeof parsed === "object"
                 && typeof parsed.headlineSuggestion === "string"
                 && Array.isArray(parsed.aboutGaps)
