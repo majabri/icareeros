@@ -35,7 +35,7 @@ export interface UseProfileSkillsOptions {
    * a local-state sync — but going through the proper remove() keeps
    * useTargetSkills' optimistic + error-handling paths in one place.
    */
-  onAdd?: (skills: string[]) => void | Promise<void>;
+  onAdd?: (skills: string[]) => unknown | Promise<unknown>;
 }
 
 export function useProfileSkills(opts: UseProfileSkillsOptions = {}): UseProfileSkills {
