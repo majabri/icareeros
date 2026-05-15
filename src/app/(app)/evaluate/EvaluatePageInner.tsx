@@ -64,6 +64,7 @@ export function EvaluatePageInner() {
       hasOutput={!!output}
       error={error}
       running={running}
+      cycleInfo={cycle ? { cycleNumber: cycle.cycle_number, goal: cycle.goal } : null}
       onRun={handleRun}
     >
       {output && <EvaluateOutputPanel result={output} generatedAt={output.generatedAt} />}

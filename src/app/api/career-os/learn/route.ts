@@ -14,6 +14,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import type { LearnResult } from "@/services/ai/learnService";
+import { persistStageNotes } from "@/lib/career-os/persistStageNotes";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
@@ -204,6 +205,23 @@ export async function POST(req: Request) {
           estimatedCompletionWeeks: result.estimatedCompletionWeeks,
         },
       });
+
+    // Sprint 5 P2-fix — persist this stage's output to career_os_stages.notes.
+    // Phase 1's stage pages call this route directly (not via advanceStage),
+    // so persistence has to happen here or notes never get written and the
+    // page's reload() will keep finding nothing.
+    if (cycleId) {
+      const persisted = await persistStageNotes(
+        supabase,
+        user.id,
+        cycleId,
+        "learn",
+        result as unknown as Record<string, unknown>,
+      );
+      if (!persisted.ok) {
+        console.warn("[learn] persist failed (non-fatal):", persisted.error);
+      }
+    }
 
     return NextResponse.json(result);
   } catch (err) {
