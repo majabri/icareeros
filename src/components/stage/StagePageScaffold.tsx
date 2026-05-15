@@ -122,6 +122,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
         {props.cycleInfo && (
           <CycleGoalHeader info={props.cycleInfo} noun={props.outputNoun ?? props.stageLabel} />
         )}
+        <CycleSwitcher cycleId={props.cycleId ?? null} userId={props.userId ?? null} />
         {props.children}
 
         {/* Re-run with inline confirmation (P3-3) */}
@@ -193,6 +194,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
           subtle
         />
       )}
+      <CycleSwitcher cycleId={props.cycleId ?? null} userId={props.userId ?? null} />
       {props.profileIncomplete && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Your career profile isn't fully filled in yet. You can still run {props.stageLabel}, but{" "}
