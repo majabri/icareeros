@@ -19,7 +19,7 @@ const TYPE_ICON: Record<LearningResource["type"], string> = {
 };
 
 export function LearnPageInner() {
-  const { loading, userId, cycle, output, reload } = useStageData<StoredLearn>("learn");
+  const { loading, userId, cycle, output, reload, setOutput } = useStageData<StoredLearn>("learn");
   const [running, setRunning] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
@@ -27,8 +27,9 @@ export function LearnPageInner() {
     if (!userId || !cycle) return;
     setRunning(true); setError(null);
     try {
-      await generateLearningPlan(userId, cycle.id);
-      await reload();
+      const result = await generateLearningPlan(userId, cycle.id);
+      setOutput({ ...result, generatedAt: new Date().toISOString() });
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Learn failed. Try again in a moment.");
     } finally {

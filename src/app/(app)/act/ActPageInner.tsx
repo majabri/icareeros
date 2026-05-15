@@ -20,7 +20,7 @@ const TIER_COLOR: Record<ApplicationTier["roleTier"], string> = {
 };
 
 export function ActPageInner() {
-  const { loading, userId, cycle, output, reload } = useStageData<ActResult>("act");
+  const { loading, userId, cycle, output, reload, setOutput } = useStageData<ActResult>("act");
   const [running, setRunning] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
@@ -28,8 +28,9 @@ export function ActPageInner() {
     if (!userId || !cycle) return;
     setRunning(true); setError(null);
     try {
-      await triggerAction(userId, cycle.id);
-      await reload();
+      const result = await triggerAction(userId, cycle.id);
+      setOutput(result);
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Act failed. Try again in a moment.");
     } finally {

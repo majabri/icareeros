@@ -12,7 +12,7 @@ interface StoredEvaluate extends EvaluationResult {
 }
 
 export function EvaluatePageInner() {
-  const { loading, userId, cycle, output, reload } = useStageData<StoredEvaluate>("evaluate");
+  const { loading, userId, cycle, output, reload, setOutput } = useStageData<StoredEvaluate>("evaluate");
   const [running, setRunning]     = useState(false);
   const [error,   setError]       = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState<boolean | null>(null);
@@ -44,8 +44,13 @@ export function EvaluatePageInner() {
     if (!userId || !cycle) return;
     setRunning(true); setError(null);
     try {
-      await evaluateCareerProfile(userId, cycle.id);
-      await reload();
+      const result = await evaluateCareerProfile(userId, cycle.id);
+      // Sprint 5 fix — write the response into output immediately so the user
+      // sees the new data without waiting for reload() (which can race with
+      // background advanceStage writes from /mycareer/profile).
+      setOutput({ ...result, generatedAt: new Date().toISOString() });
+      // Best-effort reload in the background so persisted state stays in sync.
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Evaluate failed. Try again in a moment.");
     } finally {

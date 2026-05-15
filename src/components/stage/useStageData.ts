@@ -22,6 +22,14 @@ export interface StageDataState<T> {
   output:  T | null;
   /** Force a refetch — useful after running the stage to refresh notes. */
   reload:  () => Promise<void>;
+  /**
+   * Sprint 5 fix — immediate setter so the page can display the API
+   * response directly without waiting for a DB round-trip. This bypasses
+   * any race with the orchestrator's advanceStage (which is fire-and-
+   * forget from /mycareer/profile when the user saves their profile and
+   * can clobber the stage row while my reload() is in flight).
+   */
+  setOutput: (next: T | null) => void;
 }
 
 export function useStageData<T>(stage: CareerOsStage): StageDataState<T> {
@@ -68,5 +76,5 @@ export function useStageData<T>(stage: CareerOsStage): StageDataState<T> {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
-  return { loading, userId, cycle, output, reload: load };
+  return { loading, userId, cycle, output, reload: load, setOutput };
 }
