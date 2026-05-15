@@ -111,7 +111,7 @@ describe("persistStageNotes — insert path (first run)", () => {
     expect(r.ok).toBe(true);
     expect(chain.spies.insert).toHaveBeenCalledTimes(1);
 
-    const inserted = chain.spies.insert.mock.calls[0][0];
+    const inserted = chain.spies.insert.mock.calls[0][0] as Record<string, unknown>;
     expect(inserted.user_id).toBe(USER_ID);
     expect(inserted.cycle_id).toBe(CYCLE_ID);
     expect(inserted.stage).toBe("evaluate");
@@ -146,7 +146,7 @@ describe("persistStageNotes — update path (re-run)", () => {
     expect(chain.spies.update).toHaveBeenCalledTimes(1);
     expect(chain.spies.insert).not.toHaveBeenCalled();
 
-    const patch = chain.spies.update.mock.calls[0][0];
+    const patch = chain.spies.update.mock.calls[0][0] as Record<string, unknown>;
     expect(patch.notes).toEqual(RESULT);
     expect(patch.status).toBe("completed");
     expect(typeof patch.ended_at).toBe("string");
