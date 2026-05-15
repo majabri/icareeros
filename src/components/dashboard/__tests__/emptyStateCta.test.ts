@@ -44,7 +44,8 @@ describe("emptyStateCta — base rules", () => {
 });
 
 describe("emptyStateCta — Evaluate", () => {
-  it("disabled 'Complete your profile first' when profileReady=false", () => {
+  it("Evaluate (profileReady=false) — clickable link to /mycareer/profile with helper", () => {
+    // Sprint 5 fix-pack — was a disabled blocker; now a clickable link.
     const cta = emptyStateCta({
       stage: "evaluate",
       stageStatus: ALL_PENDING,
@@ -53,14 +54,16 @@ describe("emptyStateCta — Evaluate", () => {
       plan: "free",
     });
     expect(cta).toMatchObject({
-      label: "Complete your Career Profile first",
-      disabled: true,
+      label: "Complete your Career Profile →",
+      href:  "/mycareer/profile",
     });
-    expect(cta?.href).toBeUndefined();
+    expect(cta?.disabled).toBeFalsy();
     expect(cta?.helper).toMatch(/headline/);
   });
 
-  it("'Upload your resume' link when profileReady=true and not the current stage", () => {
+  it("Evaluate (profileReady=true, not current) — 'Open Evaluate' link to /evaluate", () => {
+    // Sprint 5 fix-pack — was "Upload your resume" → /mycareer/profile.
+    // Now sends the user to the actual stage page where they can Run.
     const cta = emptyStateCta({
       stage: "evaluate",
       stageStatus: ALL_PENDING,
@@ -69,14 +72,17 @@ describe("emptyStateCta — Evaluate", () => {
       plan: "free",
     });
     expect(cta).toEqual({
-      label: "Upload your resume to get started →",
-      href:  "/mycareer/profile",
+      label: "Open Evaluate →",
+      href:  "/evaluate",
     });
   });
 });
 
-describe("emptyStateCta — Advise / Learn / Achieve are disabled prompts", () => {
-  it("Advise: 'Complete Evaluate first' disabled", () => {
+describe("emptyStateCta — Advise / Learn / Achieve now soft-link to their stage pages", () => {
+  // Sprint 5 fix-pack — these three were previously disabled blockers.
+  // They now link to the stage page so the user can attempt to run.
+
+  it("Advise → 'Open Career Advice →' /advise (no longer disabled)", () => {
     const cta = emptyStateCta({
       stage: "advise",
       stageStatus: ALL_PENDING,
@@ -84,12 +90,14 @@ describe("emptyStateCta — Advise / Learn / Achieve are disabled prompts", () =
       profileReady: true,
       plan: "starter",
     });
-    expect(cta?.disabled).toBe(true);
-    expect(cta?.label).toMatch(/Complete Evaluate first/);
-    expect(cta?.href).toBeUndefined();
+    expect(cta).toEqual({
+      label: "Open Career Advice →",
+      href:  "/advise",
+    });
+    expect(cta?.disabled).toBeFalsy();
   });
 
-  it("Learn: 'Complete Advise' disabled", () => {
+  it("Learn → 'Open Learning Plan →' /learn (no longer disabled)", () => {
     const cta = emptyStateCta({
       stage: "learn",
       stageStatus: ALL_PENDING,
@@ -97,11 +105,14 @@ describe("emptyStateCta — Advise / Learn / Achieve are disabled prompts", () =
       profileReady: true,
       plan: "starter",
     });
-    expect(cta?.disabled).toBe(true);
-    expect(cta?.label).toMatch(/Complete Advise/);
+    expect(cta).toEqual({
+      label: "Open Learning Plan →",
+      href:  "/learn",
+    });
+    expect(cta?.disabled).toBeFalsy();
   });
 
-  it("Achieve: 'Your achievements will appear here' disabled", () => {
+  it("Achieve → 'Open Achieve →' /achieve with helper (no longer disabled)", () => {
     const cta = emptyStateCta({
       stage: "achieve",
       stageStatus: ALL_PENDING,
@@ -109,8 +120,12 @@ describe("emptyStateCta — Advise / Learn / Achieve are disabled prompts", () =
       profileReady: true,
       plan: "starter",
     });
-    expect(cta?.disabled).toBe(true);
-    expect(cta?.label).toMatch(/achievements will appear here/);
+    expect(cta).toMatchObject({
+      label: "Open Achieve →",
+      href:  "/achieve",
+    });
+    expect(cta?.disabled).toBeFalsy();
+    expect(cta?.helper).toMatch(/milestone/i);
   });
 });
 

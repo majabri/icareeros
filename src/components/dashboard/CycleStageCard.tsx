@@ -627,26 +627,13 @@ export function CycleStageCard({
         </div>
       )}
 
-      {/* ── Phase 5 Item 2 — opportunities-loading callout (advise/act) ── */}
-      {(stage === "advise" || stage === "act") &&
-        opportunitiesCount === 0 && (
-          <div
-            data-testid={"opportunities-empty-" + stage}
-            className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
-          >
-            <p className="font-medium">Job data is loading.</p>
-            <p className="mt-0.5 text-amber-700">
-              We refresh listings every few hours. Check back soon
-              {stage === "act" && (
-                <>
-                  , or{" "}
-                  <a href="/jobs" className="underline font-medium">search jobs now →</a>
-                </>
-              )}
-              .
-            </p>
-          </div>
-        )}
+      {/*
+        Sprint 5 fix-pack — Removed the "Job data is loading" callout that
+        previously rendered for advise/act when opportunitiesCount===0.
+        Per Amir: this messaging belongs on the dashboard's data-source row,
+        not on individual stage cards where it adds noise and reads as a
+        blocker.
+      */}
 
       {/* ── Phase 5 Item 2 — empty-state CTA (no notes, not the current run) ── */}
       {emptyStateCta && !(isCurrentStage && onRun) && status !== "completed" && (
