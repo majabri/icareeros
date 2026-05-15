@@ -23,9 +23,18 @@ export interface UseTargetSkills {
   has:       (skill: string) => boolean;
   /** Add one or many skills. Returns the server response (added/skipped). */
   add:       (skills: string[]) => Promise<{ added: string[]; skipped: string[] }>;
+  /**
+   * Sprint 5 hotfix (2026-05-15) — Remove one or many skills from
+   * target_skills. Used as the cross-hook callback when the user marks
+   * a skill as "I already have this" via ✅ on the dual-button pill;
+   * the server-side add-profile-skill route already removes the same
+   * skills atomically, so this call is idempotent. Returns the server
+   * response (which skills were actually removed).
+   */
+  remove:    (skills: string[]) => Promise<{ removed: string[]; skipped: string[] }>;
   /** True while the initial GET is in flight. */
   loading:   boolean;
-  /** Most recent error from a failed add (null if last call succeeded). */
+  /** Most recent error from a failed add/remove (null if last call succeeded). */
   error:     string | null;
 }
 
@@ -123,5 +132,59 @@ export function useTargetSkills(): UseTargetSkills {
     }
   }, [skills]);
 
-  return { skills, has, add, loading, error };
+  const remove = useCallback(async (incoming: string[]): Promise<{ removed: string[]; skipped: string[] }> => {
+    const lowerDrop = new Set(incoming.map((s) => s.toLowerCase().trim()).filter(Boolean));
+    if (lowerDrop.size === 0) return { removed: [], skipped: [] };
+
+    // Optimistic — drop from local state immediately.
+    const dropped: string[] = [];
+    setSkills((prev) => {
+      const next: string[] = [];
+      for (const s of prev) {
+        if (lowerDrop.has(s.toLowerCase().trim())) {
+          dropped.push(s);
+        } else {
+          next.push(s);
+        }
+      }
+      return next;
+    });
+
+    setError(null);
+
+    try {
+      const res = await fetch("/api/career-os/remove-target-skill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ skills: incoming }),
+      });
+      const json = await res.json().catch(() => ({})) as {
+        removed?: string[]; skipped?: string[]; target_skills?: string[]; error?: string;
+      };
+      if (!res.ok) {
+        // Revert optimistic drop.
+        if (dropped.length > 0) {
+          setSkills((prev) => [...prev, ...dropped]);
+        }
+        setError(json.error ?? `Could not remove skill${incoming.length === 1 ? "" : "s"}.`);
+        return { removed: [], skipped: incoming };
+      }
+      if (Array.isArray(json.target_skills)) {
+        setSkills(json.target_skills);
+      }
+      return {
+        removed: Array.isArray(json.removed) ? json.removed : dropped,
+        skipped: Array.isArray(json.skipped) ? json.skipped : [],
+      };
+    } catch (e) {
+      if (dropped.length > 0) {
+        setSkills((prev) => [...prev, ...dropped]);
+      }
+      setError(e instanceof Error ? e.message : "Network error — try again.");
+      return { removed: [], skipped: incoming };
+    }
+  }, []);
+
+  return { skills, has, add, remove, loading, error };
 }

@@ -10,8 +10,20 @@
  * so the user can mark a skill as either "want to learn" (🎯) or
  * "already have" (✅) independently — both, either, or neither.
  *
+ * Side-effect: once a skill is on the profile it no longer makes sense
+ * to keep it on the target list ("things I want to learn"), so this
+ * route also REMOVES any added skill from `career_profiles.target_skills`
+ * in the same DB update — atomic from the user's POV. The list of
+ * removed skills comes back as `removedFromTargets` so the client can
+ * keep its target-skills cache in sync.
+ *
  * POST body:  { skills: string[] }
- * POST reply: { added: string[]; skipped: string[]; skills: string[] }
+ * POST reply: {
+ *   added:              string[];
+ *   skipped:            string[];
+ *   skills:             string[];   // new career_profiles.skills
+ *   removedFromTargets: string[];   // entries dropped from target_skills
+ * }
  * GET reply:  { skills: string[] }
  */
 
@@ -94,7 +106,7 @@ export async function POST(req: Request) {
 
     const { data: profile, error: readErr } = await supabase
       .from("career_profiles")
-      .select("skills")
+      .select("skills, target_skills")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -126,21 +138,53 @@ export async function POST(req: Request) {
     }
 
     if (added.length === 0) {
-      return NextResponse.json({ added, skipped, skills: current });
+      // Nothing to add. Don't touch target_skills either — `skipped`
+      // skills were already on the profile (or duplicates within the
+      // batch). They may or may not also be on target_skills; leaving
+      // that as-is preserves user intent.
+      return NextResponse.json({
+        added,
+        skipped,
+        skills: current,
+        removedFromTargets: [],
+      });
     }
 
     const next = [...current, ...added];
 
+    // Atomic side-effect — strip any newly-added skill out of
+    // target_skills (case-insensitive). A skill on the profile no
+    // longer belongs on the "want to learn" list.
+    const currentTargets: string[] = (profile.target_skills as string[] | null) ?? [];
+    const addedLower = new Set(added.map((s) => s.toLowerCase()));
+    const removedFromTargets: string[] = [];
+    const nextTargets: string[] = [];
+    for (const t of currentTargets) {
+      if (addedLower.has(t.toLowerCase())) {
+        removedFromTargets.push(t);
+      } else {
+        nextTargets.push(t);
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = { skills: next };
+    if (removedFromTargets.length > 0) {
+      updatePayload.target_skills = nextTargets;
+    }
+
     const { error: updErr } = await supabase
       .from("career_profiles")
-      .update({ skills: next })
+      .update(updatePayload)
       .eq("user_id", user.id);
 
     if (updErr) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ added, skipped, skills: next }, { status: 201 });
+    return NextResponse.json(
+      { added, skipped, skills: next, removedFromTargets },
+      { status: 201 },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -68,7 +68,10 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
   // to learn) and ✅ (already have). Independent state per skill;
   // AddSkillPill dispatches to both hooks.
   const targetSkills  = useTargetSkills();
-  const profileSkills = useProfileSkills();
+  // Sprint 5 hotfix (2026-05-15) — Adding to profile auto-removes from
+  // target_skills (server-side); the onAdd callback keeps the target
+  // hook's local state in sync.
+  const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
 
   return (
     <div className="space-y-6">

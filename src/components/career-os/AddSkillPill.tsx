@@ -60,8 +60,15 @@ export function AddSkillPill({
   variant = "gap",
   size    = "md",
 }: AddSkillPillProps) {
-  const inTarget  = targetSkills.has(skill);
-  const inProfile = profileSkills.has(skill);
+  // Sprint 5 hotfix (2026-05-15) — Once a skill is on the profile it
+  // is implicitly no longer a target (and the server enforces this by
+  // dropping it from target_skills on add-profile-skill). The 🎯 chip
+  // should reflect that — visually it flips to ✓ teal regardless of
+  // which side did the work. ✅ chip stays driven only by profile
+  // membership.
+  const inProfile     = profileSkills.has(skill);
+  const inTargetOnly  = targetSkills.has(skill);
+  const targetActive  = inTargetOnly || inProfile;
 
   const [busyT, setBusyT] = useState(false);
   const [busyP, setBusyP] = useState(false);
@@ -69,7 +76,7 @@ export function AddSkillPill({
   const [justP, setJustP] = useState(false);
 
   async function addToTarget() {
-    if (inTarget || busyT) return;
+    if (targetActive || busyT) return;
     setBusyT(true);
     const { added } = await targetSkills.add([skill]);
     setBusyT(false);
@@ -96,11 +103,15 @@ export function AddSkillPill({
     >
       <span>{skill}</span>
       <ActionButton
-        active={inTarget}
+        active={targetActive}
         justFlashed={justT}
         busy={busyT}
         onClick={addToTarget}
-        addedTitle="Already on target skills"
+        addedTitle={
+          inProfile
+            ? "Already on your profile — auto-removed from target list"
+            : "Already on target skills"
+        }
         addTitle="Add to target skills (I want to learn this)"
         addIcon="🎯"
         activeBg="bg-teal-100 text-teal-800"

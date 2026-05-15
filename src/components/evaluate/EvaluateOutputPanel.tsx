@@ -28,7 +28,10 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
   // 🎯 add to target_skills (want to learn) and ✅ add to skills (have).
   // Independent state per skill, one-click each.
   const targetSkills  = useTargetSkills();
-  const profileSkills = useProfileSkills();
+  // Sprint 5 hotfix (2026-05-15) — Adding to profile auto-removes from
+  // target_skills (server-side); the onAdd callback keeps the target
+  // hook's local state in sync.
+  const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
 
   const score = Math.max(0, Math.min(100, result.marketFitScore));
   const scoreColor =

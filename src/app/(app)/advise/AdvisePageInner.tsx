@@ -57,7 +57,10 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
   // expose the same dual-button pill (🎯 target / ✅ profile) used on
   // /evaluate and /learn so the user can add a gap with one click.
   const targetSkills  = useTargetSkills();
-  const profileSkills = useProfileSkills();
+  // Sprint 5 hotfix (2026-05-15) — Adding to profile auto-removes from
+  // target_skills (server-side); the onAdd callback keeps the target
+  // hook's local state in sync.
+  const profileSkills = useProfileSkills({ onAdd: targetSkills.remove });
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">

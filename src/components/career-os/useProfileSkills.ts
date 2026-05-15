@@ -24,7 +24,21 @@ export interface UseProfileSkills {
   error:     string | null;
 }
 
-export function useProfileSkills(): UseProfileSkills {
+export interface UseProfileSkillsOptions {
+  /**
+   * Sprint 5 hotfix (2026-05-15) — fired with the list of skills that
+   * were ACTUALLY added (server-confirmed) on each successful add().
+   * The page passes `targetSkills.remove` here so that adding a skill
+   * to the profile also drops it from target_skills (a skill you have
+   * is no longer a target). Idempotent: the server's add-profile-skill
+   * route already removes the same skills atomically, so this is just
+   * a local-state sync — but going through the proper remove() keeps
+   * useTargetSkills' optimistic + error-handling paths in one place.
+   */
+  onAdd?: (skills: string[]) => void | Promise<void>;
+}
+
+export function useProfileSkills(opts: UseProfileSkillsOptions = {}): UseProfileSkills {
   const [skills,  setSkills]  = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -104,10 +118,20 @@ export function useProfileSkills(): UseProfileSkills {
       if (Array.isArray(json.skills)) {
         setSkills(json.skills);
       }
-      return {
-        added:   Array.isArray(json.added)   ? json.added   : optimisticNew,
-        skipped: Array.isArray(json.skipped) ? json.skipped : [],
-      };
+      const serverAdded = Array.isArray(json.added) ? json.added : optimisticNew;
+      const serverSkipped = Array.isArray(json.skipped) ? json.skipped : [];
+
+      // Fire the onAdd callback so the parent can keep target_skills
+      // in sync ("once you have a skill, it's no longer a target").
+      if (serverAdded.length > 0 && opts.onAdd) {
+        try {
+          await opts.onAdd(serverAdded);
+        } catch {
+          // Callback failure shouldn't fail the add itself.
+        }
+      }
+
+      return { added: serverAdded, skipped: serverSkipped };
     } catch (e) {
       if (optimisticNew.length > 0) {
         const revertKeys = new Set(optimisticNew.map((s) => s.toLowerCase()));
@@ -116,7 +140,8 @@ export function useProfileSkills(): UseProfileSkills {
       setError(e instanceof Error ? e.message : "Network error — try again.");
       return { added: [], skipped: incoming };
     }
-  }, [skills]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skills, opts.onAdd]);
 
   return { skills, has, add, loading, error };
 }
