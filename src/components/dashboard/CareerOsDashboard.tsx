@@ -652,7 +652,8 @@ export function CareerOsDashboard() {
           onSwitch={(id) => userId && void refreshCycle(userId, id)}
           onAbandon={async (id) => {
             if (!userId) return;
-            await supabase
+            const sb = createClient();
+            await sb
               .from("career_os_cycles")
               .update({ status: "abandoned" })
               .eq("id", id)
