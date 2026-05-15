@@ -9,7 +9,9 @@
  * `linkedinAnalysis.gated` is true.
  */
 
+import { useState } from "react";
 import type { EvaluationResult, LinkedInAnalysis, LinkedInGated } from "@/services/ai/evaluateService";
+import { useTargetSkills } from "@/components/career-os/useTargetSkills";
 
 export interface EvaluateOutputPanelProps {
   result:      EvaluationResult;
@@ -21,6 +23,28 @@ function isGated(x: EvaluationResult["linkedinAnalysis"]): x is LinkedInGated {
 }
 
 export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanelProps) {
+  // Sprint 5 hotfix (2026-05-15) — Gap pills can push themselves onto
+  // career_profiles.target_skills. The hook owns optimistic state +
+  // server reconciliation; we just render and dispatch.
+  const targetSkills = useTargetSkills();
+  const [addingAll, setAddingAll]  = useState(false);
+  const [addAllOk,  setAddAllOk]   = useState<string | null>(null);
+
+  async function handleAddAllGaps() {
+    if (result.gaps.length === 0 || addingAll) return;
+    setAddingAll(true);
+    setAddAllOk(null);
+    const { added } = await targetSkills.add(result.gaps);
+    setAddingAll(false);
+    if (added.length > 0) {
+      setAddAllOk(`Added ${added.length} skill${added.length === 1 ? "" : "s"} to your profile.`);
+      window.setTimeout(() => setAddAllOk(null), 3500);
+    } else {
+      setAddAllOk("All gaps already on your target list.");
+      window.setTimeout(() => setAddAllOk(null), 3500);
+    }
+  }
+
   const score = Math.max(0, Math.min(100, result.marketFitScore));
   const scoreColor =
     score >= 80 ? "text-emerald-600" :
@@ -86,11 +110,25 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
             {result.gaps.length === 0 ? (
               <p className="text-sm text-gray-400">No critical gaps identified for your target.</p>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {result.gaps.map((g) => (
-                  <span key={g} className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">{g}</span>
-                ))}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.gaps.map((g) => (
+                    <GapPill key={g} skill={g} targetSkills={targetSkills} />
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleAddAllGaps()}
+                    disabled={addingAll || targetSkills.loading}
+                    className="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {addingAll ? "Adding…" : "Add all gaps to profile →"}
+                  </button>
+                  {addAllOk && <p className="text-xs text-emerald-700">{addAllOk}</p>}
+                  {targetSkills.error && <p className="text-xs text-red-600">{targetSkills.error}</p>}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -159,5 +197,65 @@ function EvaluateLinkedIn({ analysis }: { analysis: LinkedInAnalysis }) {
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Sprint 5 hotfix (2026-05-15) — Single gap pill with inline + button
+ * that pushes the skill onto career_profiles.target_skills. Optimistic
+ * via useTargetSkills; flips to a teal "✓ Added" style on success.
+ */
+function GapPill({
+  skill,
+  targetSkills,
+}: {
+  skill: string;
+  targetSkills: ReturnType<typeof useTargetSkills>;
+}) {
+  const alreadyAdded = targetSkills.has(skill);
+  const [busy, setBusy]      = useState(false);
+  const [justAdded, setJust] = useState(false);
+
+  async function handle() {
+    if (alreadyAdded || busy) return;
+    setBusy(true);
+    const { added } = await targetSkills.add([skill]);
+    setBusy(false);
+    if (added.length > 0) {
+      setJust(true);
+      window.setTimeout(() => setJust(false), 2200);
+    }
+  }
+
+  if (alreadyAdded) {
+    return (
+      <span
+        title="Already on your target skills"
+        className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-800"
+      >
+        <span aria-hidden>✓</span>
+        {skill}
+        {justAdded && <span className="ml-1 text-[10px] font-semibold text-emerald-700">Added</span>}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handle()}
+      disabled={busy || targetSkills.loading}
+      title="Add to your target skills"
+      className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-60"
+    >
+      {skill}
+      <span
+        aria-hidden
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/70 text-[11px] font-bold text-red-700"
+      >
+        +
+      </span>
+    </button>
   );
 }
