@@ -21,7 +21,9 @@
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { getStripe, isFoundingPriceId } from "@/lib/stripe";
+import { getStripe, isFoundingPriceId, resolvePriceId } from "@/lib/stripe";
+import { RECURRING_ADDONS } from "@/services/billing/types";
+import type { SubscriptionPlan, BillingCycle, AddonKey } from "@/services/billing/types";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -40,31 +42,117 @@ async function makeSupabaseServer() {
   );
 }
 
+/**
+ * The client previously sent a fully-resolved `priceId`. That required the
+ * NEXT_PUBLIC_STRIPE_PRICE_* env vars to be duplicated alongside the
+ * server-side STRIPE_PRICE_* ones — easy to forget when wiring Vercel.
+ *
+ * The route now accepts EITHER shape:
+ *   • Legacy: `{ priceId, mode, successUrl, cancelUrl }` (still works for any
+ *     server-side caller that already has a priceId in hand).
+ *   • Plan:   `{ plan: "starter" | "standard" | "pro", cycle: "monthly" | "annual",
+ *               successUrl, cancelUrl }` — server resolves to the matching
+ *     STRIPE_PRICE_<TIER>_<CYCLE> env var. mode is always 'subscription'.
+ *   • Addon:  `{ addon: "sprint" | "interview_pack" | "negotiation_pack" |
+ *                       "founding_lifetime",
+ *               successUrl, cancelUrl }` — server resolves to STRIPE_PRICE_<NAME>
+ *     and infers mode (subscription for RECURRING_ADDONS, payment otherwise).
+ */
 interface Body {
-  priceId: string;
-  mode: "subscription" | "payment";
-  successUrl: string;
-  cancelUrl: string;
+  priceId:     string;
+  mode:        "subscription" | "payment";
+  successUrl:  string;
+  cancelUrl:   string;
 }
 
-function isValidBody(b: unknown): b is Body {
-  if (!b || typeof b !== "object") return false;
-  const o = b as Record<string, unknown>;
-  return (
-    typeof o.priceId === "string" && o.priceId.length > 0 &&
-    (o.mode === "subscription" || o.mode === "payment") &&
-    typeof o.successUrl === "string" && o.successUrl.length > 0 &&
-    typeof o.cancelUrl  === "string" && o.cancelUrl.length  > 0
-  );
+interface PlanBody {
+  plan:        Exclude<SubscriptionPlan, "free">;
+  cycle:       BillingCycle;
+  successUrl:  string;
+  cancelUrl:   string;
+}
+
+interface AddonBody {
+  addon:       AddonKey;
+  successUrl:  string;
+  cancelUrl:   string;
+}
+
+function hasUrlsRaw(o: Record<string, unknown>): boolean {
+  return typeof o.successUrl === "string" && o.successUrl.length > 0 &&
+         typeof o.cancelUrl  === "string" && o.cancelUrl.length  > 0;
+}
+
+function isPriceIdBody(b: Record<string, unknown>): b is Body & Record<string, unknown> {
+  return typeof b.priceId === "string" && b.priceId.length > 0 &&
+         (b.mode === "subscription" || b.mode === "payment") &&
+         hasUrlsRaw(b);
+}
+
+function isPlanBody(b: Record<string, unknown>): b is PlanBody & Record<string, unknown> {
+  if (typeof b.plan !== "string" || typeof b.cycle !== "string") return false;
+  const planOk  = b.plan === "starter" || b.plan === "standard" || b.plan === "pro";
+  const cycleOk = b.cycle === "monthly" || b.cycle === "annual";
+  return planOk && cycleOk && hasUrlsRaw(b);
+}
+
+function isAddonBody(b: Record<string, unknown>): b is AddonBody & Record<string, unknown> {
+  if (typeof b.addon !== "string") return false;
+  const ok = b.addon === "sprint" || b.addon === "interview_pack" ||
+             b.addon === "negotiation_pack" || b.addon === "founding_lifetime";
+  return ok && hasUrlsRaw(b);
+}
+
+/**
+ * Normalise any of the three accepted body shapes into the trio the route
+ * needs: a fully-resolved priceId + mode + the two redirect URLs. Returns
+ * a 400-style error string if the body is malformed OR if the requested
+ * plan/addon's price env var isn't set on the server.
+ */
+function resolveCheckoutInputs(
+  raw: unknown,
+): { priceId: string; mode: "subscription" | "payment"; successUrl: string; cancelUrl: string }
+  | { error: string; status: 400 | 422 } {
+  if (!raw || typeof raw !== "object") return { error: "invalid_body", status: 400 };
+  const b = raw as Record<string, unknown>;
+
+  if (isPriceIdBody(b)) {
+    return {
+      priceId:    b.priceId,
+      mode:       b.mode,
+      successUrl: b.successUrl,
+      cancelUrl:  b.cancelUrl,
+    };
+  }
+
+  if (isPlanBody(b)) {
+    const priceId = resolvePriceId({ plan: b.plan, cycle: b.cycle });
+    if (!priceId) return { error: "price_not_configured", status: 422 };
+    return { priceId, mode: "subscription", successUrl: b.successUrl, cancelUrl: b.cancelUrl };
+  }
+
+  if (isAddonBody(b)) {
+    const priceId = resolvePriceId({ addon: b.addon });
+    if (!priceId) return { error: "price_not_configured", status: 422 };
+    const mode: "subscription" | "payment" =
+      RECURRING_ADDONS.has(b.addon) ? "subscription" : "payment";
+    return { priceId, mode, successUrl: b.successUrl, cancelUrl: b.cancelUrl };
+  }
+
+  return { error: "invalid_body", status: 400 };
 }
 
 export async function POST(req: Request) {
-  let body: unknown;
-  try { body = await req.json(); }
+  let raw: unknown;
+  try { raw = await req.json(); }
   catch { return NextResponse.json({ error: "invalid_body" }, { status: 400 }); }
-  if (!isValidBody(body)) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+
+  const resolved = resolveCheckoutInputs(raw);
+  if ("error" in resolved) {
+    return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
+  // From here on, `body` is the fully-resolved priceId/mode shape used below.
+  const body = resolved;
 
   const supabase = await makeSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
