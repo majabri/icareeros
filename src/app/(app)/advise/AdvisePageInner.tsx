@@ -11,7 +11,7 @@ interface StoredAdvice extends AdviceResult {
 }
 
 export function AdvisePageInner() {
-  const { loading, userId, cycle, output, reload } = useStageData<StoredAdvice>("advise");
+  const { loading, userId, cycle, output, reload, setOutput } = useStageData<StoredAdvice>("advise");
   const [running, setRunning] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
@@ -19,8 +19,9 @@ export function AdvisePageInner() {
     if (!userId || !cycle) return;
     setRunning(true); setError(null);
     try {
-      await generateAdvice(userId, cycle.id);
-      await reload();
+      const result = await generateAdvice(userId, cycle.id);
+      setOutput({ ...result, generatedAt: new Date().toISOString() });
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Advise failed. Try again in a moment.");
     } finally {

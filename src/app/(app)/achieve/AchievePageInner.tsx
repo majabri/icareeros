@@ -16,7 +16,7 @@ const PRIORITY_BADGE: Record<"high" | "medium" | "low", string> = {
 
 export function AchievePageInner() {
   const router = useRouter();
-  const { loading, userId, cycle, output, reload } = useStageData<AchieveResult>("achieve");
+  const { loading, userId, cycle, output, reload, setOutput } = useStageData<AchieveResult>("achieve");
   const [running, setRunning]       = useState(false);
   const [completing, setCompleting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
@@ -25,8 +25,9 @@ export function AchievePageInner() {
     if (!userId || !cycle) return;
     setRunning(true); setError(null);
     try {
-      await recordAchievement(userId, cycle.id);
-      await reload();
+      const result = await recordAchievement(userId, cycle.id);
+      setOutput(result);
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Achieve failed. Try again in a moment.");
     } finally {

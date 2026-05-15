@@ -16,7 +16,7 @@
  */
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface StagePageScaffoldProps {
   /** "Evaluate", "Career Advice", etc. — page header title */
@@ -79,6 +79,30 @@ const EMPTY_NO_CYCLE = (
 export function StagePageScaffold(props: StagePageScaffoldProps) {
   const [confirming, setConfirming] = useState(false);
 
+  // Sprint 5 P3-fix — when a run completes (running goes true → false),
+  // collapse any confirmation prompt back to the Re-run button so the
+  // user clearly sees the post-run state. Without this, certain React 18
+  // batching orders could leave the prompt stuck visually even though the
+  // run already ran.
+  const prevRunning = useRef(false);
+  useEffect(() => {
+    if (prevRunning.current && !props.running) {
+      setConfirming(false);
+    }
+    prevRunning.current = props.running;
+  }, [props.running]);
+
+  // P3-fix — visible "Last run just now / 5s ago" indicator so the user can
+  // SEE that Re-run actually fired and the panel below them is fresh data.
+  // Drives off the `hasOutput && !running` transition; using a millisecond
+  // timestamp so we can render relative time below.
+  const [lastRunAt, setLastRunAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (prevRunning.current && !props.running && props.hasOutput) {
+      setLastRunAt(Date.now());
+    }
+  }, [props.running, props.hasOutput]);
+
   if (props.loading)         return SKELETON;
   if (props.planGate)        return <>{props.planGate}</>;
   if (props.noCycle)         return EMPTY_NO_CYCLE;
@@ -94,9 +118,16 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           {!confirming && !props.running && (
             <div className="flex items-center justify-between gap-4">
-              <p className="text-sm text-gray-600">
-                Generate a fresh {props.stageLabel} based on your latest profile data.
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-600">
+                  Generate a fresh {props.stageLabel} based on your latest profile data.
+                </p>
+                {lastRunAt && (
+                  <p className="mt-1 text-xs text-emerald-700">
+                    ✓ Just refreshed — output below reflects the latest run.
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => setConfirming(true)}
                 className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
