@@ -52,6 +52,7 @@ export function AchievePageInner() {
       title="Achieve"
       subtitle="Milestone + next cycle"
       stageLabel="Achieve"
+      outputNoun="Achievement"
       loading={loading}
       noCycle={!loading && !cycle}
       hasOutput={!!output}

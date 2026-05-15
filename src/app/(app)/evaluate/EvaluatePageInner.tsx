@@ -63,6 +63,7 @@ export function EvaluatePageInner() {
       title="Evaluate"
       subtitle="Skills, gaps, market fit"
       stageLabel="Evaluate"
+      outputNoun="Evaluation"
       loading={loading}
       noCycle={!loading && !cycle}
       profileIncomplete={profileReady === false}

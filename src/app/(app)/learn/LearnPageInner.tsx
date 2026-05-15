@@ -42,6 +42,7 @@ export function LearnPageInner() {
       title="Learning Plan"
       subtitle="Top resources for your gaps"
       stageLabel="Learn"
+      outputNoun="Learning plan"
       loading={loading}
       noCycle={!loading && !cycle}
       hasOutput={!!output}

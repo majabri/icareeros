@@ -34,6 +34,7 @@ export function AdvisePageInner() {
       title="Career Advice"
       subtitle="Recommended paths + next actions"
       stageLabel="Advise"
+      outputNoun="Advice"
       loading={loading}
       noCycle={!loading && !cycle}
       hasOutput={!!output}
