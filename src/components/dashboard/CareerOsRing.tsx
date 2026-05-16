@@ -104,8 +104,8 @@ export function CareerOsRing({
       </figcaption>
 
       <svg
-        viewBox="0 0 360 360"
-        className="w-full max-w-[360px]"
+        viewBox="-70 -28 500 416"
+        className="w-full max-w-[480px]"
         role="img"
         aria-label="Six-stage career operating system progress"
       >
@@ -190,21 +190,21 @@ export function CareerOsRing({
                 ) : node.status === "in_progress" ? (
                   <circle cx={x} cy={y} r={6} className="fill-brand-500" />
                 ) : (
-                  <text
-                    x={x} y={y} dy=".35em"
-                    textAnchor="middle"
-                    className="fill-gray-400 text-xs font-semibold"
-                  >
-                    {i + 1}
-                  </text>
+                  // Stage name is shown OUTSIDE the circle via the
+                  // external label below — keep pending circles empty
+                  // rather than render a misleading 1-6 step number.
+                  null
                 )}
               </g>
 
-              {/* External label */}
+              {/* External label — sits outside the ring so the full
+                  stage name is always legible. Names are short (≤ 8
+                  chars) so they fit comfortably inside the expanded
+                  viewBox at the medium text size. */}
               <text
                 x={lx} y={ly} dy=".35em"
                 textAnchor={labelAnchor}
-                className={"text-sm " + STATUS_LABEL_CLASS[node.status]}
+                className={"text-[15px] font-medium " + STATUS_LABEL_CLASS[node.status]}
               >
                 {STAGE_LABELS[node.stage]}
               </text>
