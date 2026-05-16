@@ -59,6 +59,8 @@ export function AchievePageInner() {
       error={error}
       running={running}
       cycleInfo={cycle ? { cycleNumber: cycle.cycle_number, goal: cycle.goal } : null}
+      cycleId={cycle?.id ?? null}
+      userId={userId}
       onRun={handleRun}
     >
       {output && (

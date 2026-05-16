@@ -17,6 +17,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CycleSwitcher } from "@/components/career-os/CycleSwitcher";
 
 export interface StagePageScaffoldProps {
   /** "Evaluate", "Career Advice", etc. — page header title */
@@ -48,6 +49,16 @@ export interface StagePageScaffoldProps {
    * silently.
    */
   cycleInfo?:   { cycleNumber: number; goal: string | null } | null;
+  /**
+   * Sprint 5 add-on (2026-05-15) — When the user has 2+ active cycles,
+   * a compact CycleSwitcher pill renders below the cycle-goal header so
+   * they can hop between cycles without going through the dashboard.
+   * `cycleId` is the currently-viewed cycle (highlighted in the dropdown);
+   * `userId` scopes the active-cycle query. The switcher is hidden when
+   * either is null or when the user has only 1 active cycle.
+   */
+  cycleId?:     string | null;
+  userId?:      string | null;
   /**
    * Sprint 5 hotfix (2026-05-15) — Noun used in the prominent section header
    * above the output, e.g. "Evaluation", "Advice", "Learning plan". When
@@ -122,6 +133,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
         {props.cycleInfo && (
           <CycleGoalHeader info={props.cycleInfo} noun={props.outputNoun ?? props.stageLabel} />
         )}
+        <CycleSwitcher cycleId={props.cycleId ?? null} userId={props.userId ?? null} />
         {props.children}
 
         {/* Re-run with inline confirmation (P3-3) */}
@@ -193,6 +205,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
           subtle
         />
       )}
+      <CycleSwitcher cycleId={props.cycleId ?? null} userId={props.userId ?? null} />
       {props.profileIncomplete && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Your career profile isn't fully filled in yet. You can still run {props.stageLabel}, but{" "}
