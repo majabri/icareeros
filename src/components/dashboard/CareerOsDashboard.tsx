@@ -63,21 +63,14 @@ interface ActiveCycle {
 // Stage-status logic (STAGE_ORDER, buildStageStatus, emptyNotesMap, types)
 // is in ./stageStatus — extracted in Phase 2 Item 3 so it can be unit-tested.
 
-/**
- * Load notes for every stage row in a cycle. Sprint 5 hotfix (2026-05-15)
- * — previously this query filtered by `status='completed'`, but the
- * orchestrator's status transition is fire-and-forget and races with API
- * persistence, so many stages with valid notes are stuck at 'in_progress'.
- * Skipping the filter lets `buildStageStatus` see real notes and decide.
- * `buildStageStatus` already rejects empty `{}` blobs via `hasContent()`,
- * so loading them here is safe.
- */
+/** Load notes for all completed stages in a cycle */
 async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
   const supabase = createClient();
   const { data } = await supabase
     .from("career_os_stages")
     .select("stage, notes")
-    .eq("cycle_id", cycleId);
+    .eq("cycle_id", cycleId)
+    .eq("status", "completed");
 
   const map = emptyNotesMap();
   if (data) {
