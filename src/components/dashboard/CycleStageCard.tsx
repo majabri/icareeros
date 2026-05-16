@@ -213,10 +213,12 @@ export function CycleStageCard({
       }
     >
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl" aria-hidden="true">{config.icon}</span>
-          <div>
-            <h3 className={"font-semibold " + config.color}>{config.label}</h3>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-2xl shrink-0" aria-hidden="true">{config.icon}</span>
+          <div className="min-w-0">
+            {/* Stage name renders in full — no truncate, explicit size so
+                it never inherits a smaller font from a parent. */}
+            <h3 className={"text-base font-semibold " + config.color}>{config.label}</h3>
             <p className="mt-0.5 text-xs text-gray-500">{config.description}</p>
           </div>
         </div>
