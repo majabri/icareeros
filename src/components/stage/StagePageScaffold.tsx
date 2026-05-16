@@ -260,16 +260,16 @@ function CycleGoalHeader({
   if (subtle) {
     return (
       <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600 flex items-center gap-2">
-        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700">
-          Cycle #{info.cycleNumber}
-        </span>
-        {goalText && (
+        {/* Sprint 5 UX (2026-05-16) — Cycle #N prefix removed; the goal IS
+            the label. Falls back to the noun when no goal is set. */}
+        {goalText ? (
           <>
-            <span className="text-gray-400">·</span>
             <span className="truncate">{goalText}</span>
             <span className="text-gray-400">—</span>
             <span className="font-medium text-gray-700">{cap}</span>
           </>
+        ) : (
+          <span className="font-medium text-gray-700">{cap}</span>
         )}
       </div>
     );
@@ -277,15 +277,13 @@ function CycleGoalHeader({
 
   return (
     <header className="rounded-xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-5 py-4">
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
-        <span className="rounded-full bg-brand-100 px-2 py-0.5">Cycle #{info.cycleNumber}</span>
-        {goalText && (
-          <>
-            <span className="text-brand-400">·</span>
-            <span className="truncate text-gray-700 normal-case font-medium">{goalText}</span>
-          </>
-        )}
-      </div>
+      {/* Sprint 5 UX (2026-05-16) — Cycle #N prefix removed. Goal name is
+          the single eyebrow line; the H2 below combines goal + stage noun. */}
+      {goalText && (
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-brand-700 truncate">
+          {goalText}
+        </div>
+      )}
       <h2 className="mt-1 text-xl font-semibold text-gray-900">
         {goalText ? <>{goalText} <span className="text-gray-400">—</span> {cap}</> : <>{cap}</>}
       </h2>

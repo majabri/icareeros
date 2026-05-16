@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
+import { useAutorunStage } from "@/components/stage/useAutorunStage";
 import { EvaluateOutputPanel } from "@/components/evaluate/EvaluateOutputPanel";
 import { evaluateCareerProfile, type EvaluationResult } from "@/services/ai/evaluateService";
 
@@ -57,6 +58,16 @@ export function EvaluatePageInner() {
       setRunning(false);
     }
   }
+
+    // Sprint 5 UX (2026-05-16) — Fire handleRun() automatically
+  // when the user lands here via the dashboard's "Run" deep-link
+  // (`?autorun=1`). Guards against re-runs when output already exists.
+  useAutorunStage({
+    ready:     !loading && !!cycle && !!userId,
+    hasOutput: !!output,
+    running,
+    onRun:     handleRun,
+  });
 
   return (
     <StagePageScaffold
