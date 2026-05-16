@@ -126,3 +126,38 @@ describe("buildStageStatus — defaults", () => {
     expect(status.evaluate).toBe("in_progress"); // past, no notes
   });
 });
+
+describe("buildStageStatus — future stages reflect real notes (Sprint 5 hotfix)", () => {
+  it("future stage with notes whose gate is satisfied → completed", () => {
+    // Cycle is on 'learn' (idx 2). User ran /achieve directly out-of-order
+    // and notes were persisted. Achieve uses the default notes-based gate.
+    const cycle = activeCycle("learn");
+    const notes = notesWith({
+      achieve: { milestoneType: "interview", celebrationMessage: "!" },
+    });
+    expect(buildStageStatus(cycle, notes, SIG_ZERO).achieve).toBe("completed");
+  });
+
+  it("future stage with notes but unmet signal gate → in_progress (e.g. Act)", () => {
+    // Cycle is on 'learn' (idx 2). User has notes on Act but zero apps —
+    // the signal gate isn't satisfied, but the user clearly did work, so
+    // the dashboard reflects partial progress, not pending.
+    const cycle = activeCycle("learn");
+    const notes = notesWith({ act: { strategy: "applied somewhere" } });
+    const sig = { applicationsCount: 0, opportunitiesCount: 0 };
+    expect(buildStageStatus(cycle, notes, sig).act).toBe("in_progress");
+  });
+
+  it("future stage with no notes → still pending", () => {
+    const cycle = activeCycle("learn");
+    expect(buildStageStatus(cycle, NO_NOTES, SIG_ZERO).achieve).toBe("pending");
+  });
+
+  it("current stage on active cycle stays in_progress even if completion gate satisfied", () => {
+    // Reinforces the rule preserved by the rewrite — the orchestrator,
+    // not the dashboard, advances the cycle's current_stage.
+    const cycle = activeCycle("achieve");
+    const notes = notesWith({ achieve: { milestoneType: "promoted", celebrationMessage: "!" } });
+    expect(buildStageStatus(cycle, notes, SIG_ZERO).achieve).toBe("in_progress");
+  });
+});
