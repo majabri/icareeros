@@ -33,17 +33,17 @@ const STAGE_LABELS: Record<CareerOsStage, string> = {
 };
 
 const STATUS_NODE_CLASS: Record<StageStatus, string> = {
-  pending:     "fill-gray-100 stroke-gray-300 dark:fill-gray-800 dark:stroke-gray-600",
-  in_progress: "fill-brand-100 stroke-brand-500 dark:fill-brand-900/40 dark:stroke-brand-400",
-  completed:   "fill-green-100 stroke-green-600 dark:fill-green-900/40 dark:stroke-green-400",
-  skipped:     "fill-gray-50 stroke-gray-200 dark:fill-gray-900 dark:stroke-gray-700",
+  pending:     "fill-gray-100 stroke-gray-300",
+  in_progress: "fill-brand-100 stroke-brand-500",
+  completed:   "fill-green-100 stroke-green-600",
+  skipped:     "fill-gray-50 stroke-gray-200",
 };
 
 const STATUS_LABEL_CLASS: Record<StageStatus, string> = {
-  pending:     "text-gray-600 dark:text-gray-300",
-  in_progress: "text-brand-700 dark:text-brand-300 font-semibold",
-  completed:   "text-green-700 dark:text-green-300 font-semibold",
-  skipped:     "text-gray-400 dark:text-gray-500",
+  pending:     "text-gray-500",
+  in_progress: "text-brand-700 font-semibold",
+  completed:   "text-green-700 font-semibold",
+  skipped:     "text-gray-400",
 };
 
 interface RingNode {
@@ -112,7 +112,7 @@ export function CareerOsRing({
         {/* Inner connector ring — light track */}
         <circle cx={cx} cy={cy} r={ringR}
                 fill="none" stroke="currentColor"
-                className="text-gray-200 dark:text-gray-700" strokeWidth={2} />
+                className="text-gray-200" strokeWidth={2} />
 
         {/* Connector arcs between completed stages — green progress track */}
         {ordered.map((node, i) => {
@@ -182,13 +182,13 @@ export function CareerOsRing({
                   <path
                     d={`M ${x - 10} ${y} l 7 7 l 14 -14`}
                     fill="none"
-                    className="stroke-green-700 dark:stroke-green-300"
+                    className="stroke-green-700"
                     strokeWidth={3}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 ) : node.status === "in_progress" ? (
-                  <circle cx={x} cy={y} r={6} className="fill-brand-500 dark:fill-brand-300" />
+                  <circle cx={x} cy={y} r={6} className="fill-brand-500" />
                 ) : (
                   // Stage name is shown OUTSIDE the circle via the
                   // external label below — keep pending circles empty
@@ -214,17 +214,17 @@ export function CareerOsRing({
 
         {/* Centre summary — what's the current stage in plain English */}
         <text x={cx} y={cy - 6} textAnchor="middle"
-              className="fill-gray-500 dark:fill-gray-400 text-xs uppercase tracking-wider">
+              className="fill-gray-500 text-xs uppercase tracking-wider">
           Current stage
         </text>
         <text x={cx} y={cy + 14} textAnchor="middle"
-              className="fill-gray-900 dark:fill-gray-100 text-base font-semibold">
+              className="fill-gray-900 text-base font-semibold">
           {currentStage ? STAGE_LABELS[currentStage] : "—"}
         </text>
       </svg>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex items-center gap-4 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
           completed
