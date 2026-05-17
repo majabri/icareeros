@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { AchievePageInner } from "./AchievePageInner";
 
 export const metadata: Metadata = { title: "Achieve — iCareerOS" };
@@ -13,7 +12,7 @@ export default function AchievePage() {
           Stage 6 of Career OS. Record this cycle's milestone, capture accomplishments, plan the next cycle.
         </p>
       </header>
-      <Suspense fallback={null}><AchievePageInner /></Suspense>
+      <AchievePageInner />
     </div>
   );
 }
