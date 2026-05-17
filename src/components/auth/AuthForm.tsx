@@ -13,7 +13,7 @@ interface AuthFormProps {
   mode: "login" | "signup";
   /**
    * Phase 1 subdomain (2026-05-16) — optional pre-selected role for
-   * signup mode. The landing page CTAs and the hired.icareeros.com
+   * signup mode. The landing page CTAs and the hire.icareeros.com
    * signup link both pass `?role=employer` so the recruiter card
    * lights up by default. URL coming from job-seeker landing passes
    * `?role=job_seeker`. Either value pre-selects that card on mount.
@@ -123,7 +123,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
 
             // Phase 1 subdomain (2026-05-16) — store the chosen role in
             // user_roles so the middleware's post-login redirect routes
-            // them to jobs.* or hired.* on the next sign-in. Default
+            // them to jobs.* or hire.* on the next sign-in. Default
             // to job_seeker when the selector is somehow missing.
             const role: UserRole = selectedRole ?? "job_seeker";
             await supabase
@@ -157,7 +157,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         // subdomain after sign-in based on their roles:
         //   admin                          → /admin (same host)
         //   employer ∧ job_seeker (dual)   → /auth/choose-platform
-        //   employer                       → hired.icareeros.com/dashboard
+        //   employer                       → hire.icareeros.com/dashboard
         //   job_seeker (default)           → jobs.icareeros.com/dashboard
         //
         // Same decision table as middleware.ts. Duplicated here because
@@ -203,7 +203,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
           requestedRedirect: requested,
           isProdHost,
           jobsUrl:  process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com",
-          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com",
+          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com",
         });
         window.location.href = dest;
       }

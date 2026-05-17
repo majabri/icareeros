@@ -75,7 +75,7 @@ async function checkRateLimit(
 // Phase 1 subdomain split (2026-05-16):
 //   - icareeros.com          → marketing + auth (root domain)
 //   - jobs.icareeros.com     → job-seeker app
-//   - hired.icareeros.com    → recruiter app (stub for now)
+//   - hire.icareeros.com    → recruiter app (stub for now)
 //
 // Auth cookies are scoped to `.icareeros.com` in production so a session
 // created on the root domain is valid on every subdomain.
@@ -102,11 +102,11 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-platform", platform);
 
-  // Phase 1 Task 2 — hired.icareeros.com routes everything (except auth
+  // Phase 1 Task 2 — hire.icareeros.com routes everything (except auth
   // and api) under /hired/*. The (hired) app route group (created in
   // Task 3) owns those pages. Rewrites preserve the public URL while
   // resolving to the internal app shell — so users still see
-  // `hired.icareeros.com/dashboard` in the address bar.
+  // `hire.icareeros.com/dashboard` in the address bar.
   if (
     isHiredHost
     && !pathname.startsWith("/hired")
@@ -144,7 +144,7 @@ export async function middleware(request: NextRequest) {
           response = NextResponse.next({ request: { headers: requestHeaders } });
           // Phase 1 Task 1 — scope auth cookies to the parent domain in
           // production so a session works across icareeros.com,
-          // jobs.icareeros.com, and hired.icareeros.com. Preview deploys
+          // jobs.icareeros.com, and hire.icareeros.com. Preview deploys
           // (*.vercel.app) and local dev keep the default per-host scope.
           cookiesToSet.forEach(({ name, value, options }) => {
             const finalOptions = {
@@ -207,7 +207,7 @@ export async function middleware(request: NextRequest) {
   // After login: route by role to the correct subdomain.
   //   admin                            → /admin
   //   employer ∧ job_seeker (dual)     → /auth/choose-platform
-  //   employer                         → hired.icareeros.com/dashboard
+  //   employer                         → hire.icareeros.com/dashboard
   //   job_seeker (default)             → jobs.icareeros.com/dashboard
   if (isAuthRoute && user) {
     if (isAdmin) {
@@ -231,7 +231,7 @@ export async function middleware(request: NextRequest) {
     const isProd = process.env.NODE_ENV === "production";
     if (hasEmployer) {
       const dest = isProd
-        ? (process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com") + "/dashboard"
+        ? (process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com") + "/dashboard"
         : "/hired/dashboard";
       return NextResponse.redirect(new URL(dest, request.url));
     }

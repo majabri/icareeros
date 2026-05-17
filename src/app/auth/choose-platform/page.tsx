@@ -22,7 +22,7 @@ export const metadata: Metadata = {
  */
 export default async function ChoosePlatformPage() {
   const jobsUrl  = process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com";
-  const hiredUrl = process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com";
+  const hiredUrl = process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com";
 
   // Best-effort fetch of the user's first name to personalize the greeting.
   // RLS-protected; falls back to a generic salutation on any error.
@@ -99,7 +99,7 @@ export default async function ChoosePlatformPage() {
               Find talent, post jobs, analyse job descriptions, and run outreach.
             </p>
             <div className="mt-4 text-sm font-semibold text-brand-700">
-              Go to hired.icareeros.com →
+              Go to hire.icareeros.com →
             </div>
           </a>
         </div>

@@ -5,7 +5,7 @@
  *
  * Two surfaces:
  *   (a) Discoverability toggle — controls `career_profiles.is_discoverable`.
- *       Off by default. When on, recruiter accounts on hired.icareeros.com
+ *       Off by default. When on, recruiter accounts on hire.icareeros.com
  *       can see the user's profile via the candidate search.
  *
  *   (b) Company block list — only visible when the toggle is on. Stores
@@ -155,7 +155,7 @@ export default function PrivacySettingsPage() {
             </h2>
             <p className="mt-2 text-sm text-gray-600 leading-relaxed">
               When on, hiring managers on{" "}
-              <strong className="text-gray-800">hired.icareeros.com</strong> can
+              <strong className="text-gray-800">hire.icareeros.com</strong> can
               find your profile based on your skills and target roles. Your
               contact details are never shared without your consent.
             </p>

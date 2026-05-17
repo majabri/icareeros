@@ -1,7 +1,7 @@
 /**
  * Phase 1 subdomain (2026-05-16) — Auth cookies must be scoped to the
  * parent domain in production so a session created on `icareeros.com`
- * is valid on `jobs.icareeros.com` and `hired.icareeros.com`.
+ * is valid on `jobs.icareeros.com` and `hire.icareeros.com`.
  *
  * Every `createServerClient` call site uses a Supabase `setAll` callback
  * to write cookies. Wrap the per-cookie `options` through this helper

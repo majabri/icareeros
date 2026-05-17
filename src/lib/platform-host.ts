@@ -17,6 +17,6 @@ export function isProductionHost(host: string): boolean {
 /** Map a host header value to one of three logical platforms. */
 export function platformFromHost(host: string): Platform {
   if (host.startsWith("jobs."))  return "jobs";
-  if (host.startsWith("hired.")) return "hired";
+  if (host.startsWith("hire.")) return "hired";
   return "root";
 }

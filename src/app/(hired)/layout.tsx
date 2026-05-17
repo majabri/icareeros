@@ -3,13 +3,13 @@ import Link from "next/link";
 
 /**
  * Phase 1 subdomain (2026-05-16) — Layout for the `(hired)` app route
- * group, which the middleware rewrites `hired.icareeros.com/*` into.
+ * group, which the middleware rewrites `hire.icareeros.com/*` into.
  *
  * Minimal shell: dark navy background, single top nav with the
  * iCareerOS for Hiring wordmark, two disabled (coming-soon) nav items,
  * and Sign out. No sidebar. Recruiter product features land in Phase 2;
  * this layout exists so the stub dashboard has somewhere to live and
- * so the URL surface (hired.icareeros.com/dashboard) resolves cleanly.
+ * so the URL surface (hire.icareeros.com/dashboard) resolves cleanly.
  */
 export const metadata: Metadata = {
   title: "iCareerOS for Hiring",

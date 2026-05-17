@@ -4,7 +4,7 @@
  * "employer" / undefined. Anything else is rejected.
  *
  * Used by the signup page to drive the role-card pre-selection: a URL
- * like /auth/signup?role=employer arrives from the hired.icareeros.com
+ * like /auth/signup?role=employer arrives from the hire.icareeros.com
  * signup link or from the recruiter CTA on the landing page.
  */
 import type { UserRole } from "@/components/auth/AuthForm";

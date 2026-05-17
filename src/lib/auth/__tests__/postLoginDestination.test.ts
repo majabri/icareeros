@@ -5,7 +5,7 @@ const base = {
   requestedRedirect: null,
   isProdHost: true,
   jobsUrl:  "https://jobs.icareeros.com",
-  hiredUrl: "https://hired.icareeros.com",
+  hiredUrl: "https://hire.icareeros.com",
 };
 
 describe("postLoginDestination", () => {
@@ -27,7 +27,7 @@ describe("postLoginDestination", () => {
   it("employer only → hiredUrl/dashboard in prod", () => {
     expect(postLoginDestination({
       ...base, isAdmin: false, isEmployer: true, isJobSeeker: false,
-    })).toBe("https://hired.icareeros.com/dashboard");
+    })).toBe("https://hire.icareeros.com/dashboard");
   });
 
   it("employer only → /hired/dashboard in dev", () => {

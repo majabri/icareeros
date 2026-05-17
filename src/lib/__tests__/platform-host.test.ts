@@ -10,8 +10,8 @@ describe("platformFromHost", () => {
     expect(platformFromHost("jobs.icareeros.com")).toBe<Platform>("jobs");
   });
 
-  it("maps hired.icareeros.com → 'hired'", () => {
-    expect(platformFromHost("hired.icareeros.com")).toBe<Platform>("hired");
+  it("maps hire.icareeros.com → 'hired'", () => {
+    expect(platformFromHost("hire.icareeros.com")).toBe<Platform>("hired");
   });
 
   it("maps icareeros.com → 'root'", () => {
@@ -42,7 +42,7 @@ describe("isProductionHost", () => {
   });
   it("true for any *.icareeros.com host", () => {
     expect(isProductionHost("jobs.icareeros.com")).toBe(true);
-    expect(isProductionHost("hired.icareeros.com")).toBe(true);
+    expect(isProductionHost("hire.icareeros.com")).toBe(true);
     expect(isProductionHost("www.icareeros.com")).toBe(true);
   });
   it("false for vercel.app preview hosts", () => {
