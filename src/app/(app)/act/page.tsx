@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { ActPageInner } from "./ActPageInner";
 
 export const metadata: Metadata = { title: "Action Plan — iCareerOS" };
@@ -13,7 +12,7 @@ export default function ActPage() {
           Stage 4 of Career OS. AI-generated job-search and networking plan, plus quick links to the tools you'll use.
         </p>
       </header>
-      <Suspense fallback={null}><ActPageInner /></Suspense>
+      <ActPageInner />
     </div>
   );
 }

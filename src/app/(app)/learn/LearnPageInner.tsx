@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
-import { useAutorunStage } from "@/components/stage/useAutorunStage";
 import { generateLearningPlan, type LearnResult, type LearningResource } from "@/services/ai/learnService";
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
@@ -41,16 +40,6 @@ export function LearnPageInner() {
       setRunning(false);
     }
   }
-
-    // Sprint 5 UX (2026-05-16) — Fire handleRun() automatically
-  // when the user lands here via the dashboard's "Run" deep-link
-  // (`?autorun=1`). Guards against re-runs when output already exists.
-  useAutorunStage({
-    ready:     !loading && !!cycle && !!userId,
-    hasOutput: !!output,
-    running,
-    onRun:     handleRun,
-  });
 
   return (
     <StagePageScaffold

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { LearnPageInner } from "./LearnPageInner";
 
 export const metadata: Metadata = { title: "Learning Plan — iCareerOS" };
@@ -13,7 +12,7 @@ export default function LearnPage() {
           Stage 3 of Career OS. Personalised courses, certifications, and resources to close your skill gaps.
         </p>
       </header>
-      <Suspense fallback={null}><LearnPageInner /></Suspense>
+      <LearnPageInner />
     </div>
   );
 }

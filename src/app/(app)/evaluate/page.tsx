@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { EvaluatePageInner } from "./EvaluatePageInner";
 
 export const metadata: Metadata = { title: "Evaluate — iCareerOS" };
@@ -13,7 +12,7 @@ export default function EvaluatePage() {
           Stage 1 of Career OS. AI-assesses your current skills, gaps, market fit, and recommends the next step.
         </p>
       </header>
-      <Suspense fallback={null}><EvaluatePageInner /></Suspense>
+      <EvaluatePageInner />
     </div>
   );
 }
