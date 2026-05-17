@@ -5,6 +5,7 @@ import { SocialLogins } from "@/components/auth/SocialLogins";
 import { createClient } from "@/lib/supabase";
 import { ConsentCheckboxes, type ConsentState } from "@/components/legal/ConsentCheckboxes";
 import { recordSignupConsent } from "@/app/actions/consentActions";
+import { postLoginDestination } from "@/lib/auth/postLoginDestination";
 
 export type UserRole = "job_seeker" | "employer";
 
@@ -190,31 +191,20 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
           }
         }
 
-        // If the user explicitly requested a same-host destination via
-        // ?redirect=, honour it (unless they're trying to sneak into
-        // /admin without being an admin).
-        const requested  = new URLSearchParams(window.location.search).get("redirect") ?? "";
-        const wantsAdmin = requested.startsWith("/admin");
-
+        // Shared decision table — same logic as middleware.ts, tested in
+        // src/lib/auth/__tests__/postLoginDestination.test.ts.
+        const requested  = new URLSearchParams(window.location.search).get("redirect");
         const isProdHost = typeof window !== "undefined"
           && window.location.hostname.endsWith("icareeros.com");
-        const jobsUrl    = process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com";
-        const hiredUrl   = process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com";
-
-        let dest: string;
-        if (isAdmin) {
-          dest = "/admin";
-        } else if (requested && !wantsAdmin) {
-          // Explicit redirect param wins for non-admin paths.
-          dest = requested;
-        } else if (isEmployer && isJobSeeker) {
-          dest = "/auth/choose-platform";
-        } else if (isEmployer) {
-          dest = isProdHost ? `${hiredUrl}/dashboard` : "/hired/dashboard";
-        } else {
-          // Default + isJobSeeker
-          dest = isProdHost ? `${jobsUrl}/dashboard` : "/dashboard";
-        }
+        const dest = postLoginDestination({
+          isAdmin,
+          isEmployer,
+          isJobSeeker,
+          requestedRedirect: requested,
+          isProdHost,
+          jobsUrl:  process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com",
+          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com",
+        });
         window.location.href = dest;
       }
     } catch (err: unknown) {

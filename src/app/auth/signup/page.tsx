@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { AuthForm, type UserRole } from "@/components/auth/AuthForm";
+import { AuthForm } from "@/components/auth/AuthForm";
+import { parseRoleParam } from "@/lib/auth/parseRoleParam";
 
 export const metadata: Metadata = { title: "Create account — iCareerOS" };
 
@@ -16,9 +17,7 @@ export default async function SignupPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const raw = Array.isArray(sp.role) ? sp.role[0] : sp.role;
-  const initialRole: UserRole | undefined =
-    raw === "employer" || raw === "job_seeker" ? raw : undefined;
+  const initialRole = parseRoleParam(sp.role);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent px-4">
