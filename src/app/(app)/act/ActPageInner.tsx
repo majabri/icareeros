@@ -5,6 +5,7 @@ import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { triggerAction, type ActResult, type ApplicationTier, type NetworkingTarget } from "@/services/ai/actService";
+import { arr, str, num } from "@/lib/career-os/normalize";
 
 const HUB_LINKS: Array<{ href: string; label: string; description: string; icon: string }> = [
   { href: "/jobs",         label: "Opportunities", description: "Search + score open jobs.",          icon: "💼" },
@@ -62,23 +63,29 @@ export function ActPageInner() {
 }
 
 function ActOutputPanel({ result }: { result: ActResult }) {
+  const safeResult              = result as unknown as Record<string, unknown>;
+  const summaryText             = str(safeResult.summary);
+  const weeklyApplicationTarget = num(safeResult.weeklyApplicationTarget);
+  const jobSearchQueries        = arr<string>(safeResult.jobSearchQueries);
+  const applicationPriority     = arr<ApplicationTier>(safeResult.applicationPriority);
+  const networkingTargets       = arr<NetworkingTarget>(safeResult.networkingTargets);
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <p className="text-sm leading-relaxed text-gray-700 flex-1 min-w-[200px]">{result.summary}</p>
+          <p className="text-sm leading-relaxed text-gray-700 flex-1 min-w-[200px]">{summaryText}</p>
           <div className="text-right">
-            <div className="text-2xl font-bold tabular-nums text-brand-700">{result.weeklyApplicationTarget}</div>
+            <div className="text-2xl font-bold tabular-nums text-brand-700">{weeklyApplicationTarget}</div>
             <div className="text-xs text-gray-500">apps / week</div>
           </div>
         </div>
       </div>
 
-      {result.jobSearchQueries.length > 0 && (
+      {jobSearchQueries.length > 0 && (
         <section className="rounded-xl border border-gray-200 bg-white p-5">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Search queries to run</h3>
           <div className="flex flex-wrap gap-2">
-            {result.jobSearchQueries.map((q) => (
+            {jobSearchQueries.map((q) => (
               <Link key={q} href={`/jobs?q=${encodeURIComponent(q)}`} className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-800 hover:bg-brand-200">
                 {q}
               </Link>
@@ -87,11 +94,11 @@ function ActOutputPanel({ result }: { result: ActResult }) {
         </section>
       )}
 
-      {result.applicationPriority.length > 0 && (
+      {applicationPriority.length > 0 && (
         <section>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Application mix</h3>
           <div className="grid gap-3 md:grid-cols-3">
-            {result.applicationPriority.map((t, i) => (
+            {applicationPriority.map((t, i) => (
               <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${TIER_COLOR[t.roleTier]}`}>
@@ -107,11 +114,11 @@ function ActOutputPanel({ result }: { result: ActResult }) {
         </section>
       )}
 
-      {result.networkingTargets.length > 0 && (
+      {networkingTargets.length > 0 && (
         <section className="rounded-xl border border-gray-200 bg-white p-5">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Networking targets</h3>
           <ul className="space-y-3">
-            {result.networkingTargets.map((t, i) => <NetworkingRow key={i} t={t} />)}
+            {networkingTargets.map((t, i) => <NetworkingRow key={i} t={t} />)}
           </ul>
         </section>
       )}

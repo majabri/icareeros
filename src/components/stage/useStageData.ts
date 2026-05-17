@@ -44,13 +44,21 @@ export interface StageDataState<T> {
  * as a valid stored output. Anything missing → return null and show the
  * empty state instead.
  */
-const STAGE_REQUIRED_FIELDS: Record<CareerOsStage, readonly string[]> = {
-  evaluate: ["skills", "gaps", "summary"],
-  advise:   ["recommendedPaths", "nextActions", "summary"],
-  learn:    ["resources", "topSkillGaps", "summary"],
-  act:      ["jobSearchQueries", "applicationPriority", "summary"],
+/**
+ * Sprint 5 hotfix (2026-05-16) — Each entry is `[key, expectedType]` so
+ * we can validate the persisted notes actually have the SHAPE the
+ * downstream OutputPanel expects, not just the right keys. Previously
+ * `isValidStageOutput` only checked key presence — a notes blob with
+ * `skills: null` passed the gate and crashed EvaluateOutputPanel at
+ * `result.skills.length`.
+ */
+const STAGE_REQUIRED_FIELDS: Record<CareerOsStage, readonly [string, "array" | "string"][]> = {
+  evaluate: [["skills", "array"], ["gaps", "array"], ["summary", "string"]],
+  advise:   [["recommendedPaths", "array"], ["nextActions", "array"], ["summary", "string"]],
+  learn:    [["resources", "array"], ["topSkillGaps", "array"], ["summary", "string"]],
+  act:      [["jobSearchQueries", "array"], ["applicationPriority", "array"], ["summary", "string"]],
   coach:    [],   // coach has its own page + special {brief, briefHistory} shape
-  achieve:  ["accomplishments", "celebrationMessage", "milestoneType"],
+  achieve:  [["accomplishments", "array"], ["celebrationMessage", "string"], ["milestoneType", "string"]],
 } as const;
 
 function isValidStageOutput(stage: CareerOsStage, candidate: unknown): boolean {
@@ -58,7 +66,13 @@ function isValidStageOutput(stage: CareerOsStage, candidate: unknown): boolean {
   const obj = candidate as Record<string, unknown>;
   const required = STAGE_REQUIRED_FIELDS[stage];
   if (required.length === 0) return Object.keys(obj).length > 0;   // coach: just non-empty
-  return required.every((k) => k in obj);
+  return required.every(([key, kind]) => {
+    if (!(key in obj)) return false;
+    const v = obj[key];
+    if (kind === "array")  return Array.isArray(v);
+    if (kind === "string") return typeof v === "string";
+    return false;
+  });
 }
 
 export function useStageData<T>(stage: CareerOsStage): StageDataState<T> {
