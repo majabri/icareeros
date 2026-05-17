@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AdvisePageInner } from "./AdvisePageInner";
 
 export const metadata: Metadata = { title: "Career Advice — iCareerOS" };
@@ -12,7 +13,7 @@ export default function AdvisePage() {
           Stage 2 of Career OS. AI-recommended paths, next actions, and a realistic timeline based on your evaluation.
         </p>
       </header>
-      <AdvisePageInner />
+      <Suspense fallback={null}><AdvisePageInner /></Suspense>
     </div>
   );
 }
