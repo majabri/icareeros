@@ -65,10 +65,28 @@ function hasContent(notes: Record<string, unknown> | null | undefined): boolean 
  *                                              opportunitiesCount >= 1
  *   - Act                                 →  completed iff applicationsCount >= 1
  *
- * A stage that the cycle has progressed past but whose completion gate
- * has not been satisfied surfaces as `in_progress` (re-runnable / open
- * CTA), never `completed`. This fixes the prior UX lie where stages
- * claimed completion based purely on `cycle.current_stage` index.
+ * v3 fix (2026-05-17) — Removed the prior `i <= currentIdx` gate. Stages
+ * can now show their real status regardless of where the cycle's
+ * `current_stage` index points. So if the user runs `/achieve` directly
+ * while the cycle says current_stage='evaluate', the dashboard reflects
+ * the achievement instead of pretending Achieve is still pending. The
+ * current stage on an ACTIVE cycle stays `in_progress` (never auto-
+ * graduates to completed), because cycle advancement is the
+ * orchestrator's job, not the dashboard's.
+ *
+ * Decision matrix (in priority order, first match wins):
+ *
+ *   1. cycle active AND stage === current_stage  →  in_progress
+ *      (preserves the invariant — current stage of a live cycle never
+ *       auto-graduates to completed via dashboard inference)
+ *   2. isComplete(stage)                          →  completed
+ *   3. hasContent(notes[stage])                   →  in_progress
+ *      (user ran this stage but completion gate not met — Act has
+ *       notes but 0 applications, Advise has notes but 0 opps, etc.)
+ *   4. past stage (index < currentIdx)            →  in_progress
+ *      (cycle progressed past this stage without producing notes —
+ *       it can still be re-run, so surface it as actionable)
+ *   5. otherwise                                  →  pending
  */
 export function buildStageStatus(
   cycle:   ActiveCycleSummary | null,
@@ -81,9 +99,10 @@ export function buildStageStatus(
   };
   if (!cycle) return result;
 
-  const current = cycle.current_stage as CareerOsStage;
-  const currentIdx = STAGE_ORDER.indexOf(current);
+  const current     = cycle.current_stage as CareerOsStage;
+  const currentIdx  = STAGE_ORDER.indexOf(current);
   if (currentIdx < 0) return result;
+  const cycleActive = cycle.status === "active";
 
   // Per-stage completion gate — see file header for the rules.
   function isComplete(stage: CareerOsStage): boolean {
@@ -99,14 +118,28 @@ export function buildStageStatus(
 
   for (let i = 0; i < STAGE_ORDER.length; i++) {
     const s = STAGE_ORDER[i];
-    if (i < currentIdx) {
-      result[s] = isComplete(s) ? "completed" : "in_progress";
-    } else if (i === currentIdx) {
-      const cycleDone = cycle.status !== "active";
-      result[s] = cycleDone
-        ? (isComplete(s) ? "completed" : "in_progress")
-        : "in_progress";
+
+    // Rule 1 — current stage of an active cycle is always in_progress.
+    if (cycleActive && i === currentIdx) {
+      result[s] = "in_progress";
+      continue;
     }
+    // Rule 2 — completion gate satisfied.
+    if (isComplete(s)) {
+      result[s] = "completed";
+      continue;
+    }
+    // Rule 3 — has some notes (user ran it but gate not satisfied).
+    if (hasContent(notes[s])) {
+      result[s] = "in_progress";
+      continue;
+    }
+    // Rule 4 — past stage without notes (cycle moved past it).
+    if (i < currentIdx) {
+      result[s] = "in_progress";
+      continue;
+    }
+    // Rule 5 — future stage, no notes, no signals. Default pending.
   }
   return result;
 }
