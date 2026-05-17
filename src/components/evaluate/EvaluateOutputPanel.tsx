@@ -43,7 +43,7 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
   // (could pre-date the current schema) or whatever Claude returned on
   // the most recent run. Treat every render-time access through these
   // safe accessors so a missing field never bricks the page.
-  const safeResult = result as Record<string, unknown>;
+  const safeResult = result as unknown as Record<string, unknown>;
   const skills              = arr<string>(safeResult.skills);
   const gaps                = arr<string>(safeResult.gaps);
   const summaryText         = str(safeResult.summary);

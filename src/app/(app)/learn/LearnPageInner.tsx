@@ -144,7 +144,7 @@ function LearnOutputPanel({ result }: { result: StoredLearn }) {
         <div className="grid gap-3 md:grid-cols-2">
           {visible.map((r, i) => (
             <ResourceCard
-              key={`${titleText}-${i}`}
+              key={`${str((r as unknown as Record<string, unknown>).title)}-${i}`}
               r={r}
               targetSkills={targetSkills}
               profileSkills={profileSkills}
