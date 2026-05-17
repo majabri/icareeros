@@ -63,14 +63,27 @@ interface ActiveCycle {
 // Stage-status logic (STAGE_ORDER, buildStageStatus, emptyNotesMap, types)
 // is in ./stageStatus — extracted in Phase 2 Item 3 so it can be unit-tested.
 
-/** Load notes for all completed stages in a cycle */
+/**
+ * Load notes for every stage row in a cycle. v3 fix (2026-05-17) —
+ * previously this query filtered by `status='completed'` and dropped
+ * every other row. But stage rows routinely sit at `status='in_progress'`
+ * even after a successful run because the orchestrator's status
+ * transition is fire-and-forget and races with the API write. Filtering
+ * them out meant notes for those stages never reached buildStageStatus
+ * and the dashboard ring rendered "pending" forever.
+ *
+ * Now we load notes for ALL rows of the cycle. The row-level guard
+ * below (`row.notes && typeof row.notes === "object"`) keeps null /
+ * non-object rows out of the map, and buildStageStatus rejects empty
+ * `{}` blobs via its own `hasContent()` check — so loading more rows
+ * here is safe.
+ */
 async function loadStageNotes(cycleId: string): Promise<StageNotesMap> {
   const supabase = createClient();
   const { data } = await supabase
     .from("career_os_stages")
     .select("stage, notes")
-    .eq("cycle_id", cycleId)
-    .eq("status", "completed");
+    .eq("cycle_id", cycleId);
 
   const map = emptyNotesMap();
   if (data) {
