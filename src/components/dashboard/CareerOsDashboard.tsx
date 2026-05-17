@@ -549,6 +549,20 @@ export function CareerOsDashboard() {
             <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} />
           )}
           <PlanBadge plan={plan} />
+          {/* Sprint 5 UX (2026-05-16) — promoted to a standalone outlined
+              button at the top of the dashboard. Only shown when an active
+              cycle exists; the empty-state below already has its own
+              "+ Start a cycle" CTA. */}
+          {cycle && (
+            <button
+              onClick={() => setShowGoalInput(true)}
+              disabled={running}
+              title="Add a new cycle for a different goal — keeps your current cycle open"
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              + New Cycle
+            </button>
+          )}
         </div>
       </div>
 
@@ -643,42 +657,6 @@ export function CareerOsDashboard() {
         </div>
       )}
 
-      {/* Sprint 5 fix-pack — Multi-cycle picker as expandable panel. Collapsed
-          by default; expand shows a row per cycle with Switch + soft-Delete
-          (status='abandoned' — recoverable). Selected cycle is highlighted. */}
-      {activeCycles.length > 1 && cycle && (
-        <CycleManagementPanel
-          cycles={activeCycles}
-          selectedId={cycle.id}
-          onSwitch={(c) => {
-            if (!userId) return;
-            void (async () => {
-              await refreshCycle(userId, c.id);
-              // Sprint 5 hotfix (2026-05-15) — After switching, route the
-              // user straight to the stage they're currently working on for
-              // that cycle. Without this they stay on the dashboard and have
-              // to click into the stage manually, which makes Switch feel
-              // like a no-op.
-              const stage = c.current_stage as CareerOsStage;
-              const href = STAGE_HREF[stage];
-              if (href) router.push(href);
-            })();
-          }}
-          onAbandon={async (id) => {
-            if (!userId) return;
-            const sb = createClient();
-            await sb
-              .from("career_os_cycles")
-              .update({ status: "abandoned" })
-              .eq("id", id)
-              .eq("user_id", userId);
-            // Refresh the active list; if we just abandoned the currently-
-            // selected one, refreshCycle picks the next-most-recent active.
-            await refreshCycle(userId);
-          }}
-        />
-      )}
-
       {/* Active cycle */}
       {cycle && (
         <>
@@ -694,23 +672,6 @@ export function CareerOsDashboard() {
               // Phase 3 Item 4 — route the Coach stage node to the new /coach page.
               if (stage === "coach") router.push("/coach");
             }}
-          />
-
-          {/* On-demand coaching brief (Phase 1 Item 2b) */}
-          <CoachBriefPanel
-            cycleId={cycle.id}
-            plan={plan}
-            profileReady={profileReady}
-            initial={
-              stageNotes.coach && typeof stageNotes.coach === "object"
-                && (stageNotes.coach as Record<string, unknown>).brief
-                && typeof (stageNotes.coach as Record<string, unknown>).brief === "object"
-                ? {
-                    content:     ((stageNotes.coach as Record<string, unknown>).brief as { content?: unknown }).content as string ?? "",
-                    generatedAt: ((stageNotes.coach as Record<string, unknown>).brief as { generatedAt?: unknown }).generatedAt as string ?? "",
-                  }
-                : null
-            }
           />
 
           {showGoalInput && (
@@ -766,55 +727,6 @@ export function CareerOsDashboard() {
             )}
           </section>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-sm">
-              <div>
-                <span className="font-medium text-gray-700">Cycle #{cycle.cycle_number}</span>
-                {cycle.goal && (
-                  <span className="ml-2 text-gray-500">— {cycle.goal}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                  Active
-                </span>
-                <button
-                  onClick={() => setShowGoalInput(true)}
-                  disabled={running}
-                  title="Add a new cycle for a different goal — keeps your current cycle open"
-                  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  + New cycle
-                </button>
-                <button
-                  onClick={() => void handleSkipCycle()}
-                  disabled={running}
-                  title="Skip this cycle without finishing it. Useful for roadmaps with optional steps."
-                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
-                >
-                  Skip
-                </button>
-              </div>
-            </div>
-            {/* Progress bar */}
-            <div className="mt-3">
-              <div className="h-1.5 w-full rounded-full bg-gray-100">
-                <div
-                  className="h-1.5 rounded-full bg-brand-500 transition-all"
-                  style={{
-                    width: Math.round(
-                      ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /
-                        STAGE_ORDER.length) * 100
-                    ) + "%",
-                  }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-400">
-                Stage {STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1} of {STAGE_ORDER.length}
-              </p>
-            </div>
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {STAGE_ORDER.map((stage) => (
               <CycleStageCard
@@ -829,7 +741,7 @@ export function CareerOsDashboard() {
                   // control in one place per stage. Coach already worked this
                   // way; this brings the other 5 stages into parity.
                   stage === currentStage && !cycleComplete
-                    ? () => router.push(STAGE_HREF[stage])
+                    ? () => router.push(STAGE_HREF[stage] + "?autorun=1")
                     : undefined
                 }
                 running={running}
@@ -848,6 +760,101 @@ export function CareerOsDashboard() {
               />
             ))}
           </div>
+
+          {/* Sprint 5 UX (2026-05-16) — Active-cycle indicator + multi-cycle
+              switcher moved BELOW the stage cards so the ring + cards have
+              clean breathing room at the top. Goal label only (no "Cycle #N"
+              prefix per Fix 1) — the badge is reserved for the dropdown rows
+              where the user is actually comparing cycles. */}
+          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between text-sm gap-3">
+              <div className="min-w-0">
+                {cycle.goal ? (
+                  <span className="font-medium text-gray-800 truncate">{cycle.goal}</span>
+                ) : (
+                  <span className="font-medium text-gray-500 italic">No goal set</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                  Active
+                </span>
+                <button
+                  onClick={() => void handleSkipCycle()}
+                  disabled={running}
+                  title="Skip this cycle without finishing it. Useful for roadmaps with optional steps."
+                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div>
+              <div className="h-1.5 w-full rounded-full bg-gray-100">
+                <div
+                  className="h-1.5 rounded-full bg-brand-500 transition-all"
+                  style={{
+                    width: Math.round(
+                      ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /
+                        STAGE_ORDER.length) * 100
+                    ) + "%",
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                Stage {STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1} of {STAGE_ORDER.length}
+              </p>
+            </div>
+
+            {/* Multi-cycle switcher — only renders when user has 2+ active
+                cycles. The dropdown rows DO show the "Cycle #N" badge for
+                disambiguation, per the Fix 1 carve-out. */}
+            {activeCycles.length > 1 && (
+              <CycleManagementPanel
+                cycles={activeCycles}
+                selectedId={cycle.id}
+                onSwitch={(c) => {
+                  if (!userId) return;
+                  void (async () => {
+                    await refreshCycle(userId, c.id);
+                    const stage = c.current_stage as CareerOsStage;
+                    const href = STAGE_HREF[stage];
+                    if (href) router.push(href);
+                  })();
+                }}
+                onAbandon={async (id) => {
+                  if (!userId) return;
+                  const sb = createClient();
+                  await sb
+                    .from("career_os_cycles")
+                    .update({ status: "abandoned" })
+                    .eq("id", id)
+                    .eq("user_id", userId);
+                  await refreshCycle(userId);
+                }}
+              />
+            )}
+          </section>
+
+          {/* On-demand coaching brief (Phase 1 Item 2b) — now below the
+              active-cycle indicator per Sprint 5 UX (2026-05-16). */}
+          <CoachBriefPanel
+            cycleId={cycle.id}
+            plan={plan}
+            profileReady={profileReady}
+            initial={
+              stageNotes.coach && typeof stageNotes.coach === "object"
+                && (stageNotes.coach as Record<string, unknown>).brief
+                && typeof (stageNotes.coach as Record<string, unknown>).brief === "object"
+                ? {
+                    content:     ((stageNotes.coach as Record<string, unknown>).brief as { content?: unknown }).content as string ?? "",
+                    generatedAt: ((stageNotes.coach as Record<string, unknown>).brief as { generatedAt?: unknown }).generatedAt as string ?? "",
+                  }
+                : null
+            }
+          />
 
           {/* Phase 4 Item 2b — Skills assessment modal */}
           {assessmentOpen && cycle && (
