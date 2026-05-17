@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
+import { useAutorunStage } from "@/components/career-os/useAutorunStage";
 import { EvaluateOutputPanel } from "@/components/evaluate/EvaluateOutputPanel";
 import { evaluateCareerProfile, type EvaluationResult } from "@/services/ai/evaluateService";
 
@@ -57,6 +58,16 @@ export function EvaluatePageInner() {
       setRunning(false);
     }
   }
+
+    // autorun-v2 (2026-05-17) — fire handleRun() automatically
+  // when the user lands here via the dashboard's Run deep-link
+  // (`?autorun=1`). Guards against re-runs when output exists.
+  useAutorunStage({
+    ready:     !loading && !!cycle && !!userId,
+    hasOutput: !!output,
+    running,
+    onRun:     handleRun,
+  });
 
   return (
     <StagePageScaffold

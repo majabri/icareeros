@@ -741,7 +741,13 @@ export function CareerOsDashboard() {
                   // control in one place per stage. Coach already worked this
                   // way; this brings the other 5 stages into parity.
                   stage === currentStage && !cycleComplete
-                    ? () => router.push(STAGE_HREF[stage])
+                    // autorun-v2 (2026-05-17) — append ?autorun=1 so the
+                    // stage page fires handleRun() automatically and the
+                    // user doesn't have to double-click. The stage's
+                    // useAutorunStage hook gates this on no-existing-
+                    // output, so coming back to a stage with notes just
+                    // shows the existing output silently.
+                    ? () => router.push(STAGE_HREF[stage] + "?autorun=1")
                     : undefined
                 }
                 running={running}
