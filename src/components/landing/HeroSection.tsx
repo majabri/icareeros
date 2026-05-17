@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * HeroSection — Phase 3 design-system unification (2026-05-11).
+ * HeroSection — Phase 1 subdomain update (2026-05-16).
  *
- * Previously had its own inline canvas particle animation. Now the global
- * ConstellationBackground (mounted at app/page.tsx + app/(app)/layout.tsx +
- * app/auth/layout.tsx) provides ONE consistent particle layer across every
- * page. The hero is a pure content section — content only, transparent bg.
+ * Now addresses both audiences. Primary CTA for job seekers (filled,
+ * teal); secondary CTA for recruiters (outlined). Tagline copy + the
+ * subhead reflect the dual product. Background particles still come
+ * from the global ConstellationBackground, so the section stays
+ * transparent.
  */
 export function HeroSection() {
   return (
@@ -17,20 +18,23 @@ export function HeroSection() {
     }}>
       <div style={{ maxWidth: 900, position: "relative", zIndex: 2 }}>
         <div style={{ color:"var(--accent, var(--primary))", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
-          Career Operating System
+          The AI-powered career platform
         </div>
 
         <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.2, letterSpacing:"-1px", color:"var(--text-primary)" }}>
-          The career OS that runs<br/>on outcomes, not advice.
+          For job seekers and the<br/>teams hiring them.
         </h1>
 
         <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:680, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
-          Most career tools give you information. iCareerOS gives you a system — six stages that loop from Evaluate to Achieve, built to keep moving until you hit your next milestone.
+          On one side: a career operating system that runs on outcomes — six
+          stages that loop from Evaluate to Achieve until you land your
+          next milestone. On the other: a hiring workflow that finds, scores,
+          and reaches verified talent.
         </p>
 
         <div style={{ display:"flex", gap:"1.5rem", justifyContent:"center", flexWrap:"wrap" }}>
-          <a href="#cta" className="btn btn-primary">Start your first cycle →</a>
-          <a href="#lifecycle" className="btn btn-secondary">See how it works</a>
+          <a href="/auth/signup?role=job_seeker" className="btn btn-primary">Start your career OS →</a>
+          <a href="/auth/signup?role=employer" className="btn btn-secondary">Hire with iCareerOS →</a>
         </div>
       </div>
     </section>

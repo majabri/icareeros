@@ -11,6 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
@@ -24,7 +25,7 @@ async function makeSupabaseServer() {
       cookies: {
         getAll() { return cookieStore.getAll(); },
         setAll(cs: Array<{ name: string; value: string; options: CookieOptions }>) {
-          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, withCrossSubdomainCookie(options)));
         },
       },
     }

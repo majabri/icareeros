@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { CookieOptions } from "@supabase/ssr";
@@ -15,7 +16,7 @@ async function getSupabase() {
       cookies: {
         getAll() { return cookieStore.getAll(); },
         setAll(cs: Array<{ name: string; value: string; options: CookieOptions }>) {
-          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, withCrossSubdomainCookie(options)));
         },
       },
     }

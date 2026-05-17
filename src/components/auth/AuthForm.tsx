@@ -5,9 +5,20 @@ import { SocialLogins } from "@/components/auth/SocialLogins";
 import { createClient } from "@/lib/supabase";
 import { ConsentCheckboxes, type ConsentState } from "@/components/legal/ConsentCheckboxes";
 import { recordSignupConsent } from "@/app/actions/consentActions";
+import { postLoginDestination } from "@/lib/auth/postLoginDestination";
+
+export type UserRole = "job_seeker" | "employer";
 
 interface AuthFormProps {
   mode: "login" | "signup";
+  /**
+   * Phase 1 subdomain (2026-05-16) — optional pre-selected role for
+   * signup mode. The landing page CTAs and the hired.icareeros.com
+   * signup link both pass `?role=employer` so the recruiter card
+   * lights up by default. URL coming from job-seeker landing passes
+   * `?role=job_seeker`. Either value pre-selects that card on mount.
+   */
+  initialRole?: UserRole;
 }
 
 // Username aliases → real Supabase email
@@ -21,7 +32,7 @@ const INITIAL_CONSENT: ConsentState = {
   marketingEmail: false,
 };
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, initialRole }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
   const [consentState, setConsentState] = useState<ConsentState>(INITIAL_CONSENT);
@@ -32,6 +43,10 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [resending, setResending]   = useState(false);
   const [resentMsg, setResentMsg]   = useState<string | null>(null);
+  // Phase 1 subdomain (2026-05-16) — role selector for signup. Pre-fills
+  // from `initialRole` prop (driven by `?role=` query string in page.tsx).
+  // Form fields are hidden until a role is picked.
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(initialRole ?? null);
 
   const supabase = createClient();
 
@@ -105,6 +120,18 @@ export function AuthForm({ mode }: AuthFormProps) {
               aiProcessing: consentState.aiProcessing,
               marketingEmail: consentState.marketingEmail,
             });
+
+            // Phase 1 subdomain (2026-05-16) — store the chosen role in
+            // user_roles so the middleware's post-login redirect routes
+            // them to jobs.* or hired.* on the next sign-in. Default
+            // to job_seeker when the selector is somehow missing.
+            const role: UserRole = selectedRole ?? "job_seeker";
+            await supabase
+              .from("user_roles")
+              .upsert(
+                { user_id: data.user.id, role },
+                { onConflict: "user_id,role", ignoreDuplicates: true },
+              );
           }
         } catch {
           // Don't block signup if the audit trail write fails.
@@ -126,26 +153,58 @@ export function AuthForm({ mode }: AuthFormProps) {
         });
         if (error) throw error;
 
-        // Look up role from public.profiles — single source of truth
+        // Phase 1 subdomain (2026-05-16) — route the user to the right
+        // subdomain after sign-in based on their roles:
+        //   admin                          → /admin (same host)
+        //   employer ∧ job_seeker (dual)   → /auth/choose-platform
+        //   employer                       → hired.icareeros.com/dashboard
+        //   job_seeker (default)           → jobs.icareeros.com/dashboard
+        //
+        // Same decision table as middleware.ts. Duplicated here because
+        // the post-login redirect is client-side (window.location.href)
+        // and runs BEFORE the middleware sees the next request.
         let isAdmin = false;
+        let isEmployer  = false;
+        let isJobSeeker = false;
+
         if (data.user?.id) {
+          // Admin check via profiles (binary + 5-tier admin_role).
           const { data: profile } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, admin_role")
             .eq("user_id", data.user.id)
             .maybeSingle();
-          isAdmin = profile?.role === "admin";
+          isAdmin = Boolean((profile as { admin_role?: string } | null)?.admin_role)
+                 || profile?.role === "admin";
+
+          // Role memberships from user_roles (multi-row table).
+          if (!isAdmin) {
+            const { data: roleRows } = await supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", data.user.id);
+            const roleSet = new Set(
+              (roleRows ?? []).map((r) => (r as { role?: string }).role).filter(Boolean) as string[],
+            );
+            isEmployer  = roleSet.has("employer");
+            isJobSeeker = roleSet.has("job_seeker") || roleSet.size === 0;
+          }
         }
-        const requested = new URLSearchParams(window.location.search).get("redirect") ?? "";
-        const wantsAdmin = requested.startsWith("/admin");
-        let dest: string;
-        if (isAdmin) {
-          dest = "/admin";
-        } else if (wantsAdmin) {
-          dest = "/dashboard";
-        } else {
-          dest = requested || "/dashboard";
-        }
+
+        // Shared decision table — same logic as middleware.ts, tested in
+        // src/lib/auth/__tests__/postLoginDestination.test.ts.
+        const requested  = new URLSearchParams(window.location.search).get("redirect");
+        const isProdHost = typeof window !== "undefined"
+          && window.location.hostname.endsWith("icareeros.com");
+        const dest = postLoginDestination({
+          isAdmin,
+          isEmployer,
+          isJobSeeker,
+          requestedRedirect: requested,
+          isProdHost,
+          jobsUrl:  process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com",
+          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com",
+        });
         window.location.href = dest;
       }
     } catch (err: unknown) {
@@ -159,11 +218,72 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
-  const submitDisabled = loading || !!success || (mode === "signup" && !allRequiredConsent);
+  // Phase 1 subdomain (2026-05-16) — signup also gated on role selection.
+  const submitDisabled =
+    loading
+    || !!success
+    || (mode === "signup" && !allRequiredConsent)
+    || (mode === "signup" && !selectedRole);
+
+  // ── Role-selector cards (signup only) ─────────────────────────────────────
+  const roleSelector = mode === "signup" ? (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-gray-700">Choose your path</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setSelectedRole("job_seeker")}
+          aria-pressed={selectedRole === "job_seeker"}
+          className={
+            "rounded-xl border-2 px-4 py-4 text-left transition-all " +
+            (selectedRole === "job_seeker"
+              ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
+              : "border-gray-200 bg-white hover:border-gray-300 " +
+                (selectedRole ? "opacity-60" : ""))
+          }
+        >
+          <div className="text-lg" aria-hidden>🎯</div>
+          <div className="mt-1 text-sm font-semibold text-gray-900">
+            I&apos;m looking for a job
+          </div>
+          <p className="mt-1 text-xs text-gray-600 leading-snug">
+            Career OS, AI coaching, job matching, interview prep and salary
+            negotiation. Free to start.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedRole("employer")}
+          aria-pressed={selectedRole === "employer"}
+          className={
+            "rounded-xl border-2 px-4 py-4 text-left transition-all " +
+            (selectedRole === "employer"
+              ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
+              : "border-gray-200 bg-white hover:border-gray-300 " +
+                (selectedRole ? "opacity-60" : ""))
+          }
+        >
+          <div className="text-lg" aria-hidden>🏢</div>
+          <div className="mt-1 text-sm font-semibold text-gray-900">
+            I&apos;m hiring talent
+          </div>
+          <p className="mt-1 text-xs text-gray-600 leading-snug">
+            Search verified candidates, post jobs, AI-powered JD analysis and
+            outreach. Starting at $49/mo.
+          </p>
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  // When in signup mode and no role chosen yet, render ONLY the role
+  // selector — the email/password/consent block is gated behind a choice.
+  const showCredentialBlock = mode === "login" || !!selectedRole;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <SocialLogins mode={mode} />
+      {roleSelector}
+      {showCredentialBlock && <SocialLogins mode={mode} />}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -195,6 +315,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
       )}
 
+      {showCredentialBlock && <>
       <div>
         <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
           {mode === "login" ? "Email" : "Email address"}
@@ -253,7 +374,9 @@ export function AuthForm({ mode }: AuthFormProps) {
           ? mode === "login" ? "Signing in…" : "Creating account…"
           : mode === "login" ? "Sign in" : "Create account"}
       </button>
+      </>}
 
+      {showCredentialBlock && (
       <p className="text-center text-sm text-gray-500">
         {mode === "login" ? (
           <>
@@ -271,6 +394,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           </>
         )}
       </p>
+      )}
     </form>
   );
 }
