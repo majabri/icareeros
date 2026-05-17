@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isProductionHost, platformFromHost } from "@/lib/platform-host";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
 const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/targetskills", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
@@ -81,18 +82,8 @@ async function checkRateLimit(
 
 const PROD_COOKIE_DOMAIN = ".icareeros.com";
 
-function isProductionHost(host: string): boolean {
-  // .vercel.app preview deploys also need the cross-subdomain cookie scope
-  // disabled (different parent domain). Only set the cookie domain on the
-  // real icareeros.com production hosts.
-  return host.endsWith("icareeros.com");
-}
-
-function platformFromHost(host: string): "jobs" | "hired" | "root" {
-  if (host.startsWith("jobs."))  return "jobs";
-  if (host.startsWith("hired.")) return "hired";
-  return "root";
-}
+// platformFromHost / isProductionHost live in @/lib/platform-host so they
+// can be unit-tested independently of the middleware runtime.
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 export async function middleware(request: NextRequest) {

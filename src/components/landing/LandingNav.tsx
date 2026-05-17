@@ -20,10 +20,15 @@ export function LandingNav() {
     return () => window.removeEventListener("resize", fn);
   }, []);
 
+  // Phase 1 subdomain (2026-05-16) — subtle audience switcher pinned
+  // to the right of the section anchors. Each links to the relevant
+  // signup with role pre-selected.
   const NAV_LINKS = [
     ["#lifecycle", "The Journey"],
     ["#features",  "Features"],
     ["#stats",     "Impact"],
+    ["/auth/signup?role=job_seeker", "For job seekers"],
+    ["/auth/signup?role=employer",   "For hiring teams"],
   ];
 
   return (
