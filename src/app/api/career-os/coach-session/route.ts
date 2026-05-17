@@ -23,6 +23,7 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
 import { createTracedClient, recordCoachSessionTrace } from "@/lib/observability/langfuse";
 import { PLAN_LIMITS, type SubscriptionPlan } from "@/services/billing/types";
@@ -53,7 +54,7 @@ async function makeSupabaseServer() {
         getAll() { return cookieStore.getAll(); },
         setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, withCrossSubdomainCookie(options)));
           } catch { /* server component */ }
         },
       },

@@ -25,6 +25,7 @@
  */
 
 import { createServerClient } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
 import type { CookieOptions } from "@supabase/ssr";
 import { createHash } from "node:crypto";
@@ -155,7 +156,7 @@ export async function recordConsent(records: ConsentRecordInput[]): Promise<void
         cookies: {
           getAll() { return cookieStore.getAll(); },
           setAll(cs: Array<{ name: string; value: string; options: CookieOptions }>) {
-            cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+            cs.forEach(({ name, value, options }) => cookieStore.set(name, value, withCrossSubdomainCookie(options)));
           },
         },
       },

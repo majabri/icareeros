@@ -69,12 +69,69 @@ async function checkRateLimit(
   }
 }
 
+// ─── Multi-domain helpers ────────────────────────────────────────────────────
+//
+// Phase 1 subdomain split (2026-05-16):
+//   - icareeros.com          → marketing + auth (root domain)
+//   - jobs.icareeros.com     → job-seeker app
+//   - hired.icareeros.com    → recruiter app (stub for now)
+//
+// Auth cookies are scoped to `.icareeros.com` in production so a session
+// created on the root domain is valid on every subdomain.
+
+const PROD_COOKIE_DOMAIN = ".icareeros.com";
+
+function isProductionHost(host: string): boolean {
+  // .vercel.app preview deploys also need the cross-subdomain cookie scope
+  // disabled (different parent domain). Only set the cookie domain on the
+  // real icareeros.com production hosts.
+  return host.endsWith("icareeros.com");
+}
+
+function platformFromHost(host: string): "jobs" | "hired" | "root" {
+  if (host.startsWith("jobs."))  return "jobs";
+  if (host.startsWith("hired.")) return "hired";
+  return "root";
+}
+
 // ─── Middleware ──────────────────────────────────────────────────────────────
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hostname = request.headers.get("host") ?? "";
+
+  // Phase 1 Task 2 — Hostname detection. The x-platform header lets
+  // downstream server components/route handlers tailor copy or links
+  // without re-parsing the host themselves.
+  const platform     = platformFromHost(hostname);
+  const isJobsHost   = platform === "jobs";
+  const isHiredHost  = platform === "hired";
+  const isRootHost   = platform === "root";
+  const useProdCookies = isProductionHost(hostname);
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-platform", platform);
+
+  // Phase 1 Task 2 — hired.icareeros.com routes everything (except auth
+  // and api) under /hired/*. The (hired) app route group (created in
+  // Task 3) owns those pages. Rewrites preserve the public URL while
+  // resolving to the internal app shell — so users still see
+  // `hired.icareeros.com/dashboard` in the address bar.
+  if (
+    isHiredHost
+    && !pathname.startsWith("/hired")
+    && !pathname.startsWith("/auth")
+    && !pathname.startsWith("/api")
+    && !pathname.startsWith("/_next")
+  ) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/hired${pathname === "/" ? "/dashboard" : pathname}`;
+    return NextResponse.rewrite(rewriteUrl, {
+      request: { headers: requestHeaders },
+    });
+  }
 
   let response = NextResponse.next({
-    request: { headers: request.headers },
+    request: { headers: requestHeaders },
   });
 
   const supabase = createServerClient(
@@ -93,14 +150,22 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
+          response = NextResponse.next({ request: { headers: requestHeaders } });
+          // Phase 1 Task 1 — scope auth cookies to the parent domain in
+          // production so a session works across icareeros.com,
+          // jobs.icareeros.com, and hired.icareeros.com. Preview deploys
+          // (*.vercel.app) and local dev keep the default per-host scope.
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const finalOptions = {
+              ...(options ?? {}),
+              ...(useProdCookies ? { domain: PROD_COOKIE_DOMAIN } : {}),
+            };
             response.cookies.set(
               name,
               value,
-              options as Parameters<typeof response.cookies.set>[2]
-            )
-          );
+              finalOptions as Parameters<typeof response.cookies.set>[2]
+            );
+          });
         },
       },
     }
@@ -134,6 +199,7 @@ export async function middleware(request: NextRequest) {
   if ((isProtected || isAdminProtected) && !user) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
+    if (isHiredHost) loginUrl.searchParams.set("platform", "hired");
     return NextResponse.redirect(loginUrl);
   }
 
@@ -147,11 +213,52 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // After login: admins → /admin, everyone else → /dashboard
+  // After login: route by role to the correct subdomain.
+  //   admin                            → /admin
+  //   employer ∧ job_seeker (dual)     → /auth/choose-platform
+  //   employer                         → hired.icareeros.com/dashboard
+  //   job_seeker (default)             → jobs.icareeros.com/dashboard
   if (isAuthRoute && user) {
-    const destination = isAdmin ? "/admin" : "/dashboard";
-    return NextResponse.redirect(new URL(destination, request.url));
+    if (isAdmin) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+
+    // Look up role memberships from user_roles (multi-row table).
+    const { data: roleRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const roles = new Set((roleRows ?? []).map((r) => (r as { role?: string }).role).filter(Boolean) as string[]);
+    const hasEmployer  = roles.has("employer");
+    const hasJobSeeker = roles.has("job_seeker") || roles.size === 0; // default: job seeker
+
+    if (hasEmployer && hasJobSeeker) {
+      return NextResponse.redirect(new URL("/auth/choose-platform", request.url));
+    }
+
+    const isProd = process.env.NODE_ENV === "production";
+    if (hasEmployer) {
+      const dest = isProd
+        ? (process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com") + "/dashboard"
+        : "/hired/dashboard";
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
+
+    // job_seeker (default)
+    const dest = isProd
+      ? (process.env.NEXT_PUBLIC_JOBS_URL ?? "https://jobs.icareeros.com") + "/dashboard"
+      : "/dashboard";
+    return NextResponse.redirect(new URL(dest, request.url));
   }
+
+  // Root domain (icareeros.com): authed users stay on the landing page
+  // by default — no auto-redirect to /dashboard. They can navigate to
+  // their app via the CTA / nav. Admin guard above still applies for
+  // /admin paths. This block is intentionally empty — documenting the
+  // decision so future readers don't re-add an auto-redirect.
+  void isRootHost;
+  void isJobsHost;
 
   // ── Rate limiting (API routes only) ───────────────────────────────────────
   if (pathname.startsWith("/api/")) {
