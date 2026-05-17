@@ -24,6 +24,7 @@
  */
 
 import { createServerClient } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
         },
         setAll(toSet: Array<{ name: string; value: string; options?: import("@supabase/ssr").CookieOptions }>) {
           for (const c of toSet) {
-            cookieStore.set(c.name, c.value, c.options);
+            cookieStore.set(c.name, c.value, withCrossSubdomainCookie(c.options));
           }
         },
       },
