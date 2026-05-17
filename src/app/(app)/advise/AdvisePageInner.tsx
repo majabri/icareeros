@@ -5,6 +5,7 @@ import { useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { generateAdvice, type AdviceResult, type CareerPath } from "@/services/ai/adviseService";
+import { arr, str, num } from "@/lib/career-os/normalize";
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
@@ -55,7 +56,15 @@ export function AdvisePageInner() {
 }
 
 function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
-  const top4 = result.recommendedPaths.slice(0, 4);
+  // Sprint 5 hotfix (2026-05-16) — defensively normalize every field
+  // the render touches; the persisted notes shape may be stale or the
+  // API may return a partial result that previously crashed .length.
+  const safeResult        = result as unknown as Record<string, unknown>;
+  const recommendedPaths  = arr<CareerPath>(safeResult.recommendedPaths);
+  const nextActions       = arr<string>(safeResult.nextActions);
+  const summaryText       = str(safeResult.summary);
+  const timelineWeeks     = num(safeResult.timelineWeeks);
+  const top4              = recommendedPaths.slice(0, 4);
   // Sprint 5 hotfix (2026-05-15) — gapSkills chips on each CareerPath
   // expose the same dual-button pill (🎯 target / ✅ profile) used on
   // /evaluate and /learn so the user can add a gap with one click.
@@ -71,9 +80,9 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
-          <p className="text-sm leading-relaxed text-gray-700 flex-1 min-w-[200px]">{result.summary}</p>
+          <p className="text-sm leading-relaxed text-gray-700 flex-1 min-w-[200px]">{summaryText}</p>
           <div className="text-right">
-            <div className="text-2xl font-bold tabular-nums text-brand-700">~{result.timelineWeeks}</div>
+            <div className="text-2xl font-bold tabular-nums text-brand-700">~{timelineWeeks}</div>
             <div className="text-xs text-gray-500">weeks to job-ready</div>
           </div>
         </div>
@@ -100,7 +109,7 @@ function AdviceOutputPanel({ result }: { result: StoredAdvice }) {
       <section className="rounded-xl border border-gray-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Next actions</h3>
         <ol className="list-decimal pl-5 space-y-2 text-sm text-gray-700">
-          {result.nextActions.map((a, i) => <li key={i}>{a}</li>)}
+          {nextActions.map((a, i) => <li key={i}>{a}</li>)}
         </ol>
         <div className="mt-4 pt-3 border-t border-gray-100">
           <Link href="/learn" className="text-sm text-brand-700 underline">
@@ -121,33 +130,38 @@ function CareerPathCard({
   targetSkills:  ReturnType<typeof useTargetSkills>;
   profileSkills: ReturnType<typeof useProfileSkills>;
 }) {
-  const score = Math.max(0, Math.min(100, path.matchScore));
+  const safePath       = path as unknown as Record<string, unknown>;
+  const title          = str(safePath.title);
+  const estimatedWeeks = num(safePath.estimatedWeeks);
+  const requiredSkills = arr<string>(safePath.requiredSkills);
+  const gapSkills      = arr<string>(safePath.gapSkills);
+  const score          = Math.max(0, Math.min(100, num(safePath.matchScore)));
   const barColor = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-baseline justify-between gap-2">
-        <h4 className="text-base font-semibold text-gray-900">{path.title}</h4>
+        <h4 className="text-base font-semibold text-gray-900">{title}</h4>
         <span className="text-sm font-bold tabular-nums text-brand-700">{score}%</span>
       </div>
       <div className="mt-2 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
         <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${score}%` }} />
       </div>
-      <p className="mt-2 text-xs text-gray-500">~{path.estimatedWeeks} weeks · {path.requiredSkills.length} skills needed</p>
-      {path.requiredSkills.length > 0 && (
+      <p className="mt-2 text-xs text-gray-500">~{estimatedWeeks} weeks · {requiredSkills.length} skills needed</p>
+      {requiredSkills.length > 0 && (
         <div className="mt-3">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Required skills</p>
           <div className="flex flex-wrap gap-1">
-            {path.requiredSkills.slice(0, 6).map((s) => (
+            {requiredSkills.slice(0, 6).map((s) => (
               <span key={s} className="rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800">{s}</span>
             ))}
           </div>
         </div>
       )}
-      {path.gapSkills.length > 0 && (
+      {gapSkills.length > 0 && (
         <div className="mt-2">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Gaps</p>
           <div className="flex flex-wrap gap-1">
-            {path.gapSkills.slice(0, 6).map((s) => (
+            {gapSkills.slice(0, 6).map((s) => (
               <AddSkillPill
                 key={s}
                 skill={s}

@@ -10,6 +10,7 @@
  */
 
 import type { EvaluationResult, LinkedInAnalysis, LinkedInGated } from "@/services/ai/evaluateService";
+import { arr, str, num } from "@/lib/career-os/normalize";
 import { useTargetSkills }  from "@/components/career-os/useTargetSkills";
 import { useProfileSkills } from "@/components/career-os/useProfileSkills";
 import { AddSkillPill } from "@/components/career-os/AddSkillPill";
@@ -37,7 +38,20 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
   // overlap between target_skills and skills on page mount.
   useSyncSkillLists(targetSkills, profileSkills);
 
-  const score = Math.max(0, Math.min(100, result.marketFitScore));
+  // Sprint 5 hotfix (2026-05-16) — Defensive normalize. The shape of
+  // `result` is whatever was last persisted to career_os_stages.notes
+  // (could pre-date the current schema) or whatever Claude returned on
+  // the most recent run. Treat every render-time access through these
+  // safe accessors so a missing field never bricks the page.
+  const safeResult = result as unknown as Record<string, unknown>;
+  const skills              = arr<string>(safeResult.skills);
+  const gaps                = arr<string>(safeResult.gaps);
+  const summaryText         = str(safeResult.summary);
+  const careerLevel         = str(safeResult.careerLevel, "—");
+  const recommendedNextStage = str(safeResult.recommendedNextStage, "advise");
+  const linkedinAnalysis     = (safeResult.linkedinAnalysis ?? null) as EvaluationResult["linkedinAnalysis"];
+
+  const score = Math.max(0, Math.min(100, num(safeResult.marketFitScore)));
   const scoreColor =
     score >= 80 ? "text-emerald-600" :
     score >= 60 ? "text-brand-600"   :
@@ -52,7 +66,7 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
         <div className="space-y-4">
           <div className="rounded-xl border border-gray-200 bg-white p-5 border-l-4 border-l-brand-500">
             <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-500">Summary</h3>
-            <p className="text-sm leading-relaxed text-gray-700">{result.summary}</p>
+            <p className="text-sm leading-relaxed text-gray-700">{summaryText}</p>
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -69,10 +83,10 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
             </div>
             <div className="mt-4 flex items-center gap-2">
               <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                {result.careerLevel}
+                {careerLevel}
               </span>
               <span className="text-xs text-gray-500">
-                Recommended next: <strong className="text-gray-700">{result.recommendedNextStage}</strong>
+                Recommended next: <strong className="text-gray-700">{recommendedNextStage}</strong>
               </span>
             </div>
           </div>
@@ -82,13 +96,13 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
         <div className="space-y-4">
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-              Skills you have <span className="ml-1 text-xs text-gray-400">({result.skills.length})</span>
+              Skills you have <span className="ml-1 text-xs text-gray-400">({skills.length})</span>
             </h3>
-            {result.skills.length === 0 ? (
+            {skills.length === 0 ? (
               <p className="text-sm text-gray-400">No skills detected yet — add some to your profile.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {result.skills.map((s) => (
+                {skills.map((s) => (
                   <span key={s} className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-800">{s}</span>
                 ))}
               </div>
@@ -97,14 +111,14 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-              Skill gaps <span className="ml-1 text-xs text-gray-400">({result.gaps.length})</span>
+              Skill gaps <span className="ml-1 text-xs text-gray-400">({gaps.length})</span>
             </h3>
-            {result.gaps.length === 0 ? (
+            {gaps.length === 0 ? (
               <p className="text-sm text-gray-400">No critical gaps identified for your target.</p>
             ) : (
               <>
                 <div className="flex flex-wrap gap-1.5">
-                  {result.gaps.map((g) => (
+                  {gaps.map((g) => (
                     <AddSkillPill
                       key={g}
                       skill={g}
@@ -124,21 +138,21 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
       </div>
 
       {/* LinkedIn analysis */}
-      {result.linkedinAnalysis && (
+      {linkedinAnalysis && (
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">LinkedIn analysis</h3>
-            {isGated(result.linkedinAnalysis) && (
+            {isGated(linkedinAnalysis) && (
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Upgrade</span>
             )}
           </div>
-          {isGated(result.linkedinAnalysis) ? (
+          {isGated(linkedinAnalysis) ? (
             <p className="text-sm text-gray-600">
-              {result.linkedinAnalysis.upgradeMessage}{" "}
+              {(linkedinAnalysis as LinkedInGated).upgradeMessage}{" "}
               <a href="/settings/billing" className="text-brand-700 underline">Upgrade plans</a>
             </p>
           ) : (
-            <EvaluateLinkedIn analysis={result.linkedinAnalysis} />
+            <EvaluateLinkedIn analysis={linkedinAnalysis as LinkedInAnalysis} />
           )}
         </div>
       )}
@@ -154,32 +168,38 @@ export function EvaluateOutputPanel({ result, generatedAt }: EvaluateOutputPanel
 }
 
 function EvaluateLinkedIn({ analysis }: { analysis: LinkedInAnalysis }) {
+  // Sprint 5 hotfix (2026-05-16) — same defensive pattern as the parent.
+  const safeAnalysis     = analysis as unknown as Record<string, unknown>;
+  const strengthScore    = num(safeAnalysis.strengthScore);
+  const headlineSuggest  = str(safeAnalysis.headlineSuggestion);
+  const aboutGaps        = arr<string>(safeAnalysis.aboutGaps);
+  const skillsToAdd      = arr<string>(safeAnalysis.skillsToAdd);
   return (
     <div className="space-y-3 text-sm">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Strength</p>
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tabular-nums text-brand-700">{analysis.strengthScore}</span>
+          <span className="text-2xl font-bold tabular-nums text-brand-700">{strengthScore}</span>
           <span className="text-xs text-gray-400">/ 10</span>
         </div>
       </div>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Suggested headline</p>
-        <p className="rounded-md bg-gray-50 px-3 py-2 text-gray-800">"{analysis.headlineSuggestion}"</p>
+        <p className="rounded-md bg-gray-50 px-3 py-2 text-gray-800">"{headlineSuggest}"</p>
       </div>
-      {analysis.aboutGaps.length > 0 && (
+      {aboutGaps.length > 0 && (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">About-section gaps</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-700">
-            {analysis.aboutGaps.map((g) => <li key={g}>{g}</li>)}
+            {aboutGaps.map((g) => <li key={g}>{g}</li>)}
           </ul>
         </div>
       )}
-      {analysis.skillsToAdd.length > 0 && (
+      {skillsToAdd.length > 0 && (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Skills to add</p>
           <div className="flex flex-wrap gap-1.5">
-            {analysis.skillsToAdd.map((s) => (
+            {skillsToAdd.map((s) => (
               <span key={s} className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-800">{s}</span>
             ))}
           </div>
