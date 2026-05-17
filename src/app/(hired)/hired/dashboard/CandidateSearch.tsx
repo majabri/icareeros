@@ -58,10 +58,13 @@ export function CandidateSearch() {
   const [experienceLevel, setExperienceLevel] = useState("");
 
   // Results
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [total,      setTotal]      = useState(0);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const [candidates,        setCandidates]        = useState<Candidate[]>([]);
+  const [total,             setTotal]             = useState(0);
+  const [loading,           setLoading]           = useState(false);
+  const [error,             setError]             = useState<string | null>(null);
+  // Phase 3 — server returns 422 + profileIncomplete:true until the
+  // recruiter fills in their company profile at /hired/profile.
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
 
   // Cycling placeholder
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -96,10 +99,20 @@ export function CandidateSearch() {
           experienceLevel: experienceLevel || undefined,
         }),
       });
+      if (res.status === 422) {
+        const j = await res.json().catch(() => ({}));
+        if (j?.profileIncomplete) {
+          setProfileIncomplete(true);
+          setCandidates([]);
+          setTotal(0);
+          return;
+        }
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error ?? `Search failed (${res.status})`);
       }
+      setProfileIncomplete(false);
       const json = (await res.json()) as SearchResponse;
       setCandidates(json.candidates ?? []);
       setTotal(json.total ?? 0);
@@ -142,6 +155,51 @@ export function CandidateSearch() {
             exact requirements.
           </p>
         </header>
+
+        {/* Phase 3 — Complete-your-profile gate banner. */}
+        {profileIncomplete && (
+          <div
+            role="alert"
+            style={{
+              background: "rgba(245,166,35,0.08)",
+              border: "1px solid rgba(245,166,35,0.35)",
+              borderRadius: 12,
+              padding: "1rem 1.25rem",
+              marginBottom: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: "1.5rem" }} aria-hidden>🏢</div>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <div style={{ color: "#F5A623", fontWeight: 700, fontSize: "0.95rem" }}>
+                Complete your company profile to enable candidate search.
+              </div>
+              <p style={{ color: "#A5B5CF", fontSize: "0.85rem", marginTop: "0.25rem", lineHeight: 1.5 }}>
+                We need your company name to honour job-seeker block lists.
+                Candidates who&apos;ve blocked your company won&apos;t show up
+                in your searches.
+              </p>
+            </div>
+            <Link
+              href="/hired/profile"
+              style={{
+                background: "#00B8A9",
+                color: "#0B1422",
+                padding: "0.5rem 1.1rem",
+                borderRadius: 10,
+                fontWeight: 700,
+                textDecoration: "none",
+                fontSize: "0.9rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Set up profile →
+            </Link>
+          </div>
+        )}
 
         {/* Search bar */}
         <form
