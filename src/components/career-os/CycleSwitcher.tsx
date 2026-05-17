@@ -119,9 +119,10 @@ export function CycleSwitcher({ cycleId, userId }: CycleSwitcherProps) {
         aria-expanded={open}
         className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
       >
-        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700">
-          Cycle #{active.cycle_number}
-        </span>
+        {/* Sprint 5 UX v2 (2026-05-16) — Cycle #N badge removed from the
+            pill. The goal alone is the user-facing label. The "Cycle #N"
+            badge stays inside the dropdown rows (below) so users with
+            multiple cycles can still distinguish them. */}
         <span className="max-w-[18rem] truncate text-gray-700">
           {active.goal ? truncate(active.goal) : "(no goal)"}
         </span>
