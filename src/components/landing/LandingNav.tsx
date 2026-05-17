@@ -50,72 +50,98 @@ export function LandingNav() {
           <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
         </a>
 
-        {/* Desktop nav links */}
-        <ul style={{
-          display: "flex", listStyle: "none", gap: "2rem",
-          alignItems: "center", margin: 0, padding: 0,
-        }} className="nav-desktop-links">
+        {/* Desktop nav — `hidden lg:flex` keeps everything but logo +
+            auth buttons off-screen below 1024px so nothing wraps. */}
+        <ul
+          className="hidden lg:flex list-none m-0 p-0 items-center gap-8"
+        >
+          {/* Section anchors + audience switcher.
+              text-sm + font-normal + whitespace-nowrap so the labels
+              never break onto two lines and stay clearly subordinate
+              to the iCareerOS wordmark on the left. */}
           {NAV_LINKS.map(([href, label]) => (
-            <li key={href} className="nav-link-item">
-              <a href={href} style={{
-                textDecoration: "none", color: "var(--text-secondary)",
-                fontWeight: 500, fontSize: "0.95rem", transition: "color 0.3s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = "var(--primary)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-secondary)")}
-              >{label}</a>
+            <li key={href}>
+              <a
+                href={href}
+                className="text-sm font-normal whitespace-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors no-underline"
+              >
+                {label}
+              </a>
             </li>
           ))}
+
+          {/* Sign In — same text-sm so it visually matches the nav links. */}
           <li>
-            <a href="/auth/login" style={{
-              border: "2px solid var(--primary)", color: "var(--primary)",
-              background: "transparent", padding: "0.6rem 1.25rem",
-              borderRadius: "50px", fontWeight: 600, textDecoration: "none",
-              fontSize: "0.9rem", transition: "all 0.3s", display: "inline-block",
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLElement;
-              el.style.background = "var(--primary)"; el.style.color = "var(--neutral-100)";
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLElement;
-              el.style.background = "transparent"; el.style.color = "var(--primary)";
-            }}
-            >Sign In</a>
+            <a
+              href="/auth/login"
+              className="inline-block text-sm font-medium no-underline rounded-full transition-colors whitespace-nowrap"
+              style={{
+                border: "2px solid var(--primary)",
+                color: "var(--primary)",
+                background: "transparent",
+                padding: "0.5rem 1.1rem",
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = "var(--primary)";
+                el.style.color = "var(--neutral-100)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = "transparent";
+                el.style.color = "var(--primary)";
+              }}
+            >
+              Sign In
+            </a>
           </li>
+
+          {/* Start Free — keep teal fill, reduce typography to text-sm
+              font-medium so it doesn't dominate. */}
           <li>
-            <a href="/auth/signup" style={{
-              background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
-              color: "var(--neutral-100)", padding: "0.7rem 1.5rem", borderRadius: "50px",
-              fontWeight: 600, textDecoration: "none", transition: "all 0.3s",
-              boxShadow: "0 4px 15px rgba(0,217,255,0.2)", display: "inline-block",
-              fontSize: "0.9rem",
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,217,255,0.3)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.transform = "";
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,217,255,0.2)";
-            }}
-            >Start Free</a>
+            <a
+              href="/auth/signup"
+              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap transition-all"
+              style={{
+                background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
+                color: "var(--neutral-100)",
+                padding: "0.55rem 1.3rem",
+                boxShadow: "0 4px 15px rgba(0,217,255,0.2)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,217,255,0.3)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,217,255,0.2)";
+              }}
+            >
+              Start Free
+            </a>
           </li>
+
           <li>
-            {/* Theme toggle — repositioned right of Start Free (Amir 2026-05-11). */}
+            {/* Theme toggle — pinned right of Start Free (Amir 2026-05-11). */}
             <ThemeToggle compact />
           </li>
         </ul>
 
-        {/* Mobile: Sign In + hamburger */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-             className="nav-mobile-controls">
-          <a href="/auth/login" style={{
-            border: "2px solid var(--primary)", color: "var(--primary)",
-            background: "transparent", padding: "0.45rem 1rem",
-            borderRadius: "50px", fontWeight: 600, textDecoration: "none",
-            fontSize: "0.85rem", transition: "all 0.3s", display: "inline-block",
-          }}>Sign In</a>
+        {/* Below lg (1024px): logo + Sign In + hamburger only.
+            flex lg:hidden inverts the desktop nav's hidden lg:flex. */}
+        <div className="flex lg:hidden items-center gap-3">
+          <a
+            href="/auth/login"
+            className="inline-block text-sm font-medium no-underline rounded-full transition-colors whitespace-nowrap"
+            style={{
+              border: "2px solid var(--primary)",
+              color: "var(--primary)",
+              background: "transparent",
+              padding: "0.45rem 1rem",
+            }}
+          >
+            Sign In
+          </a>
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -170,16 +196,10 @@ export function LandingNav() {
         </div>
       )}
 
-      {/* Responsive visibility CSS */}
-      <style>{`
-        .nav-desktop-links { display: flex !important; }
-        .nav-mobile-controls { display: none !important; }
-        .nav-mobile-menu { display: block; }
-        @media (max-width: 767px) {
-          .nav-desktop-links { display: none !important; }
-          .nav-mobile-controls { display: flex !important; }
-        }
-      `}</style>
+      {/* Responsive visibility owned by Tailwind: `hidden lg:flex` on
+          the desktop nav and `flex lg:hidden` on the mobile controls
+          flip at the 1024px breakpoint (Tailwind's `lg`). The legacy
+          `<style>` block + class-name CSS is no longer needed. */}
     </nav>
   );
 }
