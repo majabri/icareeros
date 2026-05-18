@@ -28,10 +28,18 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@supabase/supabase-js", () => {
   function makeQuery(rows: Array<Record<string, unknown>>) {
-    const o: Record<string, unknown> = {};
-    o.select = () => o;
-    o.order  = () => Promise.resolve({ data: rows, error: null });
-    o.eq     = () => Promise.resolve({ data: rows, error: null });
+    const p = Promise.resolve({ data: rows, error: null });
+    // The route awaits either `.select(...)` directly (user_roles, subs)
+    // or `.select(...).order(...)` (profiles). Make the chain object
+    // itself thenable so awaiting the bare select() works.
+    const o: Record<string, unknown> = {
+      select: () => o,
+      order:  () => p,
+      eq:     () => p,
+      in:     () => p,
+      then:   (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+                p.then(resolve, reject),
+    };
     return o;
   }
   return {
