@@ -102,14 +102,32 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-platform", platform);
 
-  // Phase 1 Task 2 — hire.icareeros.com routes everything (except auth
-  // and api) under /hire/*. The (hire) app route group (created in
-  // Task 3) owns those pages. Rewrites preserve the public URL while
-  // resolving to the internal app shell — so users still see
-  // `hire.icareeros.com/dashboard` in the address bar.
+  // Phase 3 (2026-05-17) — hire.icareeros.com keeps a clean URL surface:
+  // the internal `(hire)/hire/*` route folder is rewritten to from the
+  // root pathname so users always see `hire.icareeros.com/dashboard`,
+  // never `/hire/dashboard`.
+  //
+  // Two-step:
+  //   1) If a user lands on `hire.icareeros.com/hire/<x>` (bookmark, an
+  //      old link, or a search-engine result from a prior deploy), 308
+  //      redirect to `hire.icareeros.com/<x>` so the ugly prefix never
+  //      appears in the address bar.
+  //   2) For every other path on hire.*, rewrite internally to /hire/<x>
+  //      so Next routes into the (hire) route group without the URL bar
+  //      noticing.
   if (
     isHireHost
-    && !pathname.startsWith("/hire")
+    && pathname.startsWith("/hire")
+    && !pathname.startsWith("/_next")
+  ) {
+    const clean = pathname === "/hire" ? "/" : pathname.replace(/^\/hire/, "");
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = clean || "/";
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
+  if (
+    isHireHost
     && !pathname.startsWith("/auth")
     && !pathname.startsWith("/api")
     && !pathname.startsWith("/_next")

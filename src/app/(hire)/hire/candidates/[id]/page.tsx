@@ -171,7 +171,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ marginBottom: "1rem" }}>
           <Link
-            href="/hire/dashboard"
+            href="/dashboard"
             style={{ color: "#A5B5CF", textDecoration: "none", fontSize: "0.9rem" }}
           >
             ← Back to search
@@ -407,7 +407,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           }}
         >
           <Link
-            href="/hire/dashboard"
+            href="/dashboard"
             style={{
               color: "#A5B5CF",
               textDecoration: "underline",
@@ -436,7 +436,7 @@ function ForbiddenLikeShell({ title, body }: { title: string; body: string }) {
         <div aria-hidden style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🔒</div>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: "0.5rem" }}>{title}</h1>
         <p style={{ color: "#A5B5CF", fontSize: "0.95rem", lineHeight: 1.6 }}>{body}</p>
-        <Link href="/hire/dashboard" style={{ display: "inline-block", marginTop: "1.5rem", color: "#7BD6C9", textDecoration: "underline" }}>
+        <Link href="/dashboard" style={{ display: "inline-block", marginTop: "1.5rem", color: "#7BD6C9", textDecoration: "underline" }}>
           Back to search
         </Link>
       </div>

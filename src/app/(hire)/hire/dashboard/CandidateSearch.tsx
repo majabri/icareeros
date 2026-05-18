@@ -184,7 +184,7 @@ export function CandidateSearch() {
               </p>
             </div>
             <Link
-              href="/hire/profile"
+              href="/profile"
               style={{
                 background: "#00B8A9",
                 color: "#0B1422",
@@ -515,7 +515,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
       )}
 
       <Link
-        href={`/hire/candidates/${c.user_id}`}
+        href={`/candidates/${c.user_id}`}
         style={{
           display: "inline-flex",
           alignItems: "center",

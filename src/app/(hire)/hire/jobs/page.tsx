@@ -35,7 +35,7 @@ export default function HireJobsStubPage() {
           directly.
         </p>
         <Link
-          href="/hire/dashboard"
+          href="/dashboard"
           style={{
             display:        "inline-flex",
             alignItems:     "center",

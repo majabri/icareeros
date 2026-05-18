@@ -32,7 +32,7 @@ export default function HireInvitesStubPage() {
           Find the right people on Find Talent and send your first outreach.
         </p>
         <Link
-          href="/hire/dashboard"
+          href="/dashboard"
           style={{
             display:        "inline-flex",
             alignItems:     "center",

@@ -146,7 +146,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
 
         // Confirmation email sent by Supabase Auth (Bluehost SMTP, branded template).
         setSuccess(
-          `Check your inbox at ${email} — we sent you a link from bugs@icareeros.com to confirm your account. ` +
+          `Check your inbox at ${email} — we sent you a link from noreply@icareeros.com to confirm your account. ` +
           `If you don't see it within a minute, check your Spam or Promotions folder.`
         );
         setNeedsConfirmation(true);

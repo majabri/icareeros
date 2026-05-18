@@ -5,7 +5,7 @@
  * Required env vars (set in Vercel + .env.local):
  *   BLUEHOST_SMTP_HOST  e.g. mail.icareeros.com
  *   BLUEHOST_SMTP_PORT  e.g. 465 (SSL) or 587 (STARTTLS) — defaults to 465
- *   BLUEHOST_SMTP_USER  e.g. bugs@icareeros.com
+ *   BLUEHOST_SMTP_USER  e.g. noreply@icareeros.com
  *   BLUEHOST_SMTP_PASS  your Bluehost email password
  *   ALERT_FROM_EMAIL    display from address (defaults to BLUEHOST_SMTP_USER)
  */

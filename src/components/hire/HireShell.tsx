@@ -52,13 +52,13 @@ const ICON = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/hire/dashboard", label: "Find Talent",  icon: ICON.search,    matchPrefixes: ["/hire/dashboard", "/hire/candidates"] },
-  { href: "/hire/jobs",      label: "Job Postings", icon: ICON.briefcase, comingSoon: true },
-  { href: "/hire/invites",   label: "Invites Sent", icon: ICON.invite,    comingSoon: true },
+  { href: "/dashboard", label: "Find Talent",  icon: ICON.search,    matchPrefixes: ["/dashboard", "/candidates"] },
+  { href: "/jobs",      label: "Job Postings", icon: ICON.briefcase, comingSoon: true },
+  { href: "/invites",   label: "Invites Sent", icon: ICON.invite,    comingSoon: true },
 ];
 
 const FOOTER_ITEMS: NavItem[] = [
-  { href: "/hire/profile", label: "Company Profile", icon: ICON.company },
+  { href: "/profile", label: "Company Profile", icon: ICON.company },
 ];
 
 function Icon({ d, size = 18 }: { d: string; size?: number }) {
@@ -151,7 +151,7 @@ function SidebarContent({ pathname, onItemClick, onSignOut }: SidebarContentProp
       display: "flex", flexDirection: "column", height: "100%",
       background: NAVY, borderRight: `1px solid ${BORDER}`,
     }}>
-      <Link href="/hire/dashboard" onClick={onItemClick} aria-label="Hire OS — home"
+      <Link href="/dashboard" onClick={onItemClick} aria-label="Hire OS — home"
         style={{
           display: "flex", alignItems: "center", gap: "0.6rem",
           padding: "1rem 1rem 0.75rem", textDecoration: "none", color: TEXT,
