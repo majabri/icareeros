@@ -24,6 +24,7 @@
  */
 
 import { createServerClient } from "@supabase/ssr";
+import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
