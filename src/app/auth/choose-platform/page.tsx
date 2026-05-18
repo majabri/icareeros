@@ -22,7 +22,7 @@ export const metadata: Metadata = {
  */
 export default async function ChoosePlatformPage() {
   const jobsUrl  = process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com";
-  const hireUrl = process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com";
+  const hireUrl = (process.env.NEXT_PUBLIC_HIRE_URL ?? process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com");
 
   // Best-effort fetch of the user's first name to personalize the greeting.
   // RLS-protected; falls back to a generic salutation on any error.

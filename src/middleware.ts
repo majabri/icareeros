@@ -249,7 +249,7 @@ export async function middleware(request: NextRequest) {
     const isProd = process.env.NODE_ENV === "production";
     if (hasEmployer) {
       const dest = isProd
-        ? (process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com") + "/dashboard"
+        ? ((process.env.NEXT_PUBLIC_HIRE_URL ?? process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com")) + "/dashboard"
         : "/hire/dashboard";
       return NextResponse.redirect(new URL(dest, request.url));
     }
