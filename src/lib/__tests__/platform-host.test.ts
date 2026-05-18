@@ -10,8 +10,8 @@ describe("platformFromHost", () => {
     expect(platformFromHost("jobs.icareeros.com")).toBe<Platform>("jobs");
   });
 
-  it("maps hire.icareeros.com → 'hired'", () => {
-    expect(platformFromHost("hire.icareeros.com")).toBe<Platform>("hired");
+  it("maps hire.icareeros.com → 'hire'", () => {
+    expect(platformFromHost("hire.icareeros.com")).toBe<Platform>("hire");
   });
 
   it("maps icareeros.com → 'root'", () => {

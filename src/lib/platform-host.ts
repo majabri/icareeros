@@ -7,7 +7,7 @@
  * the `x-platform` request header.
  */
 
-export type Platform = "jobs" | "hired" | "root";
+export type Platform = "jobs" | "hire" | "root";
 
 /** True for any host that lives on the real icareeros.com production domain. */
 export function isProductionHost(host: string): boolean {
@@ -17,6 +17,6 @@ export function isProductionHost(host: string): boolean {
 /** Map a host header value to one of three logical platforms. */
 export function platformFromHost(host: string): Platform {
   if (host.startsWith("jobs."))  return "jobs";
-  if (host.startsWith("hire.")) return "hired";
+  if (host.startsWith("hire.")) return "hire";
   return "root";
 }

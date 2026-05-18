@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
-import { isBlockedFor } from "@/lib/hired/blockedCompaniesFilter";
+import { isBlockedFor } from "@/lib/hire/blockedCompaniesFilter";
 import { arr, num, str } from "@/lib/career-os/normalize";
 import { InviteForm } from "./InviteForm";
 
@@ -18,7 +18,7 @@ import { InviteForm } from "./InviteForm";
  *   - 404 → notFound() when candidate not discoverable OR blocked by
  *           the recruiter's company OR no such career_profiles row
  *
- * Layout matches the hired shell — navy bg, slate cards, teal accent,
+ * Layout matches the hire shell — navy bg, slate cards, teal accent,
  * gold for the market-fit score. All array/string field reads pass
  * through the shared arr/str/num normalizers so partial DB shapes
  * don't crash the page.
@@ -171,7 +171,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ marginBottom: "1rem" }}>
           <Link
-            href="/hired/dashboard"
+            href="/hire/dashboard"
             style={{ color: "#A5B5CF", textDecoration: "none", fontSize: "0.9rem" }}
           >
             ← Back to search
@@ -407,7 +407,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           }}
         >
           <Link
-            href="/hired/dashboard"
+            href="/hire/dashboard"
             style={{
               color: "#A5B5CF",
               textDecoration: "underline",
@@ -436,7 +436,7 @@ function ForbiddenLikeShell({ title, body }: { title: string; body: string }) {
         <div aria-hidden style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🔒</div>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: "0.5rem" }}>{title}</h1>
         <p style={{ color: "#A5B5CF", fontSize: "0.95rem", lineHeight: 1.6 }}>{body}</p>
-        <Link href="/hired/dashboard" style={{ display: "inline-block", marginTop: "1.5rem", color: "#7BD6C9", textDecoration: "underline" }}>
+        <Link href="/hire/dashboard" style={{ display: "inline-block", marginTop: "1.5rem", color: "#7BD6C9", textDecoration: "underline" }}>
           Back to search
         </Link>
       </div>

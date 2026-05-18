@@ -11,7 +11,7 @@
  *   Empty    — "no discoverable candidates yet" + JD analyser link
  *
  * Visual system (per the brief — distinct from jobs.):
- *   Background : navy   #0F1B2D (set on (hired) layout)
+ *   Background : navy   #0F1B2D (set on (hire) layout)
  *   Card       : slate  #1A2D45
  *   Accent     : teal   #00B8A9
  *   Premium    : gold   #F5A623   (used for score)
@@ -63,7 +63,7 @@ export function CandidateSearch() {
   const [loading,           setLoading]           = useState(false);
   const [error,             setError]             = useState<string | null>(null);
   // Phase 3 — server returns 422 + profileIncomplete:true until the
-  // recruiter fills in their company profile at /hired/profile.
+  // recruiter fills in their company profile at /hire/profile.
   const [profileIncomplete, setProfileIncomplete] = useState(false);
 
   // Cycling placeholder
@@ -87,7 +87,7 @@ export function CandidateSearch() {
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
-      const res = await fetch("/api/hired/candidates", {
+      const res = await fetch("/api/hire/candidates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -184,7 +184,7 @@ export function CandidateSearch() {
               </p>
             </div>
             <Link
-              href="/hired/profile"
+              href="/hire/profile"
               style={{
                 background: "#00B8A9",
                 color: "#0B1422",
@@ -515,7 +515,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
       )}
 
       <Link
-        href={`/hired/candidates/${c.user_id}`}
+        href={`/hire/candidates/${c.user_id}`}
         style={{
           display: "inline-flex",
           alignItems: "center",

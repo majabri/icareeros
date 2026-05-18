@@ -203,7 +203,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
           requestedRedirect: requested,
           isProdHost,
           jobsUrl:  process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com",
-          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com",
+          hireUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com",
         });
         window.location.href = dest;
       }

@@ -1,7 +1,7 @@
 /**
- * GET  /api/hired/employer-profile — read the authenticated employer's
+ * GET  /api/hire/employer-profile — read the authenticated employer's
  *      company profile (or { hasProfile: false } when none yet).
- * PUT  /api/hired/employer-profile — upsert the company profile.
+ * PUT  /api/hire/employer-profile — upsert the company profile.
  *
  * Phase 3 (2026-05-17). employer role required for both verbs. The
  * RLS policies on employer_profiles already enforce user_id = auth.uid()

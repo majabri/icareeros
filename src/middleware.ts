@@ -95,7 +95,7 @@ export async function middleware(request: NextRequest) {
   // without re-parsing the host themselves.
   const platform     = platformFromHost(hostname);
   const isJobsHost   = platform === "jobs";
-  const isHiredHost  = platform === "hired";
+  const isHireHost  = platform === "hire";
   const isRootHost   = platform === "root";
   const useProdCookies = isProductionHost(hostname);
 
@@ -103,19 +103,19 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set("x-platform", platform);
 
   // Phase 1 Task 2 — hire.icareeros.com routes everything (except auth
-  // and api) under /hired/*. The (hired) app route group (created in
+  // and api) under /hire/*. The (hire) app route group (created in
   // Task 3) owns those pages. Rewrites preserve the public URL while
   // resolving to the internal app shell — so users still see
   // `hire.icareeros.com/dashboard` in the address bar.
   if (
-    isHiredHost
-    && !pathname.startsWith("/hired")
+    isHireHost
+    && !pathname.startsWith("/hire")
     && !pathname.startsWith("/auth")
     && !pathname.startsWith("/api")
     && !pathname.startsWith("/_next")
   ) {
     const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = `/hired${pathname === "/" ? "/dashboard" : pathname}`;
+    rewriteUrl.pathname = `/hire${pathname === "/" ? "/dashboard" : pathname}`;
     return NextResponse.rewrite(rewriteUrl, {
       request: { headers: requestHeaders },
     });
@@ -190,7 +190,7 @@ export async function middleware(request: NextRequest) {
   if ((isProtected || isAdminProtected) && !user) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
-    if (isHiredHost) loginUrl.searchParams.set("platform", "hired");
+    if (isHireHost) loginUrl.searchParams.set("platform", "hire");
     return NextResponse.redirect(loginUrl);
   }
 
@@ -232,7 +232,7 @@ export async function middleware(request: NextRequest) {
     if (hasEmployer) {
       const dest = isProd
         ? (process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com") + "/dashboard"
-        : "/hired/dashboard";
+        : "/hire/dashboard";
       return NextResponse.redirect(new URL(dest, request.url));
     }
 

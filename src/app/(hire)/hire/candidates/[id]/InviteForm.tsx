@@ -33,7 +33,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
     setError(null);
     setPhase("sending");
     try {
-      const res = await fetch("/api/hired/invite", {
+      const res = await fetch("/api/hire/invite", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

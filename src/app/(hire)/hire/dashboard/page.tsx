@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Find talent — iCareerOS for Hiring
  * useSearchParams call inside CandidateSearch doesn't pull the whole
  * page off static rendering.
  */
-export default function HiredDashboardPage() {
+export default function HireDashboardPage() {
   return (
     <Suspense fallback={null}>
       <CandidateSearch />

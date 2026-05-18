@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/invite
+ * POST /api/hire/invite
  *
  * Phase 3 (2026-05-17). Recruiter→candidate outreach.
  *

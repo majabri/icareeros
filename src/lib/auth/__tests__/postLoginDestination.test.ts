@@ -5,7 +5,7 @@ const base = {
   requestedRedirect: null,
   isProdHost: true,
   jobsUrl:  "https://jobs.icareeros.com",
-  hiredUrl: "https://hire.icareeros.com",
+  hireUrl: "https://hire.icareeros.com",
 };
 
 describe("postLoginDestination", () => {
@@ -24,16 +24,16 @@ describe("postLoginDestination", () => {
     })).toBe("/auth/choose-platform");
   });
 
-  it("employer only → hiredUrl/dashboard in prod", () => {
+  it("employer only → hireUrl/dashboard in prod", () => {
     expect(postLoginDestination({
       ...base, isAdmin: false, isEmployer: true, isJobSeeker: false,
     })).toBe("https://hire.icareeros.com/dashboard");
   });
 
-  it("employer only → /hired/dashboard in dev", () => {
+  it("employer only → /hire/dashboard in dev", () => {
     expect(postLoginDestination({
       ...base, isAdmin: false, isEmployer: true, isJobSeeker: false, isProdHost: false,
-    })).toBe("/hired/dashboard");
+    })).toBe("/hire/dashboard");
   });
 
   it("job_seeker only → jobsUrl/dashboard in prod", () => {
@@ -65,7 +65,7 @@ describe("postLoginDestination", () => {
   it("uses provided env URLs, not hardcoded ones", () => {
     expect(postLoginDestination({
       ...base, isAdmin: false, isEmployer: true, isJobSeeker: false,
-      hiredUrl: "https://custom-hired.example.com",
+      hireUrl: "https://custom-hired.example.com",
     })).toBe("https://custom-hired.example.com/dashboard");
   });
 });

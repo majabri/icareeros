@@ -10,7 +10,7 @@ import Link from "next/link";
  */
 export const metadata: Metadata = { title: "Invites Sent — iCareerOS for Hiring" };
 
-export default function HiredInvitesStubPage() {
+export default function HireInvitesStubPage() {
   return (
     <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "#E5EEFA" }}>
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0 }}>Invites Sent</h1>
@@ -32,7 +32,7 @@ export default function HiredInvitesStubPage() {
           Find the right people on Find Talent and send your first outreach.
         </p>
         <Link
-          href="/hired/dashboard"
+          href="/hire/dashboard"
           style={{
             display:        "inline-flex",
             alignItems:     "center",

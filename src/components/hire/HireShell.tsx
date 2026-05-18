@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phase 3 (2026-05-17) — Hired (recruiter) app shell.
+ * Phase 3 (2026-05-17) — Hire (recruiter) app shell.
  *
  * Two-column layout that mirrors the job-seeker AppSidebar pattern but
  * adopts the dark navy / teal visual system used by hire.icareeros.com:
@@ -52,13 +52,13 @@ const ICON = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/hired/dashboard", label: "Find Talent",  icon: ICON.search,    matchPrefixes: ["/hired/dashboard", "/hired/candidates"] },
-  { href: "/hired/jobs",      label: "Job Postings", icon: ICON.briefcase, comingSoon: true },
-  { href: "/hired/invites",   label: "Invites Sent", icon: ICON.invite,    comingSoon: true },
+  { href: "/hire/dashboard", label: "Find Talent",  icon: ICON.search,    matchPrefixes: ["/hire/dashboard", "/hire/candidates"] },
+  { href: "/hire/jobs",      label: "Job Postings", icon: ICON.briefcase, comingSoon: true },
+  { href: "/hire/invites",   label: "Invites Sent", icon: ICON.invite,    comingSoon: true },
 ];
 
 const FOOTER_ITEMS: NavItem[] = [
-  { href: "/hired/profile", label: "Company Profile", icon: ICON.company },
+  { href: "/hire/profile", label: "Company Profile", icon: ICON.company },
 ];
 
 function Icon({ d, size = 18 }: { d: string; size?: number }) {
@@ -127,12 +127,12 @@ function NavList({ pathname, onItemClick }: NavListProps) {
 
   return (
     <>
-      <nav aria-label="Hired sidebar primary" style={{ marginTop: "0.5rem" }}>
+      <nav aria-label="Hire sidebar primary" style={{ marginTop: "0.5rem" }}>
         {NAV_ITEMS.map(renderItem)}
       </nav>
       <div role="separator" aria-hidden="true"
         style={{ height: 1, background: BORDER, margin: "0.5rem 1rem" }} />
-      <nav aria-label="Hired sidebar settings">
+      <nav aria-label="Hire sidebar settings">
         {FOOTER_ITEMS.map(renderItem)}
       </nav>
     </>
@@ -151,7 +151,7 @@ function SidebarContent({ pathname, onItemClick, onSignOut }: SidebarContentProp
       display: "flex", flexDirection: "column", height: "100%",
       background: NAVY, borderRight: `1px solid ${BORDER}`,
     }}>
-      <Link href="/hired/dashboard" onClick={onItemClick} aria-label="Hire OS — home"
+      <Link href="/hire/dashboard" onClick={onItemClick} aria-label="Hire OS — home"
         style={{
           display: "flex", alignItems: "center", gap: "0.6rem",
           padding: "1rem 1rem 0.75rem", textDecoration: "none", color: TEXT,
@@ -193,7 +193,7 @@ function SidebarContent({ pathname, onItemClick, onSignOut }: SidebarContentProp
   );
 }
 
-export function HiredShell({ children }: { children: React.ReactNode }) {
+export function HireShell({ children }: { children: React.ReactNode }) {
   const pathname        = usePathname() ?? "";
   const router          = useRouter();
   const [open,  setOpen]  = useState(false);
@@ -223,7 +223,7 @@ export function HiredShell({ children }: { children: React.ReactNode }) {
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
       }}>
         <button type="button" aria-label="Open navigation" aria-expanded={open}
-          aria-controls="hired-mobile-drawer" onClick={() => setOpen(true)}
+          aria-controls="hire-mobile-drawer" onClick={() => setOpen(true)}
           className="md:hidden"
           style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -257,7 +257,7 @@ export function HiredShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="flex" style={{ minHeight: "calc(100vh - 56px)" }}>
-        <aside aria-label="Hired sidebar" className="hidden md:flex"
+        <aside aria-label="Hire sidebar" className="hidden md:flex"
           style={{
             position: "sticky", top: 56,
             height: "calc(100vh - 56px)", width: 224, flexShrink: 0,
@@ -275,8 +275,8 @@ export function HiredShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {open && (
-        <div id="hired-mobile-drawer" role="dialog" aria-modal="true"
-          aria-label="Hired navigation" onClick={() => setOpen(false)}
+        <div id="hire-mobile-drawer" role="dialog" aria-modal="true"
+          aria-label="Hire navigation" onClick={() => setOpen(false)}
           className="md:hidden"
           style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex" }}>
           <div onClick={(e) => e.stopPropagation()}

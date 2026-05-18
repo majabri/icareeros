@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/candidates — Phase 3 security tests.
+ * POST /api/hire/candidates — Phase 3 security tests.
  *
  * Item 3 of the brief moves viewerCompany from the request body to a
  * server-trusted lookup against employer_profiles. These tests verify:
@@ -35,7 +35,7 @@ vi.mock("@supabase/ssr", () => ({
 import { POST } from "../route";
 
 function makeRequest(body: Record<string, unknown> = {}): Request {
-  return new Request("http://localhost/api/hired/candidates", {
+  return new Request("http://localhost/api/hire/candidates", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -60,7 +60,7 @@ beforeEach(() => {
   fromMock.mockReset();
 });
 
-describe("POST /api/hired/candidates — server-trusted viewerCompany", () => {
+describe("POST /api/hire/candidates — server-trusted viewerCompany", () => {
   it("returns 422 + profileIncomplete=true when the employer has no employer_profiles row", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: { id: "emp-1" } }, error: null });
     let call = 0;

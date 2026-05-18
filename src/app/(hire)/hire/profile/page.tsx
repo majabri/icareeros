@@ -7,7 +7,7 @@
  * employer has filled in their company name (server-derives
  * viewerCompany from this row so block lists can't be bypassed).
  *
- * Visual system matches the (hired) shell — dark navy background, slate
+ * Visual system matches the (hire) shell — dark navy background, slate
  * #1A2D45 card surface, teal #00B8A9 primary, gold #F5A623 accent.
  */
 
@@ -31,7 +31,7 @@ export default function EmployerProfilePage() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/hired/employer-profile", { credentials: "include" });
+        const res = await fetch("/api/hire/employer-profile", { credentials: "include" });
         const json = await res.json();
         if (cancelled) return;
         if (!res.ok) {
@@ -54,7 +54,7 @@ export default function EmployerProfilePage() {
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch("/api/hired/employer-profile", {
+      const res = await fetch("/api/hire/employer-profile", {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -206,7 +206,7 @@ export default function EmployerProfilePage() {
               {saving ? "Saving…" : "Save company profile"}
             </button>
             <Link
-              href="/hired/dashboard"
+              href="/hire/dashboard"
               style={{ color: "#A5B5CF", textDecoration: "underline", fontSize: "0.85rem" }}
             >
               Back to search

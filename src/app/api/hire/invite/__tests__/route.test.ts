@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/invite — Phase 3 outreach API tests.
+ * POST /api/hire/invite — Phase 3 outreach API tests.
  *
  * Covers:
  *   1) 403 when the user lacks the employer role
@@ -32,7 +32,7 @@ import { POST } from "../route";
 const CANDIDATE_UUID = "11111111-2222-3333-4444-555555555555";
 
 function makeRequest(body: Record<string, unknown> = {}): Request {
-  return new Request("http://localhost/api/hired/invite", {
+  return new Request("http://localhost/api/hire/invite", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -44,7 +44,7 @@ beforeEach(() => {
   fromMock.mockReset();
 });
 
-describe("POST /api/hired/invite", () => {
+describe("POST /api/hire/invite", () => {
   it("returns 401 when unauthenticated", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: null }, error: null });
     const res = await POST(makeRequest({

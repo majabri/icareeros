@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/candidates — recruiter candidate search.
+ * POST /api/hire/candidates — recruiter candidate search.
  *
  * Phase 2 recruiter discoverability (2026-05-17). Auth-required;
  * requires the caller to have `role='employer'` in `user_roles`. Any
@@ -38,7 +38,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
-import { filterByBlockedCompanies } from "@/lib/hired/blockedCompaniesFilter";
+import { filterByBlockedCompanies } from "@/lib/hire/blockedCompaniesFilter";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE     = 50;
@@ -178,7 +178,7 @@ export async function POST(req: Request) {
 
     // Server-side blocked_companies enforcement. RLS can't see the
     // recruiter's company so we filter here via the shared helper
-    // (unit-tested in src/lib/hired/__tests__/blockedCompaniesFilter.test.ts).
+    // (unit-tested in src/lib/hire/__tests__/blockedCompaniesFilter.test.ts).
     const filtered = filterByBlockedCompanies(profiles ?? [], viewerCompany);
 
     // ── Join user_profiles for the candidate cards ────────────────

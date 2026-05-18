@@ -5,12 +5,12 @@ import Link from "next/link";
  * Phase 3 (2026-05-17) — Job Postings stub.
  *
  * Surfaces a destination for the sidebar nav item before the real
- * employer job-posting flow ships. Matches the (hired) shell visual
+ * employer job-posting flow ships. Matches the (hire) shell visual
  * system (navy + slate + teal).
  */
 export const metadata: Metadata = { title: "Job Postings — iCareerOS for Hiring" };
 
-export default function HiredJobsStubPage() {
+export default function HireJobsStubPage() {
   return (
     <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "#E5EEFA" }}>
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0 }}>Job Postings</h1>
@@ -35,7 +35,7 @@ export default function HiredJobsStubPage() {
           directly.
         </p>
         <Link
-          href="/hired/dashboard"
+          href="/hire/dashboard"
           style={{
             display:        "inline-flex",
             alignItems:     "center",

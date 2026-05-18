@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/candidates — auth + role gate tests.
+ * POST /api/hire/candidates — auth + role gate tests.
  *
  * Phase 2 recruiter discoverability (2026-05-17). The route must:
  *   1) reject unauthenticated requests with 401
@@ -34,7 +34,7 @@ vi.mock("@supabase/ssr", () => ({
 import { POST } from "../route";
 
 function makeRequest(body: Record<string, unknown> = {}): Request {
-  return new Request("http://localhost/api/hired/candidates", {
+  return new Request("http://localhost/api/hire/candidates", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -61,7 +61,7 @@ beforeEach(() => {
   fromMock.mockReset();
 });
 
-describe("POST /api/hired/candidates", () => {
+describe("POST /api/hire/candidates", () => {
   it("returns 401 for unauthenticated requests", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: null }, error: null });
     const res = await POST(makeRequest());
