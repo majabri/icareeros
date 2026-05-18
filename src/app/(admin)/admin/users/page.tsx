@@ -3,6 +3,7 @@ import { AdminUsersTabs } from "@/components/admin/AdminUsersTabs";
 import { type AdminUserRow } from "@/components/admin/UsersAdminPanel";
 import { type HireUserRow }  from "@/components/admin/HireUsersAdminPanel";
 import { type AdminUserRow as AdminsUserRow } from "@/components/admin/AdminsAdminPanel";
+import { type AllUserRow, type RoleBadge } from "@/components/admin/AllUsersAdminPanel";
 import AdminPageHeader  from "@/components/admin/ui/AdminPageHeader";
 import AdminUserFilters from "@/components/admin/AdminUserFilters";
 import type { Metadata } from "next";
@@ -116,7 +117,25 @@ export default async function AdminUsersPage({
       email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
     }));
 
-  // ── Filters (q/plan/status) apply to all three tabs equally ───────────
+  // ── All Users: combined read-only overview with a derived role badge.
+  function badgeFor(p: { role: unknown; admin_role: unknown }, urole: string | undefined): RoleBadge {
+    if (p.admin_role || p.role === "admin") return "Admin";
+    if (urole === "employer") return "Hire User";
+    return "Jobs User";
+  }
+  const allUsers: AllUserRow[] = (profiles ?? []).map(p => {
+    const badge = badgeFor(p, userRoleMap.get(p.user_id));
+    return {
+      user_id:         p.user_id,
+      email:           p.email as string | null,
+      role_badge:      badge,
+      plan:            badge === "Admin" ? "—" : (subMap.get(p.user_id)?.plan ?? "free"),
+      created_at:      p.created_at as string,
+      email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
+    };
+  });
+
+  // ── Filters (q/plan/status) apply to all four tabs equally ───────────
   function applyFilters<T extends { email: string | null; full_name: string | null; plan: string; plan_status: string }>(
     rows: T[],
   ): T[] {
@@ -140,10 +159,21 @@ export default async function AdminUsersPage({
     return (u.email ?? "").toLowerCase().includes(q) ||
            (u.full_name ?? "").toLowerCase().includes(q);
   });
+  // All Users supports the same q filter; plan/status filters apply too.
+  const allFiltered = allUsers.filter(u => {
+    if (q) {
+      const m = (u.email ?? "").toLowerCase().includes(q) ||
+                u.role_badge.toLowerCase().includes(q) ||
+                u.plan.toLowerCase().includes(q);
+      if (!m) return false;
+    }
+    if (planF   && u.plan        !== planF)   return false;
+    return true;
+  });
 
   const totalUnfiltered = totalProfiles ?? (jobsUsers.length + hireUsers.length);
   const isFiltered = Boolean(q || planF || statusF);
-  const visibleTotal = jobsFiltered.length + hireFiltered.length + adminsFiltered.length;
+  const visibleTotal = jobsFiltered.length + hireFiltered.length + adminsFiltered.length + allFiltered.length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -164,7 +194,7 @@ export default async function AdminUsersPage({
       />
 
       <div className="mt-6">
-        <AdminUsersTabs jobsUsers={jobsFiltered} hireUsers={hireFiltered} adminsUsers={adminsFiltered} />
+        <AdminUsersTabs jobsUsers={jobsFiltered} hireUsers={hireFiltered} adminsUsers={adminsFiltered} allUsers={allFiltered} />
       </div>
     </div>
   );
