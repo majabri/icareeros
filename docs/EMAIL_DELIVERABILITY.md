@@ -1,87 +1,43 @@
-# Email Deliverability — Bluehost SMTP
+# Email Deliverability — iCareerOS
 
-**Status: 2026-05-05 — staying on Bluehost SMTP. Resend migration deferred.**
+**Status:** Bluehost SMTP is the permanent transactional-email channel. There is no Resend (the product) integration, no plan to migrate, and the previous `supabase.auth.resend()` re-attempt button has been removed from the UI.
 
-Per UAT: Bluehost is producing successful sends end-to-end (Supabase auth
-log shows status 200; SPF + DKIM + DMARC all configured correctly). Some
-Gmail signups land in Spam/Promotions rather than Inbox, but that's a
-reputation issue, not a delivery failure.
+## Transactional email path
 
-## What the platform does today
+Every outbound email goes through Bluehost SMTP, dispatched in one of two ways:
 
-- **Provider:** Bluehost shared SMTP via custom SMTP in Supabase Auth
-- **Sender:** `bugs@icareeros.com`
-- **Auth:** SPF (`v=spf1 +mx +a +ip4:50.87.199.84 ~all`), DKIM (`default._domainkey.icareeros.com`), DMARC (`p=quarantine`)
-- **UX safety net (`src/components/auth/AuthForm.tsx`):**
-  - Post-signup message names the destination address and tells users to
-    check Spam / Promotions if they don't see it in Inbox
-  - 'Didn\'t receive the email?' callout with a Resend confirmation
-    button on /auth/signup AND on /auth/login when login fails because
-    email isn't confirmed
-  - Calls `supabase.auth.resend({ type: 'signup', email })`
-
-## Observed deliverability
-
-| Domain | Confirmation outcome (in last 7 days) |
-|---|---|
-| aol.com | Confirmed in 54s |
-| icareeros.com | Confirmed in 232s |
-| gmail.com | NOT confirmed (×2) — likely landed in Spam |
-
-## When to revisit (switch to Resend)
-
-The Resend migration plan is preserved below for the day this is
-prioritized. Triggers that would justify switching:
-
-- Onboarding external users beyond UAT — first-impression matters; users
-  who can\'t find a confirmation email assume the product is broken.
-- Volume above ~100 confirmation emails/day — Bluehost\'s shared SMTP
-  has lax rate limits and reputation degrades faster at scale.
-- Bounce / spam complaints visible in Bluehost cPanel.
-
-If any of these fire, the migration takes ~30 min. Plan retained below.
-
----
-
-## (Deferred) Resend migration plan
-
-Resend has near-100% Gmail Inbox delivery vs Bluehost\'s ~70%. Free
-tier covers 3,000 emails/month — sufficient for production launch.
-
-### Setup steps
-
-1. **Create Resend account:** https://resend.com (free)
-2. **Add domain:** Resend Dashboard → Domains → Add `icareeros.com`. It
-   shows 3 DNS records (1 MX, 1 SPF TXT, 1 DKIM TXT). Paste them into
-   Cloudflare DNS for icareeros.com → Verify → all green.
-3. **Generate API key:** Resend Dashboard → API Keys → Create. Name:
-   `icareeros-prod`. Permission: Sending access only. Copy the
-   `re_xxx...` value (shown once).
-4. **Configure Supabase Auth SMTP:** Supabase Dashboard →
-   Authentication → SMTP Settings → Enable Custom SMTP:
-   - Host: `smtp.resend.com`
-   - Port: `465`
-   - Username: `resend`
-   - Password: API key from step 3
-   - Sender email: `bugs@icareeros.com` (or `noreply@icareeros.com`)
-   - Sender name: `iCareerOS`
-   - Save.
-5. **Test:** Sign up with a fresh `+test1@gmail.com` → should land in
-   Inbox within 30s.
-6. **Monitor:** Resend Dashboard → Logs (per-message status) +
-   Analytics (Inbox / Spam / Bounce rates).
-
-### Cost projection
-
-| Volume | Tier | Cost |
+| Trigger | Sender | How |
 |---|---|---|
-| < 3,000/mo | Free | $0 |
-| 3,000-50,000/mo | Pro | $20/mo |
-| 50,000+ | Custom | TBD |
+| Supabase Auth confirmation + recovery emails | Supabase Auth (gotrue) | Auth → SMTP Settings configured with Bluehost. |
+| App-initiated emails (job alerts, admin support replies, admin-initiated password resets) | Our Node mailer | `src/lib/mailer.ts` → `nodemailer` against the same Bluehost SMTP relay. |
 
-### DMARC tightening (later)
+## Bluehost SMTP config (live)
 
-Once Resend has 2+ weeks of clean delivery history, consider tightening
-icareeros.com DMARC from `p=quarantine` to `p=reject` for stronger
-phishing protection. Don\'t do this BEFORE Resend — quarantine is the
-right level while building reputation.
+| | |
+|---|---|
+| Host | `mail.icareeros.com` |
+| Port | `465` (SSL) |
+| Auth username | `bugs@icareeros.com` (the actual existing Bluehost mailbox) |
+| Display From (`ALERT_FROM_EMAIL` env + Supabase Sender Email field) | `noreply@icareeros.com` |
+
+`BLUEHOST_SMTP_USER` and `ALERT_FROM_EMAIL` are intentionally distinct — the SMTP auth user must be a real mailbox (`bugs@`), while the visible "From" can be any address the relay accepts (`noreply@`).
+
+## Signup confirmation flow
+
+1. User submits the form at **icareeros.com/auth/signup** (subdomains redirect here — see middleware).
+2. `supabase.auth.signUp({ email, password, options: { data: { role }, emailRedirectTo: "https://icareeros.com/auth/confirm" } })` is called.
+3. Supabase Auth queues the confirmation email through its configured Bluehost SMTP relay.
+4. User clicks the email link → `/auth/confirm` verifies the token, signs the user out (auth-hygiene posture), and bounces to `/auth/login?confirmed=true`.
+5. Sign-in → middleware redirects employer accounts to `hire.icareeros.com/dashboard`, job seekers to `jobs.icareeros.com/dashboard`.
+
+## Re-attempt policy
+
+There is **no** "Resend confirmation email" button. If a user reports their email never arrived:
+
+1. Tell them to check Spam/Promotions.
+2. If still missing, they sign up again with the same email — gotrue treats the second `signUp` call on an unconfirmed account as a fresh send through Bluehost SMTP. (gotrue's rate limit applies — typically 60 s cooldown per email.)
+3. If they still don't receive, the admin "Send password reset" action in `/admin/users` works as an alternate path (different email type, separate template — recovery, not signup confirmation).
+
+## Why not Resend.com?
+
+Bluehost SMTP is already paid-for as part of the existing hosting plan, has a working `noreply@icareeros.com` sender, and reaches Gmail at acceptable rates with proper SPF/DKIM/DMARC alignment. Adding a third-party ESP would create another vendor, another bill, and another set of credentials to rotate. Revisit only if outbound volume crosses ~1,000 messages/day, gmail spam-folder rate climbs above ~10 %, or marketing wants per-campaign metrics that Bluehost doesn't expose.
