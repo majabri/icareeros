@@ -145,9 +145,13 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         }
 
         // Confirmation email sent by Supabase Auth (Bluehost SMTP, branded template).
+        // Honest copy: Supabase Auth queues the email, but actual
+        // delivery depends on the SMTP config in the Supabase
+        // dashboard. If it doesn't arrive, the Resend button below
+        // gives the user an obvious next step.
         setSuccess(
-          `Check your inbox at ${email} — we sent you a link from noreply@icareeros.com to confirm your account. ` +
-          `If you don't see it within a minute, check your Spam or Promotions folder.`
+          `Look for an email at ${email} from noreply@icareeros.com with a link to confirm your account. ` +
+          `If it doesn't arrive in a minute, check your Spam/Promotions folder or use the Resend button below.`
         );
         setNeedsConfirmation(true);
       } else {

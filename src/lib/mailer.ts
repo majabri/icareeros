@@ -5,9 +5,15 @@
  * Required env vars (set in Vercel + .env.local):
  *   BLUEHOST_SMTP_HOST  e.g. mail.icareeros.com
  *   BLUEHOST_SMTP_PORT  e.g. 465 (SSL) or 587 (STARTTLS) — defaults to 465
- *   BLUEHOST_SMTP_USER  e.g. noreply@icareeros.com
- *   BLUEHOST_SMTP_PASS  your Bluehost email password
- *   ALERT_FROM_EMAIL    display from address (defaults to BLUEHOST_SMTP_USER)
+ *   BLUEHOST_SMTP_USER  SMTP auth username — MUST be a real Bluehost mailbox.
+ *                       e.g. bugs@icareeros.com
+ *   BLUEHOST_SMTP_PASS  the password of the BLUEHOST_SMTP_USER mailbox.
+ *   ALERT_FROM_EMAIL    display \"From\" address shown to recipients.
+ *                       CAN differ from BLUEHOST_SMTP_USER, but Bluehost
+ *                       may reject sends if it requires From=auth-user
+ *                       (test via the relay before relying on a mismatch).
+ *                       Defaults to BLUEHOST_SMTP_USER.
+ *                       e.g. noreply@icareeros.com
  */
 
 import nodemailer from "nodemailer";
