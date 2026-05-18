@@ -23,6 +23,12 @@ export interface AdminUserRow {
 
 interface Props {
   users: AdminUserRow[];
+  /**
+   * When true, hide the internal Users/Admins toggle and render only the
+   * Users view. Used by /admin/users where admin management has moved
+   * out into its own top-level tab.
+   */
+  hideAdminsTab?: boolean;
 }
 
 type Tab = "users" | "admins";
@@ -40,8 +46,9 @@ function roleBadgeClass(role: string) {
   return "bg-gray-100 text-gray-500";
 }
 
-export function UsersAdminPanel({ users }: Props) {
+export function UsersAdminPanel({ users, hideAdminsTab = false }: Props) {
   const [tab, setTab] = useState<Tab>("users");
+  const showAdmins = !hideAdminsTab;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [banner, setBanner] = useState<
@@ -181,6 +188,7 @@ export function UsersAdminPanel({ users }: Props) {
 
   return (
     <div>
+      {showAdmins && (
       <div className="mb-4 flex items-center gap-1 border-b border-gray-200">
         <button
           onClick={() => switchTab("users")}
@@ -205,6 +213,7 @@ export function UsersAdminPanel({ users }: Props) {
           Admins <span className="ml-1 text-xs text-gray-400">({adminsList.length})</span>
         </button>
       </div>
+      )}
 
       {banner && (
         <div

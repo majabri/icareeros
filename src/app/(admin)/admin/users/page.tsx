@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { AdminUsersTabs } from "@/components/admin/AdminUsersTabs";
 import { type AdminUserRow } from "@/components/admin/UsersAdminPanel";
 import { type HireUserRow }  from "@/components/admin/HireUsersAdminPanel";
+import { type AdminUserRow as AdminsUserRow } from "@/components/admin/AdminsAdminPanel";
 import AdminPageHeader  from "@/components/admin/ui/AdminPageHeader";
 import AdminUserFilters from "@/components/admin/AdminUserFilters";
 import type { Metadata } from "next";
@@ -46,7 +47,7 @@ export default async function AdminUsersPage({
     { data: employers },
   ] = await Promise.all([
     svc.from("profiles")
-       .select("user_id, email, full_name, role, created_at", { count: "exact" })
+       .select("user_id, email, full_name, role, admin_role, created_at", { count: "exact" })
        .order("created_at", { ascending: false })
        .limit(limit),
     svc.from("user_subscriptions").select("user_id, plan, status"),
@@ -67,10 +68,15 @@ export default async function AdminUsersPage({
   const userRoleMap = new Map((userRoles ?? []).map(r => [r.user_id as string, r.role as string]));
   const companyMap  = new Map((employers ?? []).map(e => [e.user_id as string, e.company_name as string | null]));
 
-  // ── Jobs Users: user_roles.role = 'job_seeker' (or absent → treat as
-  //    job_seeker for backward compat). Excludes employers.
+  // Admin-privileged profile predicate: admin_role IS NOT NULL OR legacy role='admin'.
+  function isAdminProfile(p: { role?: unknown; admin_role?: unknown }): boolean {
+    return Boolean(p.admin_role) || p.role === "admin";
+  }
+
+  // ── Jobs Users: non-employer, non-admin job seekers.
   const jobsUsers: AdminUserRow[] = (profiles ?? [])
     .filter(p => (userRoleMap.get(p.user_id) ?? "job_seeker") !== "employer")
+    .filter(p => !isAdminProfile(p))
     .map(p => ({
       user_id:         p.user_id,
       email:           p.email as string | null,
@@ -83,9 +89,10 @@ export default async function AdminUsersPage({
       email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
     }));
 
-  // ── Hire Users: user_roles.role = 'employer'.
+  // ── Hire Users: employer role and not also an admin.
   const hireUsers: HireUserRow[] = (profiles ?? [])
     .filter(p => userRoleMap.get(p.user_id) === "employer")
+    .filter(p => !isAdminProfile(p))
     .map(p => ({
       user_id:         p.user_id,
       email:           p.email as string | null,
@@ -97,7 +104,19 @@ export default async function AdminUsersPage({
       email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
     }));
 
-  // ── Filters (q/plan/status) apply to both tabs equally ───────────────
+  // ── Admins: any profile with admin signal.
+  const adminsUsers: AdminsUserRow[] = (profiles ?? [])
+    .filter(isAdminProfile)
+    .map(p => ({
+      user_id:         p.user_id,
+      email:           p.email as string | null,
+      full_name:       p.full_name as string | null,
+      admin_role:      (p.admin_role as string | null) ?? (p.role === "admin" ? "admin" : "viewer"),
+      created_at:      p.created_at as string,
+      email_confirmed: emailConfirmedMap.get(p.user_id) ?? false,
+    }));
+
+  // ── Filters (q/plan/status) apply to all three tabs equally ───────────
   function applyFilters<T extends { email: string | null; full_name: string | null; plan: string; plan_status: string }>(
     rows: T[],
   ): T[] {
@@ -113,12 +132,18 @@ export default async function AdminUsersPage({
     return out;
   }
 
-  const jobsFiltered = applyFilters(jobsUsers);
-  const hireFiltered = applyFilters(hireUsers);
+  const jobsFiltered   = applyFilters(jobsUsers);
+  const hireFiltered   = applyFilters(hireUsers);
+  // Admins use a simpler filter (no plan/status fields) — search-only.
+  const adminsFiltered = adminsUsers.filter(u => {
+    if (!q) return true;
+    return (u.email ?? "").toLowerCase().includes(q) ||
+           (u.full_name ?? "").toLowerCase().includes(q);
+  });
 
   const totalUnfiltered = totalProfiles ?? (jobsUsers.length + hireUsers.length);
   const isFiltered = Boolean(q || planF || statusF);
-  const visibleTotal = jobsFiltered.length + hireFiltered.length;
+  const visibleTotal = jobsFiltered.length + hireFiltered.length + adminsFiltered.length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -139,7 +164,7 @@ export default async function AdminUsersPage({
       />
 
       <div className="mt-6">
-        <AdminUsersTabs jobsUsers={jobsFiltered} hireUsers={hireFiltered} />
+        <AdminUsersTabs jobsUsers={jobsFiltered} hireUsers={hireFiltered} adminsUsers={adminsFiltered} />
       </div>
     </div>
   );
