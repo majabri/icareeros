@@ -59,11 +59,18 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         setResentMsg("Enter your email above first.");
         return;
       }
+      const rootUrl =
+        process.env.NEXT_PUBLIC_ROOT_URL ?? window.location.origin;
       const { error } = await supabase.auth.resend({
         type: "signup",
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          // Mirror the handleSubmit signUp call — confirmation links
+          // always land on the root domain (icareeros.com) via /auth/confirm.
+          // Both paths are queued by Supabase Auth through our Bluehost SMTP
+          // relay; we never integrate with Resend.com (a different product
+          // with a clashing name).
+          emailRedirectTo: `${rootUrl}/auth/confirm`,
         },
       });
       if (error) throw error;

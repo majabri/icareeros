@@ -102,6 +102,25 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-platform", platform);
 
+  // Phase 3 (2026-05-18) — registration lives ONLY on the root domain
+  // (icareeros.com). Any /auth/signup hit on a subdomain bounces to
+  // icareeros.com/auth/signup with the right ?role= preset, so the
+  // employer/job-seeker selection still flows through naturally.
+  if (
+    pathname === "/auth/signup"
+    && (isJobsHost || isHireHost)
+    && isProductionHost(hostname)
+  ) {
+    const role = isHireHost ? "employer" : "job_seeker";
+    const dest = new URL("https://icareeros.com/auth/signup");
+    dest.searchParams.set("role", role);
+    // Preserve any extra query (e.g. ?next=) the client passed in.
+    for (const [k, v] of request.nextUrl.searchParams.entries()) {
+      if (k !== "role") dest.searchParams.set(k, v);
+    }
+    return NextResponse.redirect(dest, 308);
+  }
+
   // Phase 3 (2026-05-17) — hire.icareeros.com keeps a clean URL surface:
   // the internal `(hire)/hire/*` route folder is rewritten to from the
   // root pathname so users always see `hire.icareeros.com/dashboard`,
