@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/candidates — recruiter candidate search.
+ * POST /api/hire/candidates — recruiter candidate search.
  *
  * Phase 2 recruiter discoverability (2026-05-17). Auth-required;
  * requires the caller to have `role='employer'` in `user_roles`. Any
@@ -38,7 +38,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
-import { filterByBlockedCompanies } from "@/lib/hired/blockedCompaniesFilter";
+import { filterByBlockedCompanies } from "@/lib/hire/blockedCompaniesFilter";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE     = 50;
@@ -51,7 +51,15 @@ interface SearchBody {
   experienceLevel?: unknown;
   page?:            unknown;
   pageSize?:        unknown;
-  viewerCompany?:   unknown;
+  // Phase 3 (2026-05-17): viewerCompany is no longer accepted from
+  // the request body. It is server-derived from employer_profiles for
+  // the authenticated user, so a recruiter cannot bypass another job
+  // seeker's block list by claiming a different company.
+}
+
+interface ProfileGateResult {
+  hasProfile: boolean;
+  company:    string;
 }
 
 async function makeSupabaseServer() {
@@ -122,7 +130,28 @@ export async function POST(req: Request) {
     const experienceLevel = trimmedString(body.experienceLevel);
     const page           = intInRange(body.page,     1, 10_000, 1);
     const pageSize       = intInRange(body.pageSize, 1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE);
-    const viewerCompany  = trimmedString(body.viewerCompany);
+
+    // Phase 3 (2026-05-17) — server-trusted viewerCompany.
+    const { data: empProfile, error: empErr } = await supabase
+      .from("employer_profiles")
+      .select("company_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (empErr) {
+      return NextResponse.json({ error: empErr.message }, { status: 500 });
+    }
+    const viewerCompany = typeof empProfile?.company_name === "string"
+      ? empProfile.company_name.trim()
+      : "";
+    if (!viewerCompany) {
+      return NextResponse.json(
+        {
+          error:              "Company profile incomplete",
+          profileIncomplete:  true,
+        } satisfies { error: string; profileIncomplete: true },
+        { status: 422 },
+      );
+    }
 
     // ── Query career_profiles ─────────────────────────────────────
     // RLS limits us to is_discoverable=true rows already, but the
@@ -149,7 +178,7 @@ export async function POST(req: Request) {
 
     // Server-side blocked_companies enforcement. RLS can't see the
     // recruiter's company so we filter here via the shared helper
-    // (unit-tested in src/lib/hired/__tests__/blockedCompaniesFilter.test.ts).
+    // (unit-tested in src/lib/hire/__tests__/blockedCompaniesFilter.test.ts).
     const filtered = filterByBlockedCompanies(profiles ?? [], viewerCompany);
 
     // ── Join user_profiles for the candidate cards ────────────────

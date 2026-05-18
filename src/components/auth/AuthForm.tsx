@@ -13,7 +13,7 @@ interface AuthFormProps {
   mode: "login" | "signup";
   /**
    * Phase 1 subdomain (2026-05-16) — optional pre-selected role for
-   * signup mode. The landing page CTAs and the hired.icareeros.com
+   * signup mode. The landing page CTAs and the hire.icareeros.com
    * signup link both pass `?role=employer` so the recruiter card
    * lights up by default. URL coming from job-seeker landing passes
    * `?role=job_seeker`. Either value pre-selects that card on mount.
@@ -90,56 +90,63 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
     try {
       if (mode === "signup") {
         const email = identifier.trim();
+        const role: UserRole = selectedRole ?? "job_seeker";
+
+        // Phase 3 (2026-05-17) — pass the chosen role in signUp
+        // options.data so the public.handle_new_user_role() trigger
+        // writes the right user_roles row (job_seeker | employer).
+        // Previously the client did a follow-up upsert that was
+        // silently rejected by RLS (no INSERT policy for non-admins)
+        // and swallowed by an empty catch. The trigger runs as
+        // SECURITY DEFINER and bypasses RLS, so it Just Works.
+        //
+        // emailRedirectTo points at the canonical icareeros.com host
+        // (NEXT_PUBLIC_ROOT_URL, falling back to window.location.origin
+        // for local dev) so confirmation links always land on the
+        // primary domain regardless of which subdomain initiated the
+        // signup. The cookie domain is .icareeros.com, so the session
+        // is valid across jobs.* / hire.* after confirmation.
+        const rootUrl =
+          process.env.NEXT_PUBLIC_ROOT_URL ?? window.location.origin;
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: { role },
+            emailRedirectTo: `${rootUrl}/auth/confirm`,
           },
         });
         if (error) throw error;
 
-        // Audit trail. Non-blocking on UX — failures are logged server-side.
-        try {
-          if (data?.user?.id) {
-            // Keep user_profiles.accepted_terms_at for back-compat with any
-            // code that quick-checks "did this user accept the ToS?". The
-            // canonical record now lives in consent_records (3 rows: privacy_terms,
-            // ai_processing, marketing_email) written by the server action below.
-            await supabase
-              .from("user_profiles")
-              .upsert(
-                { user_id: data.user.id, accepted_terms_at: new Date().toISOString() },
-                { onConflict: "user_id", ignoreDuplicates: false }
-              );
-
+        // Record the 3 consent rows via a server action. It uses the
+        // SUPABASE_SERVICE_ROLE_KEY internally to bypass RLS, so it
+        // works even though the user is unconfirmed and has no
+        // session here. Failures surface to the user — we legally
+        // want to know when an audit row goes missing.
+        if (data?.user?.id) {
+          try {
             await recordSignupConsent({
-              userId: data.user.id,
+              userId:         data.user.id,
               email,
-              privacyTerms: consentState.privacyTerms,
-              aiProcessing: consentState.aiProcessing,
+              privacyTerms:   consentState.privacyTerms,
+              aiProcessing:   consentState.aiProcessing,
               marketingEmail: consentState.marketingEmail,
             });
-
-            // Phase 1 subdomain (2026-05-16) — store the chosen role in
-            // user_roles so the middleware's post-login redirect routes
-            // them to jobs.* or hired.* on the next sign-in. Default
-            // to job_seeker when the selector is somehow missing.
-            const role: UserRole = selectedRole ?? "job_seeker";
-            await supabase
-              .from("user_roles")
-              .upsert(
-                { user_id: data.user.id, role },
-                { onConflict: "user_id,role", ignoreDuplicates: true },
-              );
+          } catch (consentErr) {
+            console.error("[AuthForm] recordSignupConsent failed:", consentErr);
+            setError(
+              "Your account was created but we couldn't record your " +
+              "consent preferences. Please contact support@icareeros.com.",
+            );
+            // Keep going — we still want to show the "check your inbox"
+            // success message so the user can confirm.
           }
-        } catch {
-          // Don't block signup if the audit trail write fails.
         }
 
         // Confirmation email sent by Supabase Auth (Bluehost SMTP, branded template).
         setSuccess(
-          `Check your inbox at ${email} — we sent you a link from bugs@icareeros.com to confirm your account. ` +
+          `Check your inbox at ${email} — we sent you a link from noreply@icareeros.com to confirm your account. ` +
           `If you don't see it within a minute, check your Spam or Promotions folder.`
         );
         setNeedsConfirmation(true);
@@ -157,7 +164,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         // subdomain after sign-in based on their roles:
         //   admin                          → /admin (same host)
         //   employer ∧ job_seeker (dual)   → /auth/choose-platform
-        //   employer                       → hired.icareeros.com/dashboard
+        //   employer                       → hire.icareeros.com/dashboard
         //   job_seeker (default)           → jobs.icareeros.com/dashboard
         //
         // Same decision table as middleware.ts. Duplicated here because
@@ -203,7 +210,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
           requestedRedirect: requested,
           isProdHost,
           jobsUrl:  process.env.NEXT_PUBLIC_JOBS_URL  ?? "https://jobs.icareeros.com",
-          hiredUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hired.icareeros.com",
+          hireUrl: process.env.NEXT_PUBLIC_HIRED_URL ?? "https://hire.icareeros.com",
         });
         window.location.href = dest;
       }

@@ -6,7 +6,7 @@ const TABS = [
   { href: "/settings/linked-accounts", label: "Linked Accounts" },
   { href: "/settings/security",        label: "Security & Compliance" },
   // Phase 2 recruiter discoverability (2026-05-17) — controls
-  // whether the user is visible to recruiters on hired.icareeros.com.
+  // whether the user is visible to recruiters on hire.icareeros.com.
   { href: "/settings/privacy",         label: "Privacy" },
   { href: "/settings/email",           label: "Notifications" },
   { href: "/settings/billing",         label: "Billing" },

@@ -10,7 +10,7 @@
  * The browser client now writes its session cookies with
  * `domain: .icareeros.com` when running on production hosts, so a
  * sign-in on icareeros.com is valid on jobs.icareeros.com and
- * hired.icareeros.com without bouncing through another login.
+ * hire.icareeros.com without bouncing through another login.
  *
  * The check is hostname-based (not NODE_ENV-based) on purpose:
  *   - localhost:3000           → no domain attribute (per-host cookie)

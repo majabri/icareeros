@@ -1,5 +1,5 @@
 /**
- * POST /api/hired/candidates — auth + role gate tests.
+ * POST /api/hire/candidates — auth + role gate tests.
  *
  * Phase 2 recruiter discoverability (2026-05-17). The route must:
  *   1) reject unauthenticated requests with 401
@@ -34,7 +34,7 @@ vi.mock("@supabase/ssr", () => ({
 import { POST } from "../route";
 
 function makeRequest(body: Record<string, unknown> = {}): Request {
-  return new Request("http://localhost/api/hired/candidates", {
+  return new Request("http://localhost/api/hire/candidates", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -61,7 +61,7 @@ beforeEach(() => {
   fromMock.mockReset();
 });
 
-describe("POST /api/hired/candidates", () => {
+describe("POST /api/hire/candidates", () => {
   it("returns 401 for unauthenticated requests", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: null }, error: null });
     const res = await POST(makeRequest());
@@ -88,8 +88,10 @@ describe("POST /api/hired/candidates", () => {
   it("returns 200 + empty list for an employer with no matching candidates", async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: { id: "emp-1" } }, error: null });
 
-    // 1st from() — user_roles lookup → role = employer
-    // 2nd from() — career_profiles search → no rows
+    // Phase 3 (2026-05-17) flow:
+    //   from() #1 — user_roles            → role = employer
+    //   from() #2 — employer_profiles     → company_name = "Acme"
+    //   from() #3 — career_profiles       → search returns []
     let call = 0;
     fromMock.mockImplementation((table: string) => {
       call += 1;
@@ -98,6 +100,17 @@ describe("POST /api/hired/candidates", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq:     vi.fn().mockResolvedValue({ data: [{ role: "employer" }], error: null }),
+        };
+      }
+      if (call === 2) {
+        expect(table).toBe("employer_profiles");
+        return {
+          select:      vi.fn().mockReturnThis(),
+          eq:          vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data:  { company_name: "Acme" },
+            error: null,
+          }),
         };
       }
       expect(table).toBe("career_profiles");
@@ -134,6 +147,16 @@ describe("POST /api/hired/candidates", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq:     vi.fn().mockResolvedValue({ data: [{ role: "employer" }], error: null }),
+        };
+      }
+      if (call === 2) {
+        return {
+          select:      vi.fn().mockReturnThis(),
+          eq:          vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data:  { company_name: "Acme" },
+            error: null,
+          }),
         };
       }
       expect(table).toBe("career_profiles");

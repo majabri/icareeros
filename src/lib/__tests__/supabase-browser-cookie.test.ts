@@ -86,8 +86,8 @@ describe("createClient (browser) — cookie domain scope", () => {
     });
   });
 
-  it("applies the parent-domain cookie on hired.icareeros.com", async () => {
-    setHostname("hired.icareeros.com");
+  it("applies the parent-domain cookie on hire.icareeros.com", async () => {
+    setHostname("hire.icareeros.com");
     const { createClient } = await import("../supabase");
     createClient();
     expect(optionsFromLastCall()).toEqual({
