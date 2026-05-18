@@ -399,7 +399,10 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         {mode === "login" ? (
           <>
             Don&apos;t have an account?{" "}
-            <a href="/auth/signup" className="font-medium text-brand-600 hover:text-brand-700">
+            <a
+              href={`${process.env.NEXT_PUBLIC_ROOT_URL ?? "https://icareeros.com"}/auth/signup`}
+              className="font-medium text-brand-600 hover:text-brand-700"
+            >
               Sign up free
             </a>
           </>
