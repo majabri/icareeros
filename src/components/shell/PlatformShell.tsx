@@ -36,14 +36,19 @@ import { isNavItemActive, type PlatformConfig, type NavItem } from "@/components
 // Must match AppTopBar height
 const TOP_BAR_H = 72;
 
-// Hire-side sidebar palette (mirrors what the old HireShell used).
-const NAVY        = "#0F1B2D";
-const NAVY_DEEPER = "#0B1422";
-const BORDER      = "#1F2E48";
-const TEXT        = "#E5EEFA";
-const MUTED       = "#7B9AC0";
-const TEAL        = "#00B8A9";
-const TEAL_TINT   = "rgba(0,184,169,0.12)";
+// Theme-aware tokens — delegate to the CSS variables defined in
+// globals.css so the sidebar follows the user's light/dark preference.
+// In light theme: SURFACE = white, TEXT = dark slate, BORDER = light gray.
+// In dark theme:  SURFACE = #162338 (JBS card), TEXT = white, BORDER = cyan-tinted.
+// TEAL stays as the hire-side accent in both themes — it reads against
+// both light and dark backgrounds (4.5:1 contrast).
+const SURFACE      = "var(--surface-card, #ffffff)";
+const SURFACE_DEEP = "var(--surface-page, #ffffff)";
+const BORDER       = "var(--surface-border, #e5e7eb)";
+const TEXT         = "var(--text-primary, #0f172a)";
+const MUTED        = "var(--text-muted, #6b7280)";
+const TEAL         = "#00B8A9";
+const TEAL_TINT    = "rgba(0,184,169,0.12)";
 
 interface PlatformShellProps {
   config:         PlatformConfig;
@@ -150,7 +155,7 @@ function ConfigDrivenSidebar({ config, mobileOpen, setMobileOpen }: SidebarProps
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: 256, height: "100%", background: NAVY }}
+            style={{ width: 256, height: "100%", background: SURFACE }}
           >
             {content}
           </div>
@@ -209,8 +214,8 @@ function NavRow({ item, active, onClick }: { item: NavItem; active: boolean; onC
           style={{
             fontSize:     "0.625rem",
             fontWeight:   600,
-            color:        "#5A7299",
-            background:   "rgba(255,255,255,0.05)",
+            color:        "var(--text-muted, #6b7280)",
+            background:   "var(--surface-muted, #f8fafc)",
             border:       `1px solid ${BORDER}`,
             padding:      "0.125rem 0.4rem",
             borderRadius: "999px",
@@ -266,7 +271,7 @@ function SidebarContent({
         display:        "flex",
         flexDirection:  "column",
         height:         "100%",
-        background:     NAVY,
+        background:     SURFACE,
         borderRight:    `1px solid ${BORDER}`,
       }}
     >
@@ -294,7 +299,7 @@ function SidebarContent({
               height:         28,
               borderRadius:   6,
               background:     TEAL,
-              color:          NAVY_DEEPER,
+              color:          "#ffffff",
               fontWeight:     700,
               fontSize:       "0.85rem",
             }}
