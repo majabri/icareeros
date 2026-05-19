@@ -157,7 +157,7 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
         // dashboard. If it doesn't arrive, the Resend button below
         // gives the user an obvious next step.
         setSuccess(
-          `Look for an email at ${email} from noreply@icareeros.com with a link to confirm your account. ` +
+          `Look for an email at ${email} from bugs@icareeros.com with a link to confirm your account. ` +
           `If it doesn't arrive in a minute, check your Spam/Promotions folder or use the Resend button below.`
         );
         setNeedsConfirmation(true);
