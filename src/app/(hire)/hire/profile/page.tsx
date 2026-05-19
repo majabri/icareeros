@@ -80,7 +80,7 @@ export default function EmployerProfilePage() {
   }
 
   return (
-    <div style={{ padding: "3rem 1.5rem", color: "#E5EEFA" }}>
+    <div style={{ padding: "3rem 1.5rem", color: "var(--text-primary, #E5EEFA)" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
         <header style={{ marginBottom: "2rem", textAlign: "center" }}>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>
@@ -129,8 +129,8 @@ export default function EmployerProfilePage() {
         <form
           onSubmit={handleSave}
           style={{
-            background: "#1A2D45",
-            border: "1px solid #243653",
+            background: "var(--surface-card, #1A2D45)",
+            border: "1px solid var(--surface-border, #243653)",
             borderRadius: 14,
             padding: "1.75rem",
             display: "grid",
@@ -221,10 +221,10 @@ export default function EmployerProfilePage() {
 const fieldStyle: React.CSSProperties = {
   width: "100%",
   background: "#142238",
-  border: "1px solid #243653",
+  border: "1px solid var(--surface-border, #243653)",
   borderRadius: 10,
   padding: "0.55rem 0.85rem",
-  color: "#E5EEFA",
+  color: "var(--text-primary, #E5EEFA)",
   fontSize: "0.95rem",
   outline: "none",
 };
@@ -242,7 +242,7 @@ function FormField({
     <label style={{ display: "block" }}>
       <span
         style={{
-          color: "#7B9AC0",
+          color: "var(--text-muted, #7B9AC0)",
           fontSize: "0.72rem",
           textTransform: "uppercase",
           letterSpacing: "0.5px",

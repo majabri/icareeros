@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
-import { HireShell } from "@/components/hire/HireShell";
+import { PlatformShell } from "@/components/shell/PlatformShell";
+import { HIRE_CONFIG }   from "@/components/shell/platform.config";
 
 /**
- * Phase 3 (2026-05-17) — Layout for the `(hire)` app route group.
+ * hire.icareeros.com layout.
  *
- * The middleware rewrites `hire.icareeros.com/*` into this group. The
- * shell (sidebar + top bar + main column) lives in the client-side
- * <HireShell> component so it can manage the mobile drawer state,
- * highlight the active route via usePathname(), and call supabase
- * auth.signOut() from the top bar / sidebar footer.
+ * Uses the unified PlatformShell with the config-driven sidebar (flat
+ * nav). The previous HireShell.tsx was retired by feat/unified-platform-shell
+ * — its visuals + behaviour are now provided by PlatformShell + HIRE_CONFIG.
  */
 export const metadata: Metadata = {
   title: "iCareerOS for Hiring",
 };
 
 export default function HireLayout({ children }: { children: React.ReactNode }) {
-  return <HireShell>{children}</HireShell>;
+  return <PlatformShell config={HIRE_CONFIG}>{children}</PlatformShell>;
 }
