@@ -12,17 +12,17 @@ export const metadata: Metadata = { title: "Job Postings — iCareerOS for Hirin
 
 export default function HireJobsStubPage() {
   return (
-    <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "#E5EEFA" }}>
+    <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "var(--text-primary, #E5EEFA)" }}>
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0 }}>Job Postings</h1>
-      <p style={{ marginTop: "0.75rem", color: "#7B9AC0", lineHeight: 1.55 }}>
+      <p style={{ marginTop: "0.75rem", color: "var(--text-muted, #7B9AC0)", lineHeight: 1.55 }}>
         Coming soon. Post a job, manage candidates, and track your hiring funnel
         — all from one place. We&apos;re building this next.
       </p>
       <div
         style={{
           marginTop: "1.75rem",
-          background:   "#1A2D45",
-          border:       "1px solid #1F2E48",
+          background:   "var(--surface-card, #1A2D45)",
+          border:       "1px solid var(--surface-border, #1F2E48)",
           borderRadius: 12,
           padding:      "1.25rem",
         }}
@@ -30,7 +30,7 @@ export default function HireJobsStubPage() {
         <p style={{ margin: 0, fontWeight: 600 }}>
           In the meantime, you can already find talent.
         </p>
-        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: "#7B9AC0" }}>
+        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: "var(--text-muted, #7B9AC0)" }}>
           Search profiles by skill, role, and location — and invite candidates
           directly.
         </p>

@@ -147,7 +147,7 @@ export function CandidateSearch() {
       <div style={{ maxWidth: 1120, margin: "0 auto" }}>
         {/* Hero */}
         <header style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-          <h1 style={{ color: "#E5EEFA", fontSize: "2.25rem", fontWeight: 800, letterSpacing: "-0.5px" }}>
+          <h1 style={{ color: "var(--text-primary, #E5EEFA)", fontSize: "2.25rem", fontWeight: 800, letterSpacing: "-0.5px" }}>
             Find exceptional talent
           </h1>
           <p style={{ color: "#A5B5CF", fontSize: "1rem", marginTop: "0.75rem", maxWidth: 640, marginInline: "auto" }}>
@@ -215,7 +215,7 @@ export function CandidateSearch() {
               gap: "0.5rem",
               alignItems: "stretch",
               background: "#142238",
-              border: "1px solid #243653",
+              border: "1px solid var(--surface-border, #243653)",
               borderRadius: 14,
               padding: "0.35rem 0.35rem 0.35rem 1rem",
             }}
@@ -231,7 +231,7 @@ export function CandidateSearch() {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#E5EEFA",
+                color: "var(--text-primary, #E5EEFA)",
                 fontSize: "1rem",
                 padding: "0.5rem 0",
               }}
@@ -287,10 +287,10 @@ export function CandidateSearch() {
               alignItems: "center",
               gap: "0.5rem",
               background: "#142238",
-              border: "1px solid #243653",
+              border: "1px solid var(--surface-border, #243653)",
               borderRadius: 10,
               padding: "0.6rem 0.9rem",
-              color: "#E5EEFA",
+              color: "var(--text-primary, #E5EEFA)",
               fontSize: "0.9rem",
               cursor: "pointer",
             }}
@@ -306,7 +306,7 @@ export function CandidateSearch() {
         </div>
 
         {/* Results summary */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: "#7B9AC0", fontSize: "0.85rem", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: "var(--text-muted, #7B9AC0)", fontSize: "0.85rem", marginBottom: "1rem" }}>
           <span>
             {loading ? "Searching…" : `${total} candidate${total === 1 ? "" : "s"}`}
           </span>
@@ -349,7 +349,7 @@ function FilterInput({
 }) {
   return (
     <label style={{ display: "block" }}>
-      <span style={{ color: "#7B9AC0", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+      <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
         {label}
       </span>
       <input
@@ -361,10 +361,10 @@ function FilterInput({
           marginTop: "0.25rem",
           width: "100%",
           background: "#142238",
-          border: "1px solid #243653",
+          border: "1px solid var(--surface-border, #243653)",
           borderRadius: 10,
           padding: "0.5rem 0.75rem",
-          color: "#E5EEFA",
+          color: "var(--text-primary, #E5EEFA)",
           fontSize: "0.9rem",
           outline: "none",
         }}
@@ -386,7 +386,7 @@ function FilterSelect({
 }) {
   return (
     <label style={{ display: "block" }}>
-      <span style={{ color: "#7B9AC0", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+      <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
         {label}
       </span>
       <select
@@ -396,10 +396,10 @@ function FilterSelect({
           marginTop: "0.25rem",
           width: "100%",
           background: "#142238",
-          border: "1px solid #243653",
+          border: "1px solid var(--surface-border, #243653)",
           borderRadius: 10,
           padding: "0.5rem 0.75rem",
-          color: "#E5EEFA",
+          color: "var(--text-primary, #E5EEFA)",
           fontSize: "0.9rem",
           outline: "none",
           cursor: "pointer",
@@ -441,11 +441,11 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
   return (
     <article
       style={{
-        background: "#1A2D45",
+        background: "var(--surface-card, #1A2D45)",
         borderLeft: "3px solid #00B8A9",
         borderRadius: 12,
         padding: "1.25rem 1.5rem",
-        color: "#E5EEFA",
+        color: "var(--text-primary, #E5EEFA)",
         boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
       }}
     >
@@ -469,7 +469,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           {fallbackInitials}
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: "1rem", color: "#E5EEFA", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-primary, #E5EEFA)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {displayName ?? role ?? "iCareerOS candidate"}
           </div>
           {role && displayName && (
@@ -482,7 +482,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
       {openTo.length > 0 && (
         <div style={{ marginBottom: "0.5rem", fontSize: "0.85rem", color: "#A5B5CF" }}>
-          <span style={{ color: "#7B9AC0", fontWeight: 600 }}>Open to:</span> {openTo.join(" · ")}
+          <span style={{ color: "var(--text-muted, #7B9AC0)", fontWeight: 600 }}>Open to:</span> {openTo.join(" · ")}
           {c.experience_level && <> · {c.experience_level}</>}
         </div>
       )}
@@ -509,7 +509,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
       {target && (
         <div style={{ fontSize: "0.85rem", color: "#A5B5CF", marginBottom: "0.85rem" }}>
-          <span style={{ color: "#7B9AC0", fontWeight: 600 }}>Target:</span>{" "}
+          <span style={{ color: "var(--text-muted, #7B9AC0)", fontWeight: 600 }}>Target:</span>{" "}
           <span style={{ color: "#F5A623", fontWeight: 600 }}>{target}</span>
         </div>
       )}
@@ -539,14 +539,14 @@ function EmptyState() {
     <div
       style={{
         background: "#142238",
-        border: "1px dashed #243653",
+        border: "1px dashed var(--surface-border, #243653)",
         borderRadius: 14,
         padding: "3.5rem 1.5rem",
         textAlign: "center",
       }}
     >
       <div aria-hidden style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🔍</div>
-      <h2 style={{ color: "#E5EEFA", fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+      <h2 style={{ color: "var(--text-primary, #E5EEFA)", fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.5rem" }}>
         No candidates match your search yet.
       </h2>
       <p style={{ color: "#A5B5CF", fontSize: "0.95rem", lineHeight: 1.6, maxWidth: 480, margin: "0 auto 1.5rem" }}>

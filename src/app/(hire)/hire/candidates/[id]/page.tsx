@@ -167,7 +167,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
     .map((w) => (w[0] ?? "").toUpperCase()).join("") || "?";
 
   return (
-    <div style={{ padding: "2.5rem 1.5rem 6rem", color: "#E5EEFA" }}>
+    <div style={{ padding: "2.5rem 1.5rem 6rem", color: "var(--text-primary, #E5EEFA)" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ marginBottom: "1rem" }}>
           <Link
@@ -181,7 +181,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         {/* HEADER ───────────────────────────────────────────────── */}
         <section
           style={{
-            background: "#1A2D45",
+            background: "var(--surface-card, #1A2D45)",
             borderLeft: "3px solid #00B8A9",
             borderRadius: 14,
             padding: "1.75rem",
@@ -206,7 +206,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           </div>
 
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#E5EEFA" }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--text-primary, #E5EEFA)" }}>
               {displayName}
             </h1>
             {role && (
@@ -229,7 +229,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
               <div style={{ fontSize: "2.25rem", fontWeight: 800, color: "#F5A623", lineHeight: 1 }}>
                 {marketFitScore}
               </div>
-              <div style={{ color: "#7B9AC0", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "0.15rem" }}>
+              <div style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "0.15rem" }}>
                 market fit
               </div>
               <div style={{ marginTop: "0.4rem", height: 4, width: 80, borderRadius: 4, background: "rgba(123,154,192,0.25)", overflow: "hidden", margin: "0.4rem auto 0" }}>
@@ -242,7 +242,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         {/* SKILLS ──────────────────────────────────────────────── */}
         <section
           style={{
-            background: "#1A2D45",
+            background: "var(--surface-card, #1A2D45)",
             borderRadius: 14,
             padding: "1.5rem",
             marginBottom: "1.25rem",
@@ -256,7 +256,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         {/* CAREER PATH ────────────────────────────────────────── */}
         <section
           style={{
-            background: "#1A2D45",
+            background: "var(--surface-card, #1A2D45)",
             borderRadius: 14,
             padding: "1.5rem",
             marginBottom: "1.25rem",
@@ -307,7 +307,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                       key={i}
                       style={{
                         background: "#142238",
-                        border: "1px solid #243653",
+                        border: "1px solid var(--surface-border, #243653)",
                         borderRadius: 10,
                         padding: "0.6rem 0.85rem",
                         display: "flex",
@@ -327,7 +327,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 })}
               </ul>
               {adviseTimeline > 0 && (
-                <p style={{ marginTop: "0.5rem", color: "#7B9AC0", fontSize: "0.8rem" }}>
+                <p style={{ marginTop: "0.5rem", color: "var(--text-muted, #7B9AC0)", fontSize: "0.8rem" }}>
                   Path-to-target estimate: ~{adviseTimeline} weeks
                 </p>
               )}
@@ -344,7 +344,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         {(learnWeeks > 0 || learnTopGaps.length > 0) && (
           <section
             style={{
-              background: "#1A2D45",
+              background: "var(--surface-card, #1A2D45)",
               borderRadius: 14,
               padding: "1.5rem",
               marginBottom: "1.25rem",
@@ -391,7 +391,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           background: "rgba(11,20,34,0.94)",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
-          borderTop: "1px solid #243653",
+          borderTop: "1px solid var(--surface-border, #243653)",
           padding: "0.85rem 1.5rem",
         }}
       >
@@ -431,7 +431,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
 function ForbiddenLikeShell({ title, body }: { title: string; body: string }) {
   return (
-    <div style={{ padding: "5rem 1.5rem", color: "#E5EEFA", textAlign: "center" }}>
+    <div style={{ padding: "5rem 1.5rem", color: "var(--text-primary, #E5EEFA)", textAlign: "center" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div aria-hidden style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🔒</div>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: "0.5rem" }}>{title}</h1>
@@ -448,7 +448,7 @@ const sectionHeadingStyle: React.CSSProperties = {
   fontSize: "0.7rem",
   textTransform: "uppercase",
   letterSpacing: "0.6px",
-  color: "#7B9AC0",
+  color: "var(--text-muted, #7B9AC0)",
   fontWeight: 700,
   marginBottom: "0.75rem",
 };
@@ -478,7 +478,7 @@ function BadgeChip({ children, variant }: { children: React.ReactNode; variant?:
 function SubLabel({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
-      color: "#7B9AC0",
+      color: "var(--text-muted, #7B9AC0)",
       fontSize: "0.7rem",
       textTransform: "uppercase",
       letterSpacing: "0.5px",

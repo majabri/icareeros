@@ -134,7 +134,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
       <label style={{ display: "block" }}>
         <span
           style={{
-            color: "#7B9AC0",
+            color: "var(--text-muted, #7B9AC0)",
             fontSize: "0.7rem",
             textTransform: "uppercase",
             letterSpacing: "0.5px",
@@ -154,10 +154,10 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
             marginTop: "0.25rem",
             width: "100%",
             background: "#142238",
-            border: "1px solid #243653",
+            border: "1px solid var(--surface-border, #243653)",
             borderRadius: 10,
             padding: "0.55rem 0.85rem",
-            color: "#E5EEFA",
+            color: "var(--text-primary, #E5EEFA)",
             fontSize: "0.95rem",
             outline: "none",
           }}
@@ -167,7 +167,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
       <label style={{ display: "block" }}>
         <span
           style={{
-            color: "#7B9AC0",
+            color: "var(--text-muted, #7B9AC0)",
             fontSize: "0.7rem",
             textTransform: "uppercase",
             letterSpacing: "0.5px",
@@ -186,16 +186,16 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
             marginTop: "0.25rem",
             width: "100%",
             background: "#142238",
-            border: "1px solid #243653",
+            border: "1px solid var(--surface-border, #243653)",
             borderRadius: 10,
             padding: "0.55rem 0.85rem",
-            color: "#E5EEFA",
+            color: "var(--text-primary, #E5EEFA)",
             fontSize: "0.92rem",
             resize: "vertical",
             outline: "none",
           }}
         />
-        <span style={{ color: "#7B9AC0", fontSize: "0.7rem", marginTop: "0.2rem", display: "block" }}>
+        <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", marginTop: "0.2rem", display: "block" }}>
           {message.length}/500
         </span>
       </label>
@@ -236,7 +236,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
             color: "#A5B5CF",
             padding: "0.6rem 1rem",
             borderRadius: 10,
-            border: "1px solid #243653",
+            border: "1px solid var(--surface-border, #243653)",
             fontWeight: 600,
             fontSize: "0.9rem",
             cursor: phase === "sending" ? "wait" : "pointer",
