@@ -1,44 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { ConstellationBackground } from "@/components/ConstellationBackground";
-import { AppTopBar }               from "@/components/AppTopBar";
-import { AppSidebar }              from "@/components/AppSidebar";
+/**
+ * jobs.icareeros.com layout.
+ *
+ * Uses the unified PlatformShell for the chrome (ConstellationBackground +
+ * top bar + mobile drawer state) and supplies AppSidebar via the
+ * `customSidebar` slot so the rich career-OS sidebar (6 stages, status
+ * gating, mobile expand-collapse, marketplace section) stays specialized
+ * and unchanged. The chrome is now shared with hire.icareeros.com.
+ */
 
-const TOP_BAR_H = 72; // px — must match AppTopBar height
+import { useState } from "react";
+import { PlatformShell } from "@/components/shell/PlatformShell";
+import { JOBS_CONFIG }   from "@/components/shell/platform.config";
+import { AppSidebar }    from "@/components/AppSidebar";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-
   return (
-    <>
-      {/* ── Constellation: fixed behind everything ─────────────────── */}
-      <ConstellationBackground />
-
-      {/* ── All app chrome sits above the constellation ─────────────── */}
-      <div style={{ position: "relative", zIndex: 1 }}>
-
-        {/* Persistent top bar */}
-        <AppTopBar onMenuClick={() => setMobileOpen(true)} />
-
-        {/* Sidebar + page content, pushed below the top bar */}
-        <div
-          className="flex"
-          style={{ paddingTop: TOP_BAR_H, minHeight: "100vh" }}
-        >
-          <AppSidebar
-            mobileOpen={mobileOpen}
-            setMobileOpen={setMobileOpen}
-          />
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="flex-1 min-w-0 outline-none"  /* Safari fix: removed overflow-y-auto so body scrolls, position:sticky on sidebar resolves correctly, click hit-tests align with rendered UI */
-          >
-            {children}
-          </main>
-        </div>
-      </div>
-    </>
+    <PlatformShell
+      config={JOBS_CONFIG}
+      customSidebar={
+        <AppSidebar
+          mobileOpen={mobileOpen}
+          setMobileOpen={setMobileOpen}
+        />
+      }
+    >
+      {children}
+    </PlatformShell>
   );
 }

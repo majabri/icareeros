@@ -6,6 +6,8 @@ import { Logo } from "@/components/brand/Logo";
 
 interface Props {
   onMenuClick?: () => void;
+  /** Small muted text rendered next to the logo. Set per platform via PlatformShell config. */
+  tagline?: string;
 }
 
 /**
@@ -15,7 +17,7 @@ interface Props {
  * Name priority: user_profiles.full_name → user_metadata.full_name → email prefix
  * Avatar priority: user_metadata.avatar_url (OAuth) → initials circle (fallback)
  */
-export function AppTopBar({ onMenuClick }: Props) {
+export function AppTopBar({ onMenuClick, tagline }: Props) {
   const [scrolled,     setScrolled]     = useState(false);
   const [displayName,  setDisplayName]  = useState("");
   const [avatarUrl,    setAvatarUrl]    = useState<string | null>(null);
@@ -127,6 +129,24 @@ export function AppTopBar({ onMenuClick }: Props) {
       >
         <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
       </a>
+
+      {tagline && (
+        <span
+          aria-hidden
+          className="hidden md:inline"
+          style={{
+            fontSize:      "0.78rem",
+            fontWeight:    500,
+            color:         "var(--neutral-500)",
+            letterSpacing: "0.01em",
+            paddingLeft:   "0.4rem",
+            borderLeft:    "1px solid var(--neutral-200)",
+            marginLeft:    "0.4rem",
+          }}
+        >
+          {tagline}
+        </span>
+      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
