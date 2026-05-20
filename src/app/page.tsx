@@ -3,12 +3,11 @@ import { headers } from "next/headers";
 
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }            from "@/components/landing/LandingNav";
-import { HeroSection }           from "@/components/landing/HeroSection";
-import { ProblemSection }        from "@/components/landing/ProblemSection";
-import { LifecycleSection }      from "@/components/landing/LifecycleSection";
-import { FeaturesSection }       from "@/components/landing/FeaturesSection";
-import { FAQSection }            from "@/components/landing/FAQSection";
-import { CTASection }            from "@/components/landing/CTASection";
+import { RootHeroSection }       from "@/components/landing/RootHeroSection";
+import { RootPlatformOverview }  from "@/components/landing/RootPlatformOverview";
+import { RootStagesSection }     from "@/components/landing/RootStagesSection";
+import { RootVisionSection }     from "@/components/landing/RootVisionSection";
+import { RootCTASection }        from "@/components/landing/RootCTASection";
 import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
 import { JobsHeroSection }       from "@/components/landing/JobsHeroSection";
 import { JobsPainSection }       from "@/components/landing/JobsPainSection";
@@ -126,12 +125,11 @@ function RootLanding() {
       <div style={{ position: "relative", zIndex: 1 }}>
         <LandingNav />
         <main>
-          <HeroSection />
-          <ProblemSection />
-          <LifecycleSection />
-          <FeaturesSection />
-          <FAQSection />
-          <CTASection />
+          <RootHeroSection />
+          <RootPlatformOverview />
+          <RootStagesSection />
+          <RootVisionSection />
+          <RootCTASection />
         </main>
       </div>
     </>
