@@ -145,14 +145,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 308);
   }
 
+  // Phase 4 (2026-05-19) — Public hire.* landing page.
+  //
+  // The `/` path on hire.* is no longer auto-rewritten here; it's
+  // handled below after getUser() so that:
+  //   - unauthenticated visitors render `src/app/page.tsx` (HireLanding
+  //     variant, driven by `x-platform === "hire"`)
+  //   - authenticated visitors rewrite to /hire/dashboard (unchanged)
+  //
+  // Every other path on hire.* still rewrites into the (hire) route
+  // group exactly as before.
   if (
     isHireHost
+    && pathname !== "/"
     && !pathname.startsWith("/auth")
     && !pathname.startsWith("/api")
     && !pathname.startsWith("/_next")
   ) {
     const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = `/hire${pathname === "/" ? "/dashboard" : pathname}`;
+    rewriteUrl.pathname = `/hire${pathname}`;
     return NextResponse.rewrite(rewriteUrl, {
       request: { headers: requestHeaders },
     });
@@ -202,6 +213,17 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Phase 4 (2026-05-19) — Authenticated hire.* `/` → dashboard rewrite.
+  // Unauthenticated `/` on hire.* falls through to the response path so
+  // Next renders src/app/page.tsx (HireLanding variant). See block above.
+  if (isHireHost && pathname === "/" && user) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = "/hire/dashboard";
+    return NextResponse.rewrite(rewriteUrl, {
+      request: { headers: requestHeaders },
+    });
+  }
 
   // ── Auth guards ────────────────────────────────────────────────────────────
   // Look up role from public.profiles to determine admin status. Single
