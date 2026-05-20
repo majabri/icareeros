@@ -214,15 +214,41 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Phase 4 (2026-05-19) — Authenticated hire.* `/` → dashboard rewrite.
-  // Unauthenticated `/` on hire.* falls through to the response path so
-  // Next renders src/app/page.tsx (HireLanding variant). See block above.
-  if (isHireHost && pathname === "/" && user) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = "/hire/dashboard";
-    return NextResponse.rewrite(rewriteUrl, {
-      request: { headers: requestHeaders },
-    });
+  // Phase 5 (2026-05-20) — Subdomain landings collapsed into the root.
+  // The unauthenticated marketing surface used to live at jobs.* and
+  // hire.* directly; per Amir 2026-05-20, those landings now redirect
+  // to the corresponding anchor on icareeros.com/ which holds the full
+  // pitch. Authenticated `/` visits still resolve to the app dashboard
+  // on each subdomain so logged-in users don't bounce to marketing.
+  //
+  // jobs.* `/` :
+  //   unauthed  → 308 to https://icareeros.com/#job-seekers
+  //   authed    → /dashboard on jobs.* (no rewrite needed; matches the
+  //               existing app routing already in place for jobs.*)
+  // hire.* `/` :
+  //   unauthed  → 308 to https://icareeros.com/#hiring-teams
+  //   authed    → rewrite to /hire/dashboard (unchanged from Phase 4)
+  if (isJobsHost && pathname === "/") {
+    if (user) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.redirect(
+      "https://icareeros.com/#job-seekers",
+      308,
+    );
+  }
+  if (isHireHost && pathname === "/") {
+    if (user) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = "/hire/dashboard";
+      return NextResponse.rewrite(rewriteUrl, {
+        request: { headers: requestHeaders },
+      });
+    }
+    return NextResponse.redirect(
+      "https://icareeros.com/#hiring-teams",
+      308,
+    );
   }
 
   // ── Auth guards ────────────────────────────────────────────────────────────

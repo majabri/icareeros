@@ -16,7 +16,8 @@ function src(file: string) {
 }
 
 const COMPONENTS = [
-  // Root arm — icareeros.com (dual-audience).
+  // Root arm — icareeros.com (only landing surface; jobs.* and hire.*
+  // unauthenticated `/` are 308-redirected here by middleware Phase 5).
   { file: "LandingNav.tsx", export: "LandingNav" },
   { file: "RootHeroSection.tsx", export: "RootHeroSection" },
   { file: "RootPlatformInnovation.tsx", export: "RootPlatformInnovation" },
@@ -24,26 +25,6 @@ const COMPONENTS = [
   { file: "RootHiringTeamSection.tsx", export: "RootHiringTeamSection" },
   { file: "RootVisionSection.tsx", export: "RootVisionSection" },
   { file: "RootCTASection.tsx", export: "RootCTASection" },
-
-  // Jobs arm — jobs.icareeros.com (job-seeker only).
-  { file: "JobsLandingNav.tsx", export: "JobsLandingNav" },
-  { file: "JobsHeroSection.tsx", export: "JobsHeroSection" },
-  { file: "JobsPainSection.tsx", export: "JobsPainSection" },
-  { file: "JobsStagesSection.tsx", export: "JobsStagesSection" },
-  { file: "JobsFeaturesSection.tsx", export: "JobsFeaturesSection" },
-  { file: "JobsVisionSection.tsx", export: "JobsVisionSection" },
-  { file: "JobsCTASection.tsx", export: "JobsCTASection" },
-
-  // Hire arm — hire.icareeros.com (employer only, public).
-  { file: "HireLandingNav.tsx", export: "HireLandingNav" },
-  { file: "HireHeroSection.tsx", export: "HireHeroSection" },
-  { file: "HirePathwaySection.tsx", export: "HirePathwaySection" },
-  { file: "HirePainSection.tsx", export: "HirePainSection" },
-  { file: "HireWorkflowSection.tsx", export: "HireWorkflowSection" },
-  { file: "HireFeaturesSection.tsx", export: "HireFeaturesSection" },
-  { file: "HireVisionSection.tsx", export: "HireVisionSection" },
-  { file: "HireFAQSection.tsx", export: "HireFAQSection" },
-  { file: "HireCTASection.tsx", export: "HireCTASection" },
 ] as const;
 
 describe("Landing page component files", () => {
@@ -66,38 +47,45 @@ describe("Landing page component files", () => {
     }
   });
 
-  it("page.tsx branches on the x-platform header", () => {
+  it("page.tsx is the single landing render path (Phase 5)", () => {
     const pageSrc = readFileSync(
       resolve(LANDING_DIR, "../../app/page.tsx"),
       "utf-8"
     );
-    // Header-driven branching (Option A from COWORK-BRIEF-platform-landing-v1)
-    expect(pageSrc).toContain('"x-platform"');
-    expect(pageSrc).toMatch(/RootLanding/);
-    expect(pageSrc).toMatch(/JobsLanding/);
-    expect(pageSrc).toMatch(/HireLanding/);
+    // Phase 5 — subdomain landings collapsed; page.tsx has a single
+    // export with no platform branching. The old x-platform header
+    // branch and the JobsLanding/HireLanding render arms are gone.
+    expect(pageSrc).not.toContain('"x-platform"');
+    expect(pageSrc).not.toMatch(/JobsLanding/);
+    expect(pageSrc).not.toMatch(/HireLanding/);
+    expect(pageSrc).toMatch(/function LandingPage\(\)/);
   });
 
-  it("generateMetadata returns per-host canonical URLs", () => {
+  it("page.tsx exports a static root canonical (Phase 5 collapse)", () => {
     const pageSrc = readFileSync(
       resolve(LANDING_DIR, "../../app/page.tsx"),
       "utf-8"
     );
     expect(pageSrc).toContain('"https://icareeros.com"');
-    expect(pageSrc).toContain('"https://jobs.icareeros.com"');
-    expect(pageSrc).toContain('"https://hire.icareeros.com"');
     expect(pageSrc).toContain('locale: "en_US"');
+    // Per-subdomain canonicals are not generated here anymore; subdomain
+    // landings 308-redirect to icareeros.com anchors via middleware.
+    expect(pageSrc).not.toContain('"https://jobs.icareeros.com"');
+    expect(pageSrc).not.toContain('"https://hire.icareeros.com"');
   });
 
-  it("middleware leaves unauthenticated hire.* `/` to render src/app/page.tsx", () => {
+  it("middleware Phase 5 redirects subdomain `/` to root anchors", () => {
     const mw = readFileSync(
       resolve(LANDING_DIR, "../../middleware.ts"),
       "utf-8"
     );
-    // The general hire.* rewrite must explicitly skip "/" so the request
-    // continues to getUser() (Phase 4 split — unauthed lands on HireLanding,
-    // authed gets rewritten to /hire/dashboard below).
-    expect(mw).toContain('pathname !== "/"');
-    expect(mw).toMatch(/isHireHost\s*&&\s*pathname\s*===\s*"\/"\s*&&\s*user/);
+    // Unauthenticated jobs.* / and hire.* / now 308-redirect into the
+    // root landing's per-audience anchors.
+    expect(mw).toContain('"https://icareeros.com/#job-seekers"');
+    expect(mw).toContain('"https://icareeros.com/#hiring-teams"');
+    // Authenticated jobs.* / still routes to the app dashboard, and
+    // authed hire.* / still rewrites to /hire/dashboard.
+    expect(mw).toMatch(/isJobsHost\s*&&\s*pathname\s*===\s*"\/"/);
+    expect(mw).toMatch(/isHireHost\s*&&\s*pathname\s*===\s*"\/"/);
   });
 });
