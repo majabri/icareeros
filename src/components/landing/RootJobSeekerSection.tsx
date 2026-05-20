@@ -243,11 +243,6 @@ export function RootJobSeekerSection() {
           ))}
         </div>
 
-        <div style={{ textAlign: "center" }}>
-          <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your iJobsOS — it&rsquo;s free →
-          </a>
-        </div>
       </div>
 
       <style>{`

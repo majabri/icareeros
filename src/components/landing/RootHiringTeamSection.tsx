@@ -317,11 +317,6 @@ export function RootHiringTeamSection() {
           ))}
         </div>
 
-        <div style={{ textAlign: "center" }}>
-          <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-primary">
-            Start hiring with iTalentOS — free →
-          </a>
-        </div>
       </div>
 
       <style>{`
