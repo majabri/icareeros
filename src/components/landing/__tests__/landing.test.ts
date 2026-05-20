@@ -24,6 +24,11 @@ const COMPONENTS = [
   { file: "JobsHeroSection.tsx", export: "JobsHeroSection" },
   { file: "JobsCTASection.tsx", export: "JobsCTASection" },
   { file: "JobsLandingNav.tsx", export: "JobsLandingNav" },
+  { file: "HireHeroSection.tsx", export: "HireHeroSection" },
+  { file: "HireHowItWorksSection.tsx", export: "HireHowItWorksSection" },
+  { file: "HireFeaturesSection.tsx", export: "HireFeaturesSection" },
+  { file: "HireFAQSection.tsx", export: "HireFAQSection" },
+  { file: "HireLandingNav.tsx", export: "HireLandingNav" },
 ] as const;
 
 describe("Landing page component files", () => {
@@ -53,8 +58,9 @@ describe("Landing page component files", () => {
     );
     // Header-driven branching (Option A from COWORK-BRIEF-platform-landing-v1)
     expect(pageSrc).toContain('"x-platform"');
-    expect(pageSrc).toMatch(/JobsLanding/);
     expect(pageSrc).toMatch(/RootLanding/);
+    expect(pageSrc).toMatch(/JobsLanding/);
+    expect(pageSrc).toMatch(/HireLanding/);
   });
 
   it("generateMetadata returns per-host canonical URLs", () => {
@@ -64,6 +70,19 @@ describe("Landing page component files", () => {
     );
     expect(pageSrc).toContain('"https://icareeros.com"');
     expect(pageSrc).toContain('"https://jobs.icareeros.com"');
+    expect(pageSrc).toContain('"https://hire.icareeros.com"');
     expect(pageSrc).toContain('locale: "en_US"');
+  });
+
+  it("middleware leaves unauthenticated hire.* `/` to render src/app/page.tsx", () => {
+    const mw = readFileSync(
+      resolve(LANDING_DIR, "../../middleware.ts"),
+      "utf-8"
+    );
+    // The general hire.* rewrite must explicitly skip "/" so the request
+    // continues to getUser() (Phase 4 split — unauthed lands on HireLanding,
+    // authed gets rewritten to /hire/dashboard below).
+    expect(mw).toContain('pathname !== "/"');
+    expect(mw).toMatch(/isHireHost\s*&&\s*pathname\s*===\s*"\/"\s*&&\s*user/);
   });
 });

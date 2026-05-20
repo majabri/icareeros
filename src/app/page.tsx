@@ -2,29 +2,40 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { ConstellationBackground } from "@/components/ConstellationBackground";
-import { LandingNav }       from "@/components/landing/LandingNav";
-import { HeroSection }      from "@/components/landing/HeroSection";
-import { ProblemSection }   from "@/components/landing/ProblemSection";
-import { LifecycleSection } from "@/components/landing/LifecycleSection";
-import { FeaturesSection }  from "@/components/landing/FeaturesSection";
-import { FAQSection }       from "@/components/landing/FAQSection";
-import { CTASection }       from "@/components/landing/CTASection";
-import { JobsLandingNav }   from "@/components/landing/JobsLandingNav";
-import { JobsHeroSection }  from "@/components/landing/JobsHeroSection";
-import { JobsCTASection }   from "@/components/landing/JobsCTASection";
+import { LandingNav }            from "@/components/landing/LandingNav";
+import { HeroSection }           from "@/components/landing/HeroSection";
+import { ProblemSection }        from "@/components/landing/ProblemSection";
+import { LifecycleSection }      from "@/components/landing/LifecycleSection";
+import { FeaturesSection }       from "@/components/landing/FeaturesSection";
+import { FAQSection }            from "@/components/landing/FAQSection";
+import { CTASection }            from "@/components/landing/CTASection";
+import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
+import { JobsHeroSection }       from "@/components/landing/JobsHeroSection";
+import { JobsCTASection }        from "@/components/landing/JobsCTASection";
+import { HireLandingNav }        from "@/components/landing/HireLandingNav";
+import { HireHeroSection }       from "@/components/landing/HireHeroSection";
+import { HireHowItWorksSection } from "@/components/landing/HireHowItWorksSection";
+import { HireFeaturesSection }   from "@/components/landing/HireFeaturesSection";
+import { HireFAQSection }        from "@/components/landing/HireFAQSection";
 
 /**
- * Root + jobs.* landing page.
+ * Root + jobs.* + hire.* landing page.
  *
- * Single page.tsx that renders two variants based on the `x-platform`
- * request header that middleware.ts sets (`root` for icareeros.com,
- * `jobs` for jobs.icareeros.com). hire.icareeros.com never reaches
- * this route — middleware rewrites every non-/api, non-/auth path
- * under hire.* into the (hire) route group.
+ * Single page.tsx that renders three variants based on the `x-platform`
+ * request header that middleware.ts sets:
+ *
+ *   icareeros.com         → x-platform = "root"  → <RootLanding/>   (dual-audience)
+ *   jobs.icareeros.com    → x-platform = "jobs"  → <JobsLanding/>   (job-seeker only)
+ *   hire.icareeros.com /  → x-platform = "hire"  → <HireLanding/>   (employer only, unauthed)
+ *
+ * Authenticated visits to hire.* `/` are rewritten to /hire/dashboard
+ * inside middleware (Phase 4) and never reach this page.tsx — the
+ * hire-landing variant is exclusively the unauthenticated employer
+ * marketing surface. Every other hire.* path is internally rewritten
+ * to /hire/<path> and resolves into the (hire) route group as before.
  *
  * Per COWORK-BRIEF-platform-landing-v1.md (Option A — header-driven
- * branching) — keeps the diff small, avoids a route-group split,
- * lets per-host metadata be served via Next 15 generateMetadata().
+ * branching).
  */
 
 type Platform = "root" | "jobs" | "hire";
@@ -43,6 +54,10 @@ const ROOT_DESC =
 const JOBS_TITLE = "iCareerOS — Your AI Career Operating System";
 const JOBS_DESC  = "Six stages. One loop. Real outcomes for job seekers.";
 
+const HIRE_TITLE = "iCareerOS for Hiring — Find verified talent faster";
+const HIRE_DESC  =
+  "Search AI-scored candidates who opted in to be discovered. Build your pipeline with iCareerOS.";
+
 export async function generateMetadata(): Promise<Metadata> {
   const platform = await getPlatform();
   if (platform === "jobs") {
@@ -54,6 +69,21 @@ export async function generateMetadata(): Promise<Metadata> {
         title: JOBS_TITLE,
         description: JOBS_DESC,
         url: "https://jobs.icareeros.com",
+        siteName: "iCareerOS",
+        type: "website",
+        locale: "en_US",
+      },
+    };
+  }
+  if (platform === "hire") {
+    return {
+      title: HIRE_TITLE,
+      description: HIRE_DESC,
+      alternates: { canonical: "https://hire.icareeros.com" },
+      openGraph: {
+        title: HIRE_TITLE,
+        description: HIRE_DESC,
+        url: "https://hire.icareeros.com",
         siteName: "iCareerOS",
         type: "website",
         locale: "en_US",
@@ -77,7 +107,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function LandingPage() {
   const platform = await getPlatform();
-  return platform === "jobs" ? <JobsLanding /> : <RootLanding />;
+  if (platform === "jobs") return <JobsLanding />;
+  if (platform === "hire") return <HireLanding />;
+  return <RootLanding />;
 }
 
 function RootLanding() {
@@ -112,6 +144,23 @@ function JobsLanding() {
           <FeaturesSection />
           <FAQSection />
           <JobsCTASection />
+        </main>
+      </div>
+    </>
+  );
+}
+
+function HireLanding() {
+  return (
+    <>
+      <ConstellationBackground />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <HireLandingNav />
+        <main>
+          <HireHeroSection />
+          <HireHowItWorksSection />
+          <HireFeaturesSection />
+          <HireFAQSection />
         </main>
       </div>
     </>
