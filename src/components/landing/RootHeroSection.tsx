@@ -22,7 +22,7 @@ export function RootHeroSection() {
 
         <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:780, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
           One platform. Two connected experiences. Job seekers run a
-          continuous career OS — from evaluation to offer — while hiring
+          continuous iJobsOS — from evaluation to offer — while hiring
           teams search verified, opt-in talent who are already prepared.
           The system works because both sides are in it.
         </p>

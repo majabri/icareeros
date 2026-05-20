@@ -19,6 +19,7 @@ import { JobsVisionSection }     from "@/components/landing/JobsVisionSection";
 import { JobsCTASection }        from "@/components/landing/JobsCTASection";
 import { HireLandingNav }        from "@/components/landing/HireLandingNav";
 import { HireHeroSection }       from "@/components/landing/HireHeroSection";
+import { HirePathwaySection }    from "@/components/landing/HirePathwaySection";
 import { HirePainSection }       from "@/components/landing/HirePainSection";
 import { HireWorkflowSection }   from "@/components/landing/HireWorkflowSection";
 import { HireFeaturesSection }   from "@/components/landing/HireFeaturesSection";
@@ -167,6 +168,7 @@ function HireLanding() {
         <HireLandingNav />
         <main>
           <HireHeroSection />
+          <HirePathwaySection />
           <HirePainSection />
           <HireWorkflowSection />
           <HireFeaturesSection />

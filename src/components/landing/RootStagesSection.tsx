@@ -3,7 +3,7 @@
 /**
  * RootStagesSection — condensed 6-stage timeline on icareeros.com.
  * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 3 —
- * "The six stages of the career OS."
+ * "The six iJobsOS stages."
  *
  * One-line bodies only; the long-form treatment lives on jobs.* via
  * JobsStagesSection.
@@ -22,7 +22,7 @@ export function RootStagesSection() {
     <section id="stages" className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)" }}>
       <div style={{ maxWidth:1100, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          The six stages of the career OS.
+          The six iJobsOS stages.
         </h2>
         <p style={{ fontSize:"1.1rem", color:"var(--neutral-700)", marginBottom:"3rem", textAlign:"center" }}>
           Built for job seekers. Visible to hiring teams on the other side.

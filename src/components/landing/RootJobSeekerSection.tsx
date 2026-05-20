@@ -9,7 +9,7 @@ import { CareerCycleSVG } from "./CareerCycleSVG";
 /**
  * RootJobSeekerSection — #job-seekers section on icareeros.com.
  *
- * Per Amir 2026-05-20: intelligent career OS for job seekers, with the
+ * Per Amir 2026-05-20: iJobsOS for job seekers, with the
  * 6-stage cycle image, benefits of the method + platform, and the
  * value of an easier interface with hiring managers and recruiters.
  *
@@ -63,7 +63,7 @@ export function RootJobSeekerSection() {
             For job seekers
           </div>
           <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", lineHeight:1.2 }}>
-            An intelligent career OS for job seekers.
+            iJobsOS — for job seekers.
           </h2>
           <p style={{ fontSize:"1.15rem", color:"var(--neutral-700)", maxWidth:780, margin:"0 auto", lineHeight:1.7 }}>
             Six stages. One continuous loop. A system that runs from where
@@ -76,7 +76,7 @@ export function RootJobSeekerSection() {
         <div className="root-js-cycle-grid" style={{ display:"grid", gap:"2.5rem", alignItems:"start", marginBottom:"4rem" }}>
           <div>
             <CareerCycleSVG
-              centerLabel="Career OS"
+              centerLabel="iJobsOS"
               stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
             />
           </div>

@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 
 /**
- * JobsStagesSection — the six career OS stages.
+ * JobsStagesSection — the six iJobsOS stages.
  * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1 — "The six stages".
  */
 const STAGES: Array<{ n: string; Icon: Icon; title: string; headline: string; body: string }> = [

@@ -1,7 +1,7 @@
 "use client";
 import {
-  IconCompass, IconTarget, IconBooks, IconSearch, IconMicrophone, IconTrophy,
-  IconReportAnalytics, IconShieldCheck, IconClipboardList, IconHeartHandshake,
+  IconRulerMeasure, IconUserSearch, IconPuzzle, IconLifebuoy, IconStairsUp, IconAward,
+  IconShieldCheck, IconReportAnalytics, IconChartHistogram, IconHeartHandshake,
   type Icon,
 } from "@tabler/icons-react";
 import { CareerCycleSVG } from "./CareerCycleSVG";
@@ -9,52 +9,53 @@ import { CareerCycleSVG } from "./CareerCycleSVG";
 /**
  * RootHiringTeamSection — #hiring-teams section on icareeros.com.
  *
- * Per Amir 2026-05-20: intelligent career OS for employers; improve
- * hiring-manager engagement; explanation + data; benefits; value of
- * an easier interface with employees/job seekers. Show the 6 stages
- * with animation, with description per stage.
+ * Per Amir 2026-05-20 (second iteration): the hiring-team side runs on
+ * the **iTalentOS** product (sister to iJobsOS on the job-seeker
+ * side). The six stages are Design / Select / Integrate / Support /
+ * Develop / Retain — operational stages of the People Retention
+ * Pathway as sourced from standard HR literature, renamed for the
+ * iCareerOS brand. Verbatim stage definitions from Amir's spec.
  *
- * The cycle is the SAME six-stage Career OS framework — the platform's
- * core differentiator is that hiring teams see what candidates are
- * doing at each stage, not a different process running in parallel.
- * Descriptions are written from the employer's perspective.
+ * Replaces the earlier mis-framing of "Career OS for hiring teams"
+ * from PR #266 — hiring teams don't run iJobsOS (that's the
+ * candidate's framework).
  */
 
 const STAGES = [
-  { n: 1, label: "Evaluate", Icon: IconCompass,
-    body: "Filter the pool by candidates who've done their own market-fit assessment — and who match the requirements in your JD." },
-  { n: 2, label: "Advise",   Icon: IconTarget,
-    body: "Paste a JD, get AI fit scores against every opted-in candidate. Know who to talk to before you start typing." },
-  { n: 3, label: "Learn",    Icon: IconBooks,
-    body: "See which candidates are closing the skill gaps that matter for your role. Spot rising talent before competitors do." },
-  { n: 4, label: "Act",      Icon: IconSearch,
-    body: "Receive tailored applications, not mass blasts. Track invites, responses, and engagement across your pipeline." },
-  { n: 5, label: "Coach",    Icon: IconMicrophone,
-    body: "Candidates who've done role-specific interview prep show up ready. Shorter cycles, sharper conversations." },
-  { n: 6, label: "Achieve",  Icon: IconTrophy,
-    body: "Track offer acceptance, manage the relationship, build the talent network for your next great hire." },
+  { n: 1, label: "Design",    Icon: IconRulerMeasure,
+    body: "Define the business need before hiring begins — workforce planning, role scoping, required capabilities, success measures. Reduces role ambiguity and costly hiring mistakes." },
+  { n: 2, label: "Select",    Icon: IconUserSearch,
+    body: "Sourcing, screening, and choosing the best-fit candidate with structured interviews and consistent criteria. Improves quality of hire and reduces turnover caused by poor role fit." },
+  { n: 3, label: "Integrate", Icon: IconPuzzle,
+    body: "Onboarding and early assimilation — orientation, 30-60-90 day plans, system access, manager check-ins. Accelerates time-to-productivity and reduces early attrition." },
+  { n: 4, label: "Support",   Icon: IconLifebuoy,
+    body: "The daily employee experience after onboarding — leadership support, recognition, workload balance, feedback loops. Removes friction before dissatisfaction becomes turnover." },
+  { n: 5, label: "Develop",   Icon: IconStairsUp,
+    body: "Capability and future readiness — coaching, training, cross-skilling, leadership development, career pathing. People stay when they see growth and meaningful development." },
+  { n: 6, label: "Retain",    Icon: IconAward,
+    body: "Active preservation of key talent — compensation review, flexibility, stay interviews, retention risk tracking. Protects institutional knowledge and lowers replacement cost." },
 ] as const;
 
 const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   {
     Icon: IconShieldCheck,
-    title: "Verified, opt-in candidate pool",
-    body:  "No scraped profiles. No cold lists. Every candidate created an account and chose to be discoverable — which means they're actually looking.",
+    title: "Lower avoidable turnover",
+    body:  "iTalentOS treats retention as the result of disciplined upstream management — clearer role design, better fit, stronger onboarding, deeper development — not a single HR program bolted on at the end.",
+  },
+  {
+    Icon: IconChartHistogram,
+    title: "Measurable outcomes per stage",
+    body:  "Each stage has an owner, a workflow, and a metric: time-to-hire, 90-day retention, engagement scores, internal promotion rate, regretted-loss rate. The system runs on signals, not intuition.",
   },
   {
     Icon: IconReportAnalytics,
-    title: "Fit scores before you reach out",
-    body:  "AI scores every opted-in candidate against your JD. Skip the screening calls that go nowhere; spend your time on the conversations that count.",
-  },
-  {
-    Icon: IconClipboardList,
-    title: "Visibility into how candidates prepared",
-    body:  "See which candidates have done role-specific interview prep and skill-building. Walk into the conversation knowing they're ready.",
+    title: "Closed-loop, not a bolt-on",
+    body:  "Design feeds Select; Select feeds Integrate; Integrate feeds Support; and Retain feeds the next Design cycle. Continuous improvement of the workforce, not a series of disconnected HR projects.",
   },
   {
     Icon: IconHeartHandshake,
-    title: "A direct line to engaged people",
-    body:  "iCareerOS candidates aren't passively browsing — they're actively running their own career loop. A different kind of first conversation, and a different conversion rate.",
+    title: "A direct line to engaged candidates",
+    body:  "iCareerOS candidates run their own iJobsOS loop — assessing fit, building skills, preparing for interviews — and opt in to be discovered. A different kind of first conversation between hiring teams and the people they want to hire.",
   },
 ];
 
@@ -67,16 +68,17 @@ export function RootHiringTeamSection() {
             For hiring teams
           </div>
           <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", lineHeight:1.2 }}>
-            An intelligent career OS for hiring teams.
+            iTalentOS — for hiring teams.
           </h2>
           <p style={{ fontSize:"1.15rem", color:"var(--neutral-700)", maxWidth:780, margin:"0 auto", lineHeight:1.7 }}>
-            The same six-stage loop — viewed from the other side. Every
-            candidate you reach is already running it, already preparing,
-            already signalling intent.
+            Six stages that align role design, hiring, onboarding,
+            employee support, development, and retention into one
+            continuous system. Workforce stability becomes the outcome
+            of disciplined upstream management — not a single HR program.
           </p>
         </div>
 
-        {/* Cycle visual + employer-perspective stage detail */}
+        {/* Cycle visual + stage detail */}
         <div className="root-ht-cycle-grid" style={{ display:"grid", gap:"2.5rem", alignItems:"start", marginBottom:"4rem" }}>
           <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem" }}>
             {STAGES.map(({ n, label, Icon: StageIcon, body }) => (
@@ -112,15 +114,15 @@ export function RootHiringTeamSection() {
 
           <div>
             <CareerCycleSVG
-              centerLabel="Hire OS"
+              centerLabel="iTalentOS"
               stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
             />
           </div>
         </div>
 
-        {/* Benefits grid — employer-side */}
+        {/* Benefits grid */}
         <h3 style={{ fontSize:"1.85rem", fontWeight:700, color:"var(--neutral-900)", textAlign:"center", marginBottom:"2.5rem" }}>
-          What hiring teams get out of the loop.
+          What hiring teams get out of running iTalentOS.
         </h3>
         <div className="root-ht-benefits-grid" style={{ display:"grid", gap:"1.5rem", marginBottom:"3rem" }}>
           {BENEFITS.map(({ Icon: BenefitIcon, title, body }) => (
