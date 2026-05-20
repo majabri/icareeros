@@ -3,9 +3,11 @@ import { headers } from "next/headers";
 
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }            from "@/components/landing/LandingNav";
-import { RootHeroSection }       from "@/components/landing/RootHeroSection";
-import { RootPlatformOverview }  from "@/components/landing/RootPlatformOverview";
-import { RootStagesSection }     from "@/components/landing/RootStagesSection";
+import { RootHeroSection }         from "@/components/landing/RootHeroSection";
+import { RootPlatformInnovation }  from "@/components/landing/RootPlatformInnovation";
+import { RootJobSeekerSection }    from "@/components/landing/RootJobSeekerSection";
+import { RootHiringTeamSection }   from "@/components/landing/RootHiringTeamSection";
+import { RootStagesSection }       from "@/components/landing/RootStagesSection";
 import { RootVisionSection }     from "@/components/landing/RootVisionSection";
 import { RootCTASection }        from "@/components/landing/RootCTASection";
 import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
@@ -126,7 +128,9 @@ function RootLanding() {
         <LandingNav />
         <main>
           <RootHeroSection />
-          <RootPlatformOverview />
+          <RootPlatformInnovation />
+          <RootJobSeekerSection />
+          <RootHiringTeamSection />
           <RootStagesSection />
           <RootVisionSection />
           <RootCTASection />

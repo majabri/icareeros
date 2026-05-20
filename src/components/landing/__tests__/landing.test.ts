@@ -19,7 +19,9 @@ const COMPONENTS = [
   // Root arm — icareeros.com (dual-audience).
   { file: "LandingNav.tsx", export: "LandingNav" },
   { file: "RootHeroSection.tsx", export: "RootHeroSection" },
-  { file: "RootPlatformOverview.tsx", export: "RootPlatformOverview" },
+  { file: "RootPlatformInnovation.tsx", export: "RootPlatformInnovation" },
+  { file: "RootJobSeekerSection.tsx", export: "RootJobSeekerSection" },
+  { file: "RootHiringTeamSection.tsx", export: "RootHiringTeamSection" },
   { file: "RootStagesSection.tsx", export: "RootStagesSection" },
   { file: "RootVisionSection.tsx", export: "RootVisionSection" },
   { file: "RootCTASection.tsx", export: "RootCTASection" },
