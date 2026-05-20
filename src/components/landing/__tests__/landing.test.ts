@@ -21,6 +21,9 @@ const COMPONENTS = [
   { file: "FeaturesSection.tsx", export: "FeaturesSection" },
   { file: "CTASection.tsx", export: "CTASection" },
   { file: "LandingNav.tsx", export: "LandingNav" },
+  { file: "JobsHeroSection.tsx", export: "JobsHeroSection" },
+  { file: "JobsCTASection.tsx", export: "JobsCTASection" },
+  { file: "JobsLandingNav.tsx", export: "JobsLandingNav" },
 ] as const;
 
 describe("Landing page component files", () => {
@@ -33,7 +36,7 @@ describe("Landing page component files", () => {
     });
   }
 
-  it("root page.tsx imports all landing sections", () => {
+  it("root page.tsx imports every landing section", () => {
     const pageSrc = readFileSync(
       resolve(LANDING_DIR, "../../app/page.tsx"),
       "utf-8"
@@ -41,5 +44,26 @@ describe("Landing page component files", () => {
     for (const { export: name } of COMPONENTS) {
       expect(pageSrc).toContain(name);
     }
+  });
+
+  it("page.tsx branches on the x-platform header", () => {
+    const pageSrc = readFileSync(
+      resolve(LANDING_DIR, "../../app/page.tsx"),
+      "utf-8"
+    );
+    // Header-driven branching (Option A from COWORK-BRIEF-platform-landing-v1)
+    expect(pageSrc).toContain('"x-platform"');
+    expect(pageSrc).toMatch(/JobsLanding/);
+    expect(pageSrc).toMatch(/RootLanding/);
+  });
+
+  it("generateMetadata returns per-host canonical URLs", () => {
+    const pageSrc = readFileSync(
+      resolve(LANDING_DIR, "../../app/page.tsx"),
+      "utf-8"
+    );
+    expect(pageSrc).toContain('"https://icareeros.com"');
+    expect(pageSrc).toContain('"https://jobs.icareeros.com"');
+    expect(pageSrc).toContain('locale: "en_US"');
   });
 });
