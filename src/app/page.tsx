@@ -7,7 +7,6 @@ import { RootHeroSection }         from "@/components/landing/RootHeroSection";
 import { RootPlatformInnovation }  from "@/components/landing/RootPlatformInnovation";
 import { RootJobSeekerSection }    from "@/components/landing/RootJobSeekerSection";
 import { RootHiringTeamSection }   from "@/components/landing/RootHiringTeamSection";
-import { RootStagesSection }       from "@/components/landing/RootStagesSection";
 import { RootVisionSection }     from "@/components/landing/RootVisionSection";
 import { RootCTASection }        from "@/components/landing/RootCTASection";
 import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
@@ -132,7 +131,6 @@ function RootLanding() {
           <RootPlatformInnovation />
           <RootJobSeekerSection />
           <RootHiringTeamSection />
-          <RootStagesSection />
           <RootVisionSection />
           <RootCTASection />
         </main>

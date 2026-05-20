@@ -27,14 +27,6 @@ export function RootHeroSection() {
           The system works because both sides are in it.
         </p>
 
-        <div style={{ display:"flex", gap:"1rem", justifyContent:"center", flexWrap:"wrap" }}>
-          <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            For job seekers — start free →
-          </a>
-          <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-secondary">
-            For hiring teams — start free →
-          </a>
-        </div>
       </div>
     </section>
   );

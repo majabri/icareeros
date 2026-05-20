@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
  * LandingNav — icareeros.com root nav (dual-audience).
  *
  * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 3 nav:
- *   Logo | The Platform | For Job Seekers | For Hiring Teams | Sign In | Get Started →
+ *   Logo | The Platform | For Job Seekers | For Hiring Teams | Sign In | Get Started — free →
  *
  * All auth links absolute icareeros.com URLs. Audience-switcher links
  * scroll within the page (#job-seekers / #hiring-teams) — both anchors
@@ -106,7 +106,7 @@ export function LandingNav() {
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,184,169,0.20)";
               }}
             >
-              Get Started →
+              Get Started — free →
             </a>
           </li>
 
@@ -173,7 +173,7 @@ export function LandingNav() {
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
                 fontWeight: 600, textDecoration: "none",
-              }}>Get Started →</a>
+              }}>Get Started — free →</a>
             </li>
           </ul>
         </div>

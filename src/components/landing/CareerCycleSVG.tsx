@@ -7,18 +7,17 @@
  * and RootHiringTeamSection (#hiring-teams). Same visual; different
  * stage labels and centre text per caller.
  *
- * Visual:
- *   - 6 numbered nodes evenly placed around a circle (start at top,
- *     clockwise).
- *   - Curved arcs between consecutive nodes with arrowheads showing
- *     the direction of flow.
- *   - A dashed background ring rotates slowly to convey continuous
- *     motion.
- *   - Each node pulses gently, staggered, so the cycle reads as "alive".
- *   - Centre badge holds the cycle title + a small ↻ rotating glyph.
+ * Synchronised highlight (added 2026-05-20, per Amir):
+ *   - The parent section drives a `currentStage` counter (auto-advance
+ *     every 3s, paused on hover) and passes it in as a prop.
+ *   - The SVG highlights node N (larger pulse + brighter fill +
+ *     drop-shadow glow) so the visitor's eye is led around the loop.
+ *   - The parent section uses the same currentStage to highlight the
+ *     matching description card — circle and copy breathe in sync.
  *
- * No external dependencies beyond brand tokens. Animations are CSS
- * keyframes (no JS state) so it stays cheap to render on the landing.
+ * The background dashed ring still rotates continuously regardless of
+ * `currentStage` so the cycle reads as alive even when the user pauses
+ * the auto-advance.
  */
 
 type Stage = {
@@ -31,9 +30,12 @@ type Stage = {
 export function CareerCycleSVG({
   stages,
   centerLabel,
+  currentStage,
 }: {
-  stages:      Stage[];
-  centerLabel: string;
+  stages:        Stage[];
+  centerLabel:   string;
+  /** 0-indexed currently-highlighted stage. Defaults to no highlight. */
+  currentStage?: number;
 }) {
   const cx = 250;
   const cy = 250;
@@ -91,8 +93,17 @@ export function CareerCycleSVG({
             <stop offset="100%" stopColor="rgba(0,184,169,0.10)" />
           </radialGradient>
 
+          <radialGradient id="cycle-node-grad-active" cx="50%" cy="40%" r="60%">
+            <stop offset="0%"   stopColor="#FFFFFF" />
+            <stop offset="100%" stopColor="rgba(0,184,169,0.45)" />
+          </radialGradient>
+
           <filter id="cycle-soft-shadow" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#00B8A9" floodOpacity="0.20" />
+          </filter>
+
+          <filter id="cycle-active-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#00B8A9" floodOpacity="0.55" />
           </filter>
         </defs>
 
@@ -112,18 +123,20 @@ export function CareerCycleSVG({
           />
         </g>
 
-        {/* Connecting arcs — drawn under the nodes so node circles overlap edges. */}
+        {/* Connecting arcs — highlight the arc leaving the active node */}
         {stages.map((_, i) => {
           const next = (i + 1) % stages.length;
+          const isActive = i === currentStage;
           return (
             <path
               key={`arc-${i}`}
               d={arcPath(i, next)}
               fill="none"
               stroke="#00B8A9"
-              strokeWidth="1.5"
-              strokeOpacity="0.55"
+              strokeWidth={isActive ? 2.5 : 1.5}
+              strokeOpacity={isActive ? 1 : 0.55}
               markerEnd="url(#cycle-arrow)"
+              style={{ transition: "stroke-width 600ms ease, stroke-opacity 600ms ease" }}
             />
           );
         })}
@@ -173,6 +186,7 @@ export function CareerCycleSVG({
         {/* Stage nodes — number + outer label */}
         {stages.map((s, i) => {
           const p = positions[i];
+          const isActive = i === currentStage;
 
           // Label position — push slightly outside the node along the
           // radial outward vector so labels don't overlap the ring.
@@ -186,22 +200,26 @@ export function CareerCycleSVG({
                 cx={p.x}
                 cy={p.y}
                 r={nodeR + 6}
-                fill="rgba(0,184,169,0.10)"
+                fill={isActive ? "rgba(0,184,169,0.30)" : "rgba(0,184,169,0.10)"}
                 style={{
                   transformOrigin: `${p.x}px ${p.y}px`,
-                  animation: "career-cycle-pulse 4s ease-in-out infinite",
-                  animationDelay: `${i * 0.65}s`,
+                  animation: isActive
+                    ? "career-cycle-active-pulse 1.6s ease-in-out infinite"
+                    : "career-cycle-pulse 4s ease-in-out infinite",
+                  animationDelay: isActive ? "0s" : `${i * 0.65}s`,
+                  transition: "fill 400ms ease",
                 }}
               />
 
               <circle
                 cx={p.x}
                 cy={p.y}
-                r={nodeR}
-                fill="url(#cycle-node-grad)"
+                r={isActive ? nodeR + 2 : nodeR}
+                fill={isActive ? "url(#cycle-node-grad-active)" : "url(#cycle-node-grad)"}
                 stroke="#00B8A9"
-                strokeWidth="2"
-                filter="url(#cycle-soft-shadow)"
+                strokeWidth={isActive ? 3 : 2}
+                filter={isActive ? "url(#cycle-active-glow)" : "url(#cycle-soft-shadow)"}
+                style={{ transition: "r 400ms ease, stroke-width 400ms ease" }}
               />
               <text
                 x={p.x}
@@ -221,8 +239,9 @@ export function CareerCycleSVG({
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize="13"
-                fontWeight="700"
-                fill="#0F1B2D"
+                fontWeight={isActive ? 800 : 700}
+                fill={isActive ? "#00B8A9" : "#0F1B2D"}
+                style={{ transition: "fill 400ms ease, font-weight 400ms ease" }}
               >
                 {s.label}
               </text>
@@ -238,6 +257,15 @@ export function CareerCycleSVG({
           @keyframes career-cycle-pulse {
             0%, 100% { opacity: 0.45; transform: scale(1); }
             50%      { opacity: 1;    transform: scale(1.08); }
+          }
+          @keyframes career-cycle-active-pulse {
+            0%, 100% { opacity: 0.75; transform: scale(1); }
+            50%      { opacity: 1;    transform: scale(1.18); }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            [class*="career-cycle"], svg [style*="career-cycle"] {
+              animation: none !important;
+            }
           }
         `}</style>
       </svg>
