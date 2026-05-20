@@ -18,9 +18,12 @@ import { JobsVisionSection }     from "@/components/landing/JobsVisionSection";
 import { JobsCTASection }        from "@/components/landing/JobsCTASection";
 import { HireLandingNav }        from "@/components/landing/HireLandingNav";
 import { HireHeroSection }       from "@/components/landing/HireHeroSection";
-import { HireHowItWorksSection } from "@/components/landing/HireHowItWorksSection";
+import { HirePainSection }       from "@/components/landing/HirePainSection";
+import { HireWorkflowSection }   from "@/components/landing/HireWorkflowSection";
 import { HireFeaturesSection }   from "@/components/landing/HireFeaturesSection";
+import { HireVisionSection }     from "@/components/landing/HireVisionSection";
 import { HireFAQSection }        from "@/components/landing/HireFAQSection";
+import { HireCTASection }        from "@/components/landing/HireCTASection";
 
 /**
  * Root + jobs.* + hire.* landing page.
@@ -162,9 +165,12 @@ function HireLanding() {
         <HireLandingNav />
         <main>
           <HireHeroSection />
-          <HireHowItWorksSection />
+          <HirePainSection />
+          <HireWorkflowSection />
           <HireFeaturesSection />
+          <HireVisionSection />
           <HireFAQSection />
+          <HireCTASection />
         </main>
       </div>
     </>
