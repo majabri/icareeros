@@ -19,10 +19,8 @@ const COMPONENTS = [
   { file: "HeroSection.tsx", export: "HeroSection" },
   { file: "LifecycleSection.tsx", export: "LifecycleSection" },
   { file: "FeaturesSection.tsx", export: "FeaturesSection" },
-  { file: "StatsSection.tsx", export: "StatsSection" },
   { file: "CTASection.tsx", export: "CTASection" },
   { file: "LandingNav.tsx", export: "LandingNav" },
-  { file: "LandingFooter.tsx", export: "LandingFooter" },
 ] as const;
 
 describe("Landing page component files", () => {

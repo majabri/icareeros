@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
 import { ConstellationBackground } from "@/components/ConstellationBackground";
-import { LandingNav }         from "@/components/landing/LandingNav";
-import { HeroSection }        from "@/components/landing/HeroSection";
-import { SocialProofSection } from "@/components/landing/SocialProofSection";
-import { ProblemSection }     from "@/components/landing/ProblemSection";
-import { LifecycleSection }   from "@/components/landing/LifecycleSection";
-import { FeaturesSection }    from "@/components/landing/FeaturesSection";
-import { StatsSection }       from "@/components/landing/StatsSection";
-import { FAQSection }         from "@/components/landing/FAQSection";
-import { CTASection }         from "@/components/landing/CTASection";
-import { LandingFooter }      from "@/components/landing/LandingFooter";
+import { LandingNav }       from "@/components/landing/LandingNav";
+import { HeroSection }      from "@/components/landing/HeroSection";
+import { ProblemSection }   from "@/components/landing/ProblemSection";
+import { LifecycleSection } from "@/components/landing/LifecycleSection";
+import { FeaturesSection }  from "@/components/landing/FeaturesSection";
+import { FAQSection }       from "@/components/landing/FAQSection";
+import { CTASection }       from "@/components/landing/CTASection";
 
 export const metadata: Metadata = {
   title: "iCareerOS — The career OS that runs on outcomes, not advice.",
@@ -21,7 +18,9 @@ export const metadata: Metadata = {
     url: "https://icareeros.com",
     siteName: "iCareerOS",
     type: "website",
+    locale: "en_US",
   },
+  alternates: { canonical: "https://icareeros.com" },
 };
 
 export default function LandingPage() {
@@ -29,18 +28,15 @@ export default function LandingPage() {
     <>
       <ConstellationBackground />
       <div style={{ position: "relative", zIndex: 1 }}>
-      <LandingNav />
-      <main>
-        <HeroSection />
-        <SocialProofSection />
-        <ProblemSection />
-        <LifecycleSection />
-        <FeaturesSection />
-        <FAQSection />
-        <CTASection />
-        <StatsSection />
-      </main>
-      <LandingFooter />
+        <LandingNav />
+        <main>
+          <HeroSection />
+          <ProblemSection />
+          <LifecycleSection />
+          <FeaturesSection />
+          <FAQSection />
+          <CTASection />
+        </main>
       </div>
     </>
   );
