@@ -1,13 +1,22 @@
 "use client";
 import { useEffect, useRef } from "react";
+import {
+  IconCompass,
+  IconTarget,
+  IconBooks,
+  IconUsers,
+  IconTrendingUp,
+  IconRefresh,
+  type Icon,
+} from "@tabler/icons-react";
 
-const FEATURES = [
-  { icon:"🧭", title:"Career Clarity",      desc:"Advanced assessments reveal your strengths and potential paths. No guessing, just clarity." },
-  { icon:"🎯", title:"Smart Matching",       desc:"Find roles and growth opportunities aligned with your goals, not just keyword matches." },
-  { icon:"📚", title:"Learning Paths",       desc:"Personalized skill-building journeys designed just for you. Learn what matters." },
-  { icon:"👥", title:"Real Mentorship",      desc:"Connect with mentors who've walked your path. Get advice from people who understand." },
-  { icon:"📈", title:"Progress Tracking",    desc:"Watch your growth unfold. Visual milestones keep you motivated and on track." },
-  { icon:"🔄", title:"Continuous Growth",    desc:"Your career never stops evolving. iCareerOS grows with you every step of the way." },
+const FEATURES: Array<{ Icon: Icon; title: string; desc: string }> = [
+  { Icon: IconCompass,    title: "Career Clarity",   desc: "Advanced assessments reveal your strengths and potential paths. No guessing, just clarity." },
+  { Icon: IconTarget,     title: "Smart Matching",   desc: "Find roles and growth opportunities aligned with your goals, not just keyword matches." },
+  { Icon: IconBooks,      title: "Learning Paths",   desc: "Personalized skill-building journeys designed just for you. Learn what matters." },
+  { Icon: IconUsers,      title: "Real Mentorship",  desc: "Connect with mentors who've walked your path. Get advice from people who understand." },
+  { Icon: IconTrendingUp, title: "Progress Tracking",desc: "Watch your growth unfold. Visual milestones keep you motivated and on track." },
+  { Icon: IconRefresh,    title: "Continuous Growth",desc: "Your career never stops evolving. iCareerOS grows with you every step of the way." },
 ];
 
 export function FeaturesSection() {
@@ -29,20 +38,24 @@ export function FeaturesSection() {
         </p>
 
         <div className="features-grid" style={{ display:"grid", gap:"2rem", marginTop:"3rem" }}>
-          {FEATURES.map(f => (
-            <div key={f.title} className="fade-in" style={{
+          {FEATURES.map(({ Icon: FeatureIcon, title, desc }) => (
+            <div key={title} className="fade-in" style={{
               background:"var(--neutral-100)", padding:"3rem 2.5rem", borderRadius:"1.5rem",
               border:"1px solid var(--neutral-300)", transition:"all 0.3s", textAlign:"left",
             }}
-            onMouseEnter={e => { const el = e.currentTarget; el.style.borderColor="var(--primary)"; el.style.boxShadow="0 15px 40px rgba(0,217,255,0.12)"; el.style.transform="translateY(-8px)"; }}
+            onMouseEnter={e => { const el = e.currentTarget; el.style.borderColor="#00B8A9"; el.style.boxShadow="0 15px 40px rgba(0,184,169,0.12)"; el.style.transform="translateY(-8px)"; }}
             onMouseLeave={e => { const el = e.currentTarget; el.style.borderColor="var(--neutral-300)"; el.style.boxShadow=""; el.style.transform=""; }}>
               <div style={{
-                width:80, height:80, background:"linear-gradient(135deg,var(--primary) 0%,var(--tertiary) 100%)",
-                borderRadius:"1rem", display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:"2rem", marginBottom:"1.5rem", boxShadow:"0 4px 15px rgba(0,217,255,0.15)",
-              }}>{f.icon}</div>
-              <h3 style={{ fontSize:"1.35rem", fontWeight:700, marginBottom:"0.85rem", color:"var(--neutral-900)" }}>{f.title}</h3>
-              <p style={{ color:"var(--neutral-700)", fontSize:"1rem", lineHeight:1.7 }}>{f.desc}</p>
+                width:48, height:48,
+                background:"rgba(0,184,169,0.10)",
+                borderRadius:"0.75rem",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                marginBottom:"1.5rem",
+              }}>
+                <FeatureIcon size={20} stroke={1.5} color="#00B8A9" />
+              </div>
+              <h3 style={{ fontSize:"1.35rem", fontWeight:700, marginBottom:"0.85rem", color:"var(--neutral-900)" }}>{title}</h3>
+              <p style={{ color:"var(--neutral-700)", fontSize:"1rem", lineHeight:1.7 }}>{desc}</p>
             </div>
           ))}
         </div>
