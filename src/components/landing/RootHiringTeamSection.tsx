@@ -94,23 +94,30 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   },
 ];
 
-const SYNC_INTERVAL_MS = 3000;
+// Per-stage dwell times (ms). Stages 1-5 advance every 2s; stage 6
+// dwells for 10s before wrapping back to stage 1. Per Amir 2026-05-20.
+const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 10000];
 
 export function RootHiringTeamSection() {
   const [currentStage, setCurrentStage] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
+    // Respect user preference for reduced motion: no auto-advance.
     if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
     if (paused) return;
-    const id = window.setInterval(
+    // setTimeout (not setInterval) so each stage can have its own dwell —
+    // stages 1-5 advance every 2s, stage 6 dwells 10s. The effect re-runs
+    // on each currentStage change which restarts the timer with the new
+    // stage's duration.
+    const id = window.setTimeout(
       () => setCurrentStage(n => (n + 1) % STAGES.length),
-      SYNC_INTERVAL_MS,
+      STAGE_DURATIONS_MS[currentStage] ?? 2000,
     );
-    return () => window.clearInterval(id);
-  }, [paused]);
+    return () => window.clearTimeout(id);
+  }, [currentStage, paused]);
 
   return (
     <section
@@ -256,7 +263,7 @@ export function RootHiringTeamSection() {
               currentStage={currentStage}
             />
             <div style={{ textAlign:"center", marginTop:"0.5rem", fontSize:"0.85rem", color:"var(--neutral-700)" }}>
-              Auto-advances every {Math.round(SYNC_INTERVAL_MS / 1000)}s · pauses on hover
+              Advances every 2s · dwells 10s on stage 6 · pauses on hover
             </div>
           </div>
         </div>
@@ -317,11 +324,6 @@ export function RootHiringTeamSection() {
           ))}
         </div>
 
-        <div style={{ textAlign: "center" }}>
-          <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-primary">
-            Start hiring with iTalentOS — free →
-          </a>
-        </div>
       </div>
 
       <style>{`

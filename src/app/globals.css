@@ -449,16 +449,19 @@ body {
 }
 
 
-/* ── Landing sections — transparent in dark mode (Amir 2026-05-11) ───
+/* ── Landing sections — transparent in BOTH modes (Amir 2026-05-20) ──
    Sections tagged with .landing-fade-bg drop their inline gradient in
-   dark mode so the global ConstellationBackground reads through. Light
-   mode unchanged — the inline gradients still apply.
+   both light AND dark mode so the global ConstellationBackground +
+   body gradient read through the whole vertical scroll. The opaque
+   cards/tiles nested inside each section keep their own backgrounds
+   (white / neutral-100 in light, navy in dark) so body copy stays
+   readable against the animated starfield.
 
-   The catch-all selectors below also handle inline-styled children that
-   use --neutral-100/--neutral-200 backgrounds (Lifecycle stage card,
-   FAQ accordion items, etc.). They're rewritten
-   to a translucent navy with blur in dark mode. */
-[data-theme='dark'] .landing-fade-bg {
+   Previously this rule was scoped to [data-theme='dark'] only; lifting
+   the restriction makes the page transparent in light mode too. The
+   pale body-gradient + sparse constellation particles still give plenty
+   of contrast for dark text on light mode. */
+.landing-fade-bg {
   background: transparent !important;
   border-bottom-color: var(--surface-border) !important;
 }
