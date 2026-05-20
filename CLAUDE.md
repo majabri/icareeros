@@ -58,11 +58,33 @@ supabase functions serve      # local edge fn runtime
 
 ---
 
-## Current state (as of 2026-05-07)
+## Current state (as of 2026-05-20)
 
-**HEAD on `main`:** `b60c770` — Phase 6 in progress.
-**Last full handoff:** `docs/AGENT_HANDOFF_20260507d.md` (Phase 5 complete).
-**Test suite:** 466/466 unit tests passing (Vitest); E2E suite via Playwright.
+**HEAD on `main`:** `7ce8bba` — feat(landing): three-domain copy overhaul (#264).
+
+> The detailed live state (per-arm landing inventory, recent merges,
+> active features, env vars, open backlog) lives in the workspace
+> CLAUDE.md in Google Drive:
+> `https://drive.google.com/open?id=1BbNbup5P0xNGljUIUkPh_qE5hAYrc3Ob`
+> The rest of this in-repo file documents Phase 5/6 baseline state
+> from 2026-05-07 — useful as historical context for the Stripe
+> activation, feature flags, and webhook setup that hasn't yet shipped.
+
+**Recent landing-page work (2026-05-20):**
+- #264 Three-domain landing copy overhaul — Career OS framing, brand
+  voice, 21 components (per-arm component ownership: Root 6 / Jobs 7 /
+  Hire 8; zero shared landing components remain).
+- #263 Three-domain landing alignment — social proof out, Tabler icons
+  in, per-host metadata, public hire.* landing (middleware Phase-4
+  split for hire.* `/`).
+
+**Last full handoff:** `docs/AGENT_HANDOFF_20260520b.md` (landing copy
+overhaul); see `AGENT_HANDOFF_20260507d.md` for the Phase 5/Stripe
+baseline still referenced below.
+
+**Test suite:** Type-check + Unit tests green on `7ce8bba` (CI required
+check). Local `pnpm test` sweep was not run by the Cowork session due
+to sandbox disk pressure; CI is the source of truth.
 
 ### Active features (Phase 1-5 shipped)
 
