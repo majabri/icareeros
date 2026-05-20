@@ -28,7 +28,7 @@ export function JobsCTASection() {
           className="btn btn-primary"
           style={{ fontSize: "1.05rem", padding: "0.85rem 1.75rem" }}
         >
-          Start your career OS →
+          Start your iJobsOS — it's free →
         </a>
       </div>
     </section>

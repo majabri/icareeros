@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 
 /**
- * HirePathwaySection — Talent OS framework walkthrough on hire.icareeros.com.
+ * HirePathwaySection — iTalentOS framework walkthrough on hire.icareeros.com.
  *
  * Per Amir 2026-05-20: the strategic framework underpinning what hiring
  * teams do in the platform. Six stages, verbatim definitions, plus the
@@ -72,11 +72,11 @@ export function HirePathwaySection() {
             The framework
           </div>
           <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", lineHeight:1.2 }}>
-            Talent OS — six stages that build workforce stability.
+            iTalentOS — six stages that build workforce stability.
           </h2>
           <p style={{ fontSize:"1.15rem", color:"var(--neutral-700)", maxWidth:780, margin:"0 auto", lineHeight:1.7 }}>
             Retention is the outcome of disciplined upstream management,
-            not a single HR program. Talent OS treats it as a closed-loop
+            not a single HR program. iTalentOS treats it as a closed-loop
             operating system — each stage with an owner, a workflow, and
             measurable outcomes.
           </p>

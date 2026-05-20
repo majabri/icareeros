@@ -63,7 +63,7 @@ export function RootCTASection() {
             Six stages, AI coaching, continuous loop. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your career OS →
+            Start your iJobsOS — it's free →
           </a>
         </div>
 

@@ -13,7 +13,7 @@ export function HireHeroSection() {
     }}>
       <div style={{ maxWidth: 920, position: "relative", zIndex: 2 }}>
         <div style={{ color:"#00B8A9", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
-          iCareerOS for Hiring
+          iTalentOS by iCareerOS
         </div>
 
         <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.15, letterSpacing:"-1px", color:"var(--text-primary)" }}>

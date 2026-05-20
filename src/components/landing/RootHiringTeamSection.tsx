@@ -10,14 +10,14 @@ import { CareerCycleSVG } from "./CareerCycleSVG";
  * RootHiringTeamSection — #hiring-teams section on icareeros.com.
  *
  * Per Amir 2026-05-20 (second iteration): the hiring-team side runs on
- * the **Talent OS** framework (sister to Career OS on the job-seeker
+ * the **iTalentOS** product (sister to iJobsOS on the job-seeker
  * side). The six stages are Design / Select / Integrate / Support /
  * Develop / Retain — operational stages of the People Retention
  * Pathway as sourced from standard HR literature, renamed for the
  * iCareerOS brand. Verbatim stage definitions from Amir's spec.
  *
  * Replaces the earlier mis-framing of "Career OS for hiring teams"
- * from PR #266 — hiring teams don't run the Career OS (that's the
+ * from PR #266 — hiring teams don't run iJobsOS (that's the
  * candidate's framework).
  */
 
@@ -40,7 +40,7 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   {
     Icon: IconShieldCheck,
     title: "Lower avoidable turnover",
-    body:  "Talent OS treats retention as the result of disciplined upstream management — clearer role design, better fit, stronger onboarding, deeper development — not a single HR program bolted on at the end.",
+    body:  "iTalentOS treats retention as the result of disciplined upstream management — clearer role design, better fit, stronger onboarding, deeper development — not a single HR program bolted on at the end.",
   },
   {
     Icon: IconChartHistogram,
@@ -55,7 +55,7 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   {
     Icon: IconHeartHandshake,
     title: "A direct line to engaged candidates",
-    body:  "iCareerOS candidates run their own Career OS loop — assessing fit, building skills, preparing for interviews — and opt in to be discovered. A different kind of first conversation between hiring teams and the people they want to hire.",
+    body:  "iCareerOS candidates run their own iJobsOS loop — assessing fit, building skills, preparing for interviews — and opt in to be discovered. A different kind of first conversation between hiring teams and the people they want to hire.",
   },
 ];
 
@@ -68,7 +68,7 @@ export function RootHiringTeamSection() {
             For hiring teams
           </div>
           <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"1rem", color:"var(--neutral-900)", lineHeight:1.2 }}>
-            A Talent OS for hiring teams.
+            iTalentOS — for hiring teams.
           </h2>
           <p style={{ fontSize:"1.15rem", color:"var(--neutral-700)", maxWidth:780, margin:"0 auto", lineHeight:1.7 }}>
             Six stages that align role design, hiring, onboarding,
@@ -114,7 +114,7 @@ export function RootHiringTeamSection() {
 
           <div>
             <CareerCycleSVG
-              centerLabel="Talent OS"
+              centerLabel="iTalentOS"
               stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
             />
           </div>
@@ -122,7 +122,7 @@ export function RootHiringTeamSection() {
 
         {/* Benefits grid */}
         <h3 style={{ fontSize:"1.85rem", fontWeight:700, color:"var(--neutral-900)", textAlign:"center", marginBottom:"2.5rem" }}>
-          What hiring teams get out of running Talent OS.
+          What hiring teams get out of running iTalentOS.
         </h3>
         <div className="root-ht-benefits-grid" style={{ display:"grid", gap:"1.5rem", marginBottom:"3rem" }}>
           {BENEFITS.map(({ Icon: BenefitIcon, title, body }) => (

@@ -3,14 +3,14 @@
 /**
  * JobsVisionSection — vision block for the jobs landing.
  * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1 —
- * "A career OS, not a career app."
+ * "iJobsOS — a system, not an app."
  */
 export function JobsVisionSection() {
   return (
     <section className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)" }}>
       <div style={{ maxWidth:780, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"2rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          A career OS, not a career app.
+          iJobsOS — a system, not an app.
         </h2>
 
         <div style={{ display:"flex", flexDirection:"column", gap:"1.5rem", color:"var(--neutral-800)", fontSize:"1.1rem", lineHeight:1.75 }}>
