@@ -3,9 +3,8 @@
 /**
  * JobsHeroSection — jobs.icareeros.com hero.
  *
- * Job-seeker-only copy per COWORK-BRIEF-platform-landing-v1.md Task 2.
- * Single primary CTA (Start your career OS →) routes to the centralised
- * signup on icareeros.com with role=job_seeker prefilled.
+ * Copy per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1.
+ * Brand voice: direct, system-language, no career-coach platitudes.
  */
 export function JobsHeroSection() {
   return (
@@ -16,21 +15,23 @@ export function JobsHeroSection() {
     }}>
       <div style={{ maxWidth: 900, position: "relative", zIndex: 2 }}>
         <div style={{ color:"#00B8A9", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
-          The AI-powered career platform
+          The career operating system
         </div>
 
-        <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.2, letterSpacing:"-1px", color:"var(--text-primary)" }}>
-          Your career OS. Six stages.<br/>Real outcomes.
+        <h1 style={{ fontSize:"3.5rem", fontWeight:800, marginBottom:"1.5rem", lineHeight:1.15, letterSpacing:"-1px", color:"var(--text-primary)" }}>
+          Your career doesn&rsquo;t need more advice.<br/>It needs a system.
         </h1>
 
-        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:680, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
-          A continuous career operating system that runs from Evaluate
-          to Achieve — looping until you land your next milestone.
+        <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:720, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
+          iCareerOS runs a continuous six-stage loop — from Evaluate to
+          Achieve — handling the mechanics of your job search so you can
+          focus on the one thing no AI can do for you: showing up and
+          performing.
         </p>
 
         <div style={{ display:"flex", gap:"1.5rem", justifyContent:"center", flexWrap:"wrap" }}>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your career OS →
+            Start your career OS — it&rsquo;s free →
           </a>
         </div>
       </div>

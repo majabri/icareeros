@@ -11,6 +11,10 @@ import { FAQSection }            from "@/components/landing/FAQSection";
 import { CTASection }            from "@/components/landing/CTASection";
 import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
 import { JobsHeroSection }       from "@/components/landing/JobsHeroSection";
+import { JobsPainSection }       from "@/components/landing/JobsPainSection";
+import { JobsStagesSection }     from "@/components/landing/JobsStagesSection";
+import { JobsFeaturesSection }   from "@/components/landing/JobsFeaturesSection";
+import { JobsVisionSection }     from "@/components/landing/JobsVisionSection";
 import { JobsCTASection }        from "@/components/landing/JobsCTASection";
 import { HireLandingNav }        from "@/components/landing/HireLandingNav";
 import { HireHeroSection }       from "@/components/landing/HireHeroSection";
@@ -139,10 +143,10 @@ function JobsLanding() {
         <JobsLandingNav />
         <main>
           <JobsHeroSection />
-          <ProblemSection />
-          <LifecycleSection />
-          <FeaturesSection />
-          <FAQSection />
+          <JobsPainSection />
+          <JobsStagesSection />
+          <JobsFeaturesSection />
+          <JobsVisionSection />
           <JobsCTASection />
         </main>
       </div>
