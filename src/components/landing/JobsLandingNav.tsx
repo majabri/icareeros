@@ -4,12 +4,14 @@ import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 /**
- * jobs.icareeros.com nav — job-seeker only.
+ * JobsLandingNav — jobs.icareeros.com nav.
  *
- * Sister component to LandingNav (root). Differences vs. root:
- *   - No "For job seekers" / "For hiring teams" audience-switcher links.
- *   - No "Impact" anchor (StatsSection was retired in #PR_TBD).
- *   - Sign In + Start Free always point at icareeros.com (single auth surface).
+ * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1 nav:
+ *   Logo | How it Works | The 6 Stages | For Employers | Sign In | Start Free →
+ *
+ * All auth links are absolute icareeros.com URLs — registration is
+ * centralised on the root domain (middleware Phase 3, PR #258).
+ * "For Employers" routes to hire.icareeros.com (same tab).
  */
 export function JobsLandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -28,8 +30,9 @@ export function JobsLandingNav() {
   }, []);
 
   const NAV_LINKS: Array<[string, string]> = [
-    ["#lifecycle", "The Journey"],
-    ["#features",  "Features"],
+    ["#features",                       "How it Works"],
+    ["#stages",                         "The 6 Stages"],
+    ["https://hire.icareeros.com",      "For Employers"],
   ];
 
   return (
@@ -88,8 +91,8 @@ export function JobsLandingNav() {
 
           <li>
             <a
-              href="https://icareeros.com/auth/signup"
-              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap transition-all"
+              href="https://icareeros.com/auth/signup?role=job_seeker"
+              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap"
               style={{
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)",
@@ -97,15 +100,13 @@ export function JobsLandingNav() {
                 boxShadow: "0 4px 15px rgba(0,184,169,0.20)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,184,169,0.30)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "";
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,184,169,0.20)";
               }}
             >
-              Start Free
+              Start Free →
             </a>
           </li>
 
@@ -167,12 +168,12 @@ export function JobsLandingNav() {
               <ThemeToggle />
             </li>
             <li style={{ marginTop: "1rem" }}>
-              <a href="https://icareeros.com/auth/signup" onClick={() => setMenuOpen(false)} style={{
+              <a href="https://icareeros.com/auth/signup?role=job_seeker" onClick={() => setMenuOpen(false)} style={{
                 display: "block", textAlign: "center",
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
                 fontWeight: 600, textDecoration: "none",
-              }}>Start Free</a>
+              }}>Start Free →</a>
             </li>
           </ul>
         </div>

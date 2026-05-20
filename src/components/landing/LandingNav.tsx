@@ -3,6 +3,16 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
+/**
+ * LandingNav — icareeros.com root nav (dual-audience).
+ *
+ * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 3 nav:
+ *   Logo | The Platform | For Job Seekers | For Hiring Teams | Sign In | Get Started →
+ *
+ * All auth links absolute icareeros.com URLs. Audience-switcher links
+ * scroll within the page (#job-seekers / #hiring-teams) — both anchors
+ * live inside RootPlatformOverview.
+ */
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -13,21 +23,16 @@ export function LandingNav() {
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  // Close menu on resize to desktop
   useEffect(() => {
     const fn = () => { if (window.innerWidth >= 768) setMenuOpen(false); };
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
 
-  // Phase 1 subdomain (2026-05-16) — subtle audience switcher pinned
-  // to the right of the section anchors. Each links to the relevant
-  // signup with role pre-selected.
-  const NAV_LINKS = [
-    ["#lifecycle", "The Journey"],
-    ["#features",  "Features"],
-    ["/auth/signup?role=job_seeker", "For job seekers"],
-    ["/auth/signup?role=employer",   "For hiring teams"],
+  const NAV_LINKS: Array<[string, string]> = [
+    ["#platform",      "The Platform"],
+    ["#job-seekers",   "For Job Seekers"],
+    ["#hiring-teams",  "For Hiring Teams"],
   ];
 
   return (
@@ -38,26 +43,16 @@ export function LandingNav() {
       boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
       transition: "box-shadow 0.3s",
     }}>
-      {/* Main bar */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         padding: "1.25rem 1.5rem",
         maxWidth: "1200px", margin: "0 auto",
       }}>
-        {/* Logo */}
         <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
           <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
         </a>
 
-        {/* Desktop nav — `hidden lg:flex` keeps everything but logo +
-            auth buttons off-screen below 1024px so nothing wraps. */}
-        <ul
-          className="hidden lg:flex list-none m-0 p-0 items-center gap-8"
-        >
-          {/* Section anchors + audience switcher.
-              text-sm + font-normal + whitespace-nowrap so the labels
-              never break onto two lines and stay clearly subordinate
-              to the iCareerOS wordmark on the left. */}
+        <ul className="hidden lg:flex list-none m-0 p-0 items-center gap-8">
           {NAV_LINKS.map(([href, label]) => (
             <li key={href}>
               <a
@@ -69,72 +64,62 @@ export function LandingNav() {
             </li>
           ))}
 
-          {/* Sign In — same text-sm so it visually matches the nav links. */}
           <li>
             <a
-              href="/auth/login"
+              href="https://icareeros.com/auth/login"
               className="inline-block text-sm font-medium no-underline rounded-full transition-colors whitespace-nowrap"
               style={{
-                border: "2px solid var(--primary)",
-                color: "var(--primary)",
+                border: "2px solid #00B8A9",
+                color: "#00B8A9",
                 background: "transparent",
                 padding: "0.5rem 1.1rem",
               }}
               onMouseEnter={(e) => {
                 const el = e.currentTarget as HTMLElement;
-                el.style.background = "var(--primary)";
+                el.style.background = "#00B8A9";
                 el.style.color = "var(--neutral-100)";
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget as HTMLElement;
                 el.style.background = "transparent";
-                el.style.color = "var(--primary)";
+                el.style.color = "#00B8A9";
               }}
             >
               Sign In
             </a>
           </li>
 
-          {/* Start Free — keep teal fill, reduce typography to text-sm
-              font-medium so it doesn't dominate. */}
           <li>
             <a
-              href="/auth/signup"
-              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap transition-all"
+              href="https://icareeros.com/auth/signup"
+              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap"
               style={{
-                background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
+                background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)",
                 padding: "0.55rem 1.3rem",
-                boxShadow: "0 4px 15px rgba(0,217,255,0.2)",
+                boxShadow: "0 4px 15px rgba(0,184,169,0.20)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,217,255,0.3)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,184,169,0.30)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "";
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,217,255,0.2)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,184,169,0.20)";
               }}
             >
-              Start Free
+              Get Started →
             </a>
           </li>
 
-          <li>
-            {/* Theme toggle — pinned right of Start Free (Amir 2026-05-11). */}
-            <ThemeToggle compact />
-          </li>
+          <li><ThemeToggle compact /></li>
         </ul>
 
-        {/* Below lg (1024px): logo + Sign In + hamburger only.
-            flex lg:hidden inverts the desktop nav's hidden lg:flex. */}
         <div className="flex lg:hidden items-center gap-3">
           <a
-            href="/auth/login"
+            href="https://icareeros.com/auth/login"
             className="inline-block text-sm font-medium no-underline rounded-full transition-colors whitespace-nowrap"
             style={{
-              border: "2px solid var(--primary)",
-              color: "var(--primary)",
+              border: "2px solid #00B8A9",
+              color: "#00B8A9",
               background: "transparent",
               padding: "0.45rem 1rem",
             }}
@@ -162,7 +147,6 @@ export function LandingNav() {
         </div>
       </div>
 
-      {/* Mobile dropdown menu */}
       {menuOpen && (
         <div style={{
           borderTop: "1px solid var(--surface-border)",
@@ -184,21 +168,16 @@ export function LandingNav() {
               <ThemeToggle />
             </li>
             <li style={{ marginTop: "1rem" }}>
-              <a href="/auth/signup" onClick={() => setMenuOpen(false)} style={{
+              <a href="https://icareeros.com/auth/signup" onClick={() => setMenuOpen(false)} style={{
                 display: "block", textAlign: "center",
-                background: "linear-gradient(135deg, var(--primary) 0%, var(--tertiary) 100%)",
+                background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
                 fontWeight: 600, textDecoration: "none",
-              }}>Start Free</a>
+              }}>Get Started →</a>
             </li>
           </ul>
         </div>
       )}
-
-      {/* Responsive visibility owned by Tailwind: `hidden lg:flex` on
-          the desktop nav and `flex lg:hidden` on the mobile controls
-          flip at the 1024px breakpoint (Tailwind's `lg`). The legacy
-          `<style>` block + class-name CSS is no longer needed. */}
     </nav>
   );
 }

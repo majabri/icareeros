@@ -16,19 +16,32 @@ function src(file: string) {
 }
 
 const COMPONENTS = [
-  { file: "HeroSection.tsx", export: "HeroSection" },
-  { file: "LifecycleSection.tsx", export: "LifecycleSection" },
-  { file: "FeaturesSection.tsx", export: "FeaturesSection" },
-  { file: "CTASection.tsx", export: "CTASection" },
+  // Root arm — icareeros.com (dual-audience).
   { file: "LandingNav.tsx", export: "LandingNav" },
-  { file: "JobsHeroSection.tsx", export: "JobsHeroSection" },
-  { file: "JobsCTASection.tsx", export: "JobsCTASection" },
+  { file: "RootHeroSection.tsx", export: "RootHeroSection" },
+  { file: "RootPlatformOverview.tsx", export: "RootPlatformOverview" },
+  { file: "RootStagesSection.tsx", export: "RootStagesSection" },
+  { file: "RootVisionSection.tsx", export: "RootVisionSection" },
+  { file: "RootCTASection.tsx", export: "RootCTASection" },
+
+  // Jobs arm — jobs.icareeros.com (job-seeker only).
   { file: "JobsLandingNav.tsx", export: "JobsLandingNav" },
-  { file: "HireHeroSection.tsx", export: "HireHeroSection" },
-  { file: "HireHowItWorksSection.tsx", export: "HireHowItWorksSection" },
-  { file: "HireFeaturesSection.tsx", export: "HireFeaturesSection" },
-  { file: "HireFAQSection.tsx", export: "HireFAQSection" },
+  { file: "JobsHeroSection.tsx", export: "JobsHeroSection" },
+  { file: "JobsPainSection.tsx", export: "JobsPainSection" },
+  { file: "JobsStagesSection.tsx", export: "JobsStagesSection" },
+  { file: "JobsFeaturesSection.tsx", export: "JobsFeaturesSection" },
+  { file: "JobsVisionSection.tsx", export: "JobsVisionSection" },
+  { file: "JobsCTASection.tsx", export: "JobsCTASection" },
+
+  // Hire arm — hire.icareeros.com (employer only, public).
   { file: "HireLandingNav.tsx", export: "HireLandingNav" },
+  { file: "HireHeroSection.tsx", export: "HireHeroSection" },
+  { file: "HirePainSection.tsx", export: "HirePainSection" },
+  { file: "HireWorkflowSection.tsx", export: "HireWorkflowSection" },
+  { file: "HireFeaturesSection.tsx", export: "HireFeaturesSection" },
+  { file: "HireVisionSection.tsx", export: "HireVisionSection" },
+  { file: "HireFAQSection.tsx", export: "HireFAQSection" },
+  { file: "HireCTASection.tsx", export: "HireCTASection" },
 ] as const;
 
 describe("Landing page component files", () => {

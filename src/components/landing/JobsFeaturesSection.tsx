@@ -1,29 +1,29 @@
 "use client";
 import { useEffect, useRef } from "react";
 import {
-  IconBrain, IconShieldCheck, IconAdjustments, IconMailForward, IconBuilding,
+  IconFileText, IconChartBar, IconRoute, IconMessageCircle, IconScale,
   type Icon,
 } from "@tabler/icons-react";
 
 /**
- * HireFeaturesSection — five employer features.
- * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 2 — "Everything
- * you need. Nothing you don't."
+ * JobsFeaturesSection — five job-seeker features.
+ * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1 — "Built for the
+ * full search. Not just one part of it."
  */
 const FEATURES: Array<{ Icon: Icon; title: string; desc: string }> = [
-  { Icon: IconBrain, title: "AI JD Analysis",
-    desc: "Paste a job description. Get instant fit scoring against your candidate pool. Know who to talk to before you start talking." },
-  { Icon: IconShieldCheck, title: "Verified, opt-in candidates",
-    desc: "No scraped profiles. No cold lists. Every candidate created an account and chose to be found — which means they're actually looking." },
-  { Icon: IconAdjustments, title: "Filters that matter",
-    desc: "Role, location, experience level, remote preference. Filter to the candidates who match your actual requirements — not keyword guesses." },
-  { Icon: IconMailForward, title: "Direct in-app invites",
-    desc: "Reach candidates where they're managing their job search. Track invite status. Know who's engaged and who isn't." },
-  { Icon: IconBuilding, title: "Company profile",
-    desc: "Show candidates who you are before they decide whether to respond. Culture, mission, open roles — in one employer page." },
+  { Icon: IconFileText, title: "Resume that adapts",
+    desc: "Your resume isn't static. iCareerOS tailors it to each role — keeping what's strong, adjusting what matters for the JD." },
+  { Icon: IconChartBar, title: "Fit score before you apply",
+    desc: "See how well you match a role before spending two hours on the application. Apply where it counts." },
+  { Icon: IconRoute, title: "Your path, not a generic plan",
+    desc: "Skill gaps identified from your actual target roles — not a course catalogue. Learn what moves the needle." },
+  { Icon: IconMessageCircle, title: "Interview prep that knows the role",
+    desc: "Practice with questions built for the specific role and company you're targeting — not generic \"tell me about yourself\" drills." },
+  { Icon: IconScale, title: "Offer context before you sign",
+    desc: "Know whether what's on the table is fair. Salary benchmarks, negotiation framing, what to ask for and how." },
 ];
 
-export function HireFeaturesSection() {
+export function JobsFeaturesSection() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const observer = new IntersectionObserver(entries => {
@@ -37,10 +37,10 @@ export function HireFeaturesSection() {
     <section id="features" className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)" }}>
       <div ref={ref} style={{ maxWidth:1400, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"3rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          Everything you need. Nothing you don&rsquo;t.
+          Built for the full search. Not just one part of it.
         </h2>
 
-        <div className="hire-features-grid" style={{ display:"grid", gap:"2rem" }}>
+        <div className="jobs-features-grid" style={{ display:"grid", gap:"2rem" }}>
           {FEATURES.map(({ Icon: FeatureIcon, title, desc }) => (
             <div key={title} className="fade-in" style={{
               background:"var(--neutral-100)", padding:"2.5rem 2.25rem", borderRadius:"1.5rem",
@@ -62,12 +62,12 @@ export function HireFeaturesSection() {
         </div>
       </div>
       <style>{`
-        .hire-features-grid { grid-template-columns: 1fr; }
+        .jobs-features-grid { grid-template-columns: 1fr; }
         @media (min-width: 768px) {
-          .hire-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .jobs-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (min-width: 1024px) {
-          .hire-features-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .jobs-features-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
       `}</style>
     </section>

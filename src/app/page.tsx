@@ -3,20 +3,26 @@ import { headers } from "next/headers";
 
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }            from "@/components/landing/LandingNav";
-import { HeroSection }           from "@/components/landing/HeroSection";
-import { ProblemSection }        from "@/components/landing/ProblemSection";
-import { LifecycleSection }      from "@/components/landing/LifecycleSection";
-import { FeaturesSection }       from "@/components/landing/FeaturesSection";
-import { FAQSection }            from "@/components/landing/FAQSection";
-import { CTASection }            from "@/components/landing/CTASection";
+import { RootHeroSection }       from "@/components/landing/RootHeroSection";
+import { RootPlatformOverview }  from "@/components/landing/RootPlatformOverview";
+import { RootStagesSection }     from "@/components/landing/RootStagesSection";
+import { RootVisionSection }     from "@/components/landing/RootVisionSection";
+import { RootCTASection }        from "@/components/landing/RootCTASection";
 import { JobsLandingNav }        from "@/components/landing/JobsLandingNav";
 import { JobsHeroSection }       from "@/components/landing/JobsHeroSection";
+import { JobsPainSection }       from "@/components/landing/JobsPainSection";
+import { JobsStagesSection }     from "@/components/landing/JobsStagesSection";
+import { JobsFeaturesSection }   from "@/components/landing/JobsFeaturesSection";
+import { JobsVisionSection }     from "@/components/landing/JobsVisionSection";
 import { JobsCTASection }        from "@/components/landing/JobsCTASection";
 import { HireLandingNav }        from "@/components/landing/HireLandingNav";
 import { HireHeroSection }       from "@/components/landing/HireHeroSection";
-import { HireHowItWorksSection } from "@/components/landing/HireHowItWorksSection";
+import { HirePainSection }       from "@/components/landing/HirePainSection";
+import { HireWorkflowSection }   from "@/components/landing/HireWorkflowSection";
 import { HireFeaturesSection }   from "@/components/landing/HireFeaturesSection";
+import { HireVisionSection }     from "@/components/landing/HireVisionSection";
 import { HireFAQSection }        from "@/components/landing/HireFAQSection";
+import { HireCTASection }        from "@/components/landing/HireCTASection";
 
 /**
  * Root + jobs.* + hire.* landing page.
@@ -119,12 +125,11 @@ function RootLanding() {
       <div style={{ position: "relative", zIndex: 1 }}>
         <LandingNav />
         <main>
-          <HeroSection />
-          <ProblemSection />
-          <LifecycleSection />
-          <FeaturesSection />
-          <FAQSection />
-          <CTASection />
+          <RootHeroSection />
+          <RootPlatformOverview />
+          <RootStagesSection />
+          <RootVisionSection />
+          <RootCTASection />
         </main>
       </div>
     </>
@@ -139,10 +144,10 @@ function JobsLanding() {
         <JobsLandingNav />
         <main>
           <JobsHeroSection />
-          <ProblemSection />
-          <LifecycleSection />
-          <FeaturesSection />
-          <FAQSection />
+          <JobsPainSection />
+          <JobsStagesSection />
+          <JobsFeaturesSection />
+          <JobsVisionSection />
           <JobsCTASection />
         </main>
       </div>
@@ -158,9 +163,12 @@ function HireLanding() {
         <HireLandingNav />
         <main>
           <HireHeroSection />
-          <HireHowItWorksSection />
+          <HirePainSection />
+          <HireWorkflowSection />
           <HireFeaturesSection />
+          <HireVisionSection />
           <HireFAQSection />
+          <HireCTASection />
         </main>
       </div>
     </>

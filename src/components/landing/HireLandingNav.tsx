@@ -4,12 +4,14 @@ import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 /**
- * hire.icareeros.com nav — employer only.
+ * HireLandingNav — hire.icareeros.com nav.
  *
- * Sister component to LandingNav (root) and JobsLandingNav (jobs).
- * Per COWORK-BRIEF-platform-landing-v1.md Task 3, all auth links
- * use absolute icareeros.com URLs — registration is centralised
- * on the root domain (middleware Phase 3, PR #258).
+ * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 2 nav:
+ *   Logo | How it Works | For Job Seekers | Sign In | Start Hiring Free →
+ *
+ * All auth links absolute icareeros.com URLs (centralised registration,
+ * middleware Phase 3, PR #258). "For Job Seekers" routes to
+ * jobs.icareeros.com (same tab).
  */
 export function HireLandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -28,9 +30,8 @@ export function HireLandingNav() {
   }, []);
 
   const NAV_LINKS: Array<[string, string]> = [
-    ["#how-it-works",                "How it Works"],
-    ["#features",                    "Features"],
-    ["https://jobs.icareeros.com",   "For Job Seekers"],
+    ["#workflow",                       "How it Works"],
+    ["https://jobs.icareeros.com",      "For Job Seekers"],
   ];
 
   return (
@@ -90,7 +91,7 @@ export function HireLandingNav() {
           <li>
             <a
               href="https://icareeros.com/auth/signup?role=employer"
-              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap transition-all"
+              className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap"
               style={{
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)",
@@ -98,15 +99,13 @@ export function HireLandingNav() {
                 boxShadow: "0 4px 15px rgba(0,184,169,0.20)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,184,169,0.30)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "";
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,184,169,0.20)";
               }}
             >
-              Start Hiring Free
+              Start Hiring Free →
             </a>
           </li>
 
@@ -173,7 +172,7 @@ export function HireLandingNav() {
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
                 color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
                 fontWeight: 600, textDecoration: "none",
-              }}>Start Hiring Free</a>
+              }}>Start Hiring Free →</a>
             </li>
           </ul>
         </div>

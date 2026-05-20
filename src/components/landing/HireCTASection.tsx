@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * JobsCTASection — closing CTA on the jobs landing.
- * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 1 — final CTA.
+ * HireCTASection — closing CTA on the hire landing.
+ * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 2 — final CTA.
  */
-export function JobsCTASection() {
+export function HireCTASection() {
   return (
     <section
       id="cta"
@@ -16,19 +16,19 @@ export function JobsCTASection() {
         textAlign: "center",
       }}
     >
-      <div style={{ maxWidth: 700, margin: "0 auto" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <h2 style={{ fontSize: "2.25rem", fontWeight: 800, marginBottom: "1rem", color: "var(--neutral-900)" }}>
-          Ready to run your career like a system?
+          Ready to hire candidates who are already prepared?
         </h2>
         <p style={{ fontSize: "1.1rem", marginBottom: "2.25rem", color: "var(--neutral-700)" }}>
-          Free to start. No credit card. Six stages active from day one.
+          Free to start. No credit card. Search the talent pool from day one.
         </p>
         <a
-          href="https://icareeros.com/auth/signup?role=job_seeker"
+          href="https://icareeros.com/auth/signup?role=employer"
           className="btn btn-primary"
           style={{ fontSize: "1.05rem", padding: "0.85rem 1.75rem" }}
         >
-          Start your career OS →
+          Start hiring free →
         </a>
       </div>
     </section>
