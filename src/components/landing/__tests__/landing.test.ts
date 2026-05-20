@@ -38,6 +38,7 @@ const COMPONENTS = [
   // Hire arm — hire.icareeros.com (employer only, public).
   { file: "HireLandingNav.tsx", export: "HireLandingNav" },
   { file: "HireHeroSection.tsx", export: "HireHeroSection" },
+  { file: "HirePathwaySection.tsx", export: "HirePathwaySection" },
   { file: "HirePainSection.tsx", export: "HirePainSection" },
   { file: "HireWorkflowSection.tsx", export: "HireWorkflowSection" },
   { file: "HireFeaturesSection.tsx", export: "HireFeaturesSection" },
