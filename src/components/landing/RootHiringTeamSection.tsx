@@ -97,8 +97,8 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   },
 ];
 
-// Same per-stage dwell shape as the job-seeker side: 5×2s + 10s on stage 6.
-const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 10000] as const;
+// Same per-stage dwell shape as the job-seeker side: 5×2s + 5s on stage 6.
+const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 5000] as const;
 
 export function RootHiringTeamSection() {
   const { current: currentStage, setCurrent, setPaused } = useCycleRotation(
@@ -254,7 +254,7 @@ export function RootHiringTeamSection() {
               currentStage={currentStage}
             />
             <div style={{ textAlign:"center", marginTop:"0.5rem", fontSize:"0.85rem", color:"var(--neutral-700)" }}>
-              Advances every 2s · dwells 10s on stage 6 · hover to pause
+              Flashes every 2s · pauses 5s on stage 6 · hover to freeze
             </div>
           </div>
         </div>
