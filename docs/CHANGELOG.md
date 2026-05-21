@@ -4,6 +4,20 @@ Notable shipped work. Most recent first.
 
 ---
 
+
+## 2026-05-21 — hire.* settings + iTalentOS Pathway shell
+
+**`main` HEAD after this run: `6573fde`**
+
+Two hire-side merges shipped today: the `/settings` 404 fix that
+unblocked recruiter account management, then the Sprint H1
+iTalentOS People Retention Pathway shell on top of it.
+
+### Hire — features and fixes
+
+- **#278** `feat/hire-pathway-shell` — [hire] feat(hire): People Retention Pathway shell — 6 stage pages + PathwayRing + iTalentOS Dashboard. `/dashboard` becomes the iTalentOS Dashboard overview (PathwayRing + 6-card grid); `/select` is new and hosts `CandidateSearch` (migrated from `/dashboard`); `/design`, `/integrate`, `/support`, `/develop`, `/retain` are new stub pages (Coming Soon for Design; Starter+ locked placeholder for the other four). Single source of truth at `src/lib/hire/pathway-stages.ts`. 21 new tests. No shared files touched — sidebar/middleware updates are decoupled to Platform-chat PRs per ADR-HIRE-001 v3.
+- **#276** `fix/hire-settings-404` — [hire] fix(hire): /settings 404 fixed — redirect + account settings page. New redirect page at `/settings` → `/settings/account`; new flat account settings page writing `full_name`, `phone`, `avatar_url` to `user_profiles`. Reuses the existing `avatars` Storage bucket + `icareeros:avatar-updated` event for topbar avatar parity.
+
 ## 2026-05-20 — Platform shell, theme parity, landing system overhaul
 
 **`main` HEAD after this run: `93c9f03`**
