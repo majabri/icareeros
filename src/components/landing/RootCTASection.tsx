@@ -12,7 +12,7 @@ export function RootCTASection() {
       id="cta"
       className="landing-fade-bg"
       style={{
-        padding: "6rem 3rem",
+        padding: "4rem 3rem",
         background:
           "linear-gradient(135deg,var(--neutral-100) 0%,#f8fcff 100%)",
       }}

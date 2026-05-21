@@ -35,7 +35,7 @@ const PILLARS: Array<{ Icon: Icon; title: string; body: string }> = [
 
 export function RootPlatformInnovation() {
   return (
-    <section id="platform" className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"var(--neutral-100)" }}>
+    <section id="platform" className="landing-fade-bg" style={{ padding:"4rem 3rem", background:"var(--neutral-100)" }}>
       <div style={{ maxWidth:1100, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:"3.5rem" }}>
           <div style={{ color:"#00B8A9", fontWeight:600, fontSize:"0.95rem", marginBottom:"0.75rem", textTransform:"uppercase", letterSpacing:"1px" }}>

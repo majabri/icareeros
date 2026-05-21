@@ -12,8 +12,8 @@
 export function RootHeroSection() {
   return (
     <section style={{
-      position: "relative", padding: "6rem 1.5rem",
-      textAlign: "center", minHeight: "100vh",
+      position: "relative", padding: "3.5rem 1.5rem 4rem",
+      textAlign: "center", minHeight: "60vh",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div style={{ maxWidth: 960, position: "relative", zIndex: 2 }}>
