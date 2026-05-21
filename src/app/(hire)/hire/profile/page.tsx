@@ -206,7 +206,7 @@ export default function EmployerProfilePage() {
               {saving ? "Saving…" : "Save company profile"}
             </button>
             <Link
-              href="/dashboard"
+              href="/select"
               style={{ color: "#A5B5CF", textDecoration: "underline", fontSize: "0.85rem" }}
             >
               Back to search
