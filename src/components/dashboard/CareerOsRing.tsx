@@ -16,6 +16,7 @@
 
 import { useId } from "react";
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
+import { STAGE_COLORS } from "@/lib/career-os/stage-colors";
 
 export type StageStatus = "pending" | "in_progress" | "completed" | "skipped";
 
