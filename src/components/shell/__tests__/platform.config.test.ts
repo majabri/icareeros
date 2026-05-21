@@ -17,20 +17,64 @@ describe("platform configs", () => {
     expect(HIRE_CONFIG.id).toBe("hire");
     expect(HIRE_CONFIG.tagline).toBe("Hire smarter, not harder");
     expect(HIRE_CONFIG.sidebarLabel).toBe("Hire OS");
-    expect(HIRE_CONFIG.navItems).toHaveLength(3);
+
+    // 1 Dashboard + 1 section divider + 6 stages = 8 items
+    expect(HIRE_CONFIG.navItems).toHaveLength(8);
     expect(HIRE_CONFIG.navItems.map(i => i.href)).toEqual([
-      "/dashboard", "/jobs", "/invites",
+      "/dashboard",
+      "#section-people-retention-pathway",
+      "/design",
+      "/select",
+      "/integrate",
+      "/hire-support",
+      "/develop",
+      "/retain",
     ]);
-    expect(HIRE_CONFIG.footerItems).toHaveLength(1);
-    expect(HIRE_CONFIG.footerItems[0].href).toBe("/profile");
 
-    // Find Talent has the multi-prefix matcher so /candidates/* lights it up too.
-    const findTalent = HIRE_CONFIG.navItems.find(i => i.label === "Find Talent");
-    expect(findTalent?.matchPrefixes).toEqual(["/dashboard", "/candidates"]);
+    // Top item — iCareerOS Dashboard — keeps multi-prefix matcher so
+    // /candidates/* still lights up the row.
+    const dashboard = HIRE_CONFIG.navItems.find(i => i.label === "iCareerOS Dashboard");
+    expect(dashboard?.matchPrefixes).toEqual(["/dashboard", "/candidates"]);
 
-    // The two stubs are marked Soon.
-    expect(HIRE_CONFIG.navItems.find(i => i.href === "/jobs")?.comingSoon).toBe(true);
-    expect(HIRE_CONFIG.navItems.find(i => i.href === "/invites")?.comingSoon).toBe(true);
+    // Section divider has type='section' and no real route.
+    const divider = HIRE_CONFIG.navItems.find(i => i.type === "section");
+    expect(divider?.label).toBe("People Retention Pathway");
+
+    // Footer items: Company Profile + Settings, in that order.
+    expect(HIRE_CONFIG.footerItems).toHaveLength(2);
+    expect(HIRE_CONFIG.footerItems.map(i => i.href)).toEqual(["/company", "/settings"]);
+    expect(HIRE_CONFIG.footerItems.map(i => i.label)).toEqual(["Company Profile", "Settings"]);
+  });
+
+  it("HIRE_CONFIG pathway stages have stage numbers, colours, and plan locks", () => {
+    const stages = HIRE_CONFIG.navItems.filter(i => i.stageNumber);
+    expect(stages).toHaveLength(6);
+
+    // Stage numbers in order
+    expect(stages.map(s => s.stageNumber)).toEqual(["01", "02", "03", "04", "05", "06"]);
+
+    // Stage colours from design-tokens — verify the rotation matches
+    // STAGE_COLORS_MAP order (evaluate / advise / learn / act / coach / achieve).
+    expect(stages.map(s => s.color)).toEqual([
+      "#00B8A9", // 01 Design  → evaluate (teal)
+      "#FF6B6B", // 02 Select  → advise   (coral)
+      "#F5A623", // 03 Integrate → learn  (gold)
+      "#10B981", // 04 Support → act      (green)
+      "#7B9AC0", // 05 Develop → coach    (slate blue)
+      "#40C9C0", // 06 Retain  → achieve  (light teal)
+    ]);
+
+    // Free plan: Design + Select unlocked. Everything else Starter+.
+    expect(stages.find(s => s.label === "Design")?.locked).toBe(false);
+    expect(stages.find(s => s.label === "Select")?.locked).toBe(false);
+    expect(stages.find(s => s.label === "Integrate")?.locked).toBe(true);
+    expect(stages.find(s => s.label === "Support")?.locked).toBe(true);
+    expect(stages.find(s => s.label === "Develop")?.locked).toBe(true);
+    expect(stages.find(s => s.label === "Retain")?.locked).toBe(true);
+
+    // Stage 04 Support routes to /hire-support — avoids collision with
+    // the job-seeker /support inbox in middleware PROTECTED array.
+    expect(stages.find(s => s.label === "Support")?.href).toBe("/hire-support");
   });
 
   it("isNavItemActive resolves single-prefix and multi-prefix items correctly", () => {
@@ -50,5 +94,17 @@ describe("platform configs", () => {
     expect(isNavItemActive("/candidates",          multi)).toBe(true);
     expect(isNavItemActive("/candidates/abc",      multi)).toBe(true);
     expect(isNavItemActive("/profile",             multi)).toBe(false);
+  });
+
+  it("isNavItemActive returns false for section entries", () => {
+    const section: NavItem = {
+      type:  "section",
+      href:  "#section-foo",
+      label: "Foo",
+      icon:  "",
+    };
+    expect(isNavItemActive("/dashboard",              section)).toBe(false);
+    expect(isNavItemActive("#section-foo",           section)).toBe(false);
+    expect(isNavItemActive("/anything",               section)).toBe(false);
   });
 });
