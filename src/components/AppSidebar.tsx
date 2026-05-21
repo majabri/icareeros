@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { getActiveCycle, type CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
+import { STAGE_COLORS } from "@/lib/career-os/stage-colors";
 
 // ── Reduced-motion hook ───────────────────────────────────────────────────────
 function usePrefersReducedMotion() {
@@ -336,8 +337,17 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
               >
                 {/* Stage label row */}
                 {show && (
-                  <div className={`relative mx-1 mb-0.5 rounded ${isCurrent ? "bg-brand-50" : ""}`}
-                    style={{ transition: `background-color ${dur} ease` }}
+                  <div
+                    className="relative mx-1 mb-0.5 rounded"
+                    style={{
+                      // Option A — subtle: thin colored left border on the
+                      // active stage only; no tinted background.
+                      borderLeft: isCurrent
+                        ? `2px solid ${STAGE_COLORS[section.stage]}`
+                        : "2px solid transparent",
+                      paddingLeft: "2px",
+                      transition: `border-color ${dur} ease`,
+                    }}
                   >
                     {/* On mobile, stage label is a toggle button */}
                     {mobile ? (
@@ -350,8 +360,12 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
                           ${isFuture ? "cursor-default" : "cursor-pointer"}`}
                       >
-                        <span className={`text-[9.5px] font-bold uppercase tracking-widest select-none flex-1 text-left
-                          ${isCurrent ? "text-brand-600" : "text-gray-400"}`}>
+                        <span
+                          className="text-[9.5px] font-bold uppercase tracking-widest select-none flex-1 text-left"
+                          style={{
+                            color: isCurrent ? STAGE_COLORS[section.stage] : "var(--text-muted, #9ca3af)",
+                          }}
+                        >
                           {section.num}. {section.label}
                         </span>
                         {isPast && (
@@ -376,8 +390,12 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
                     ) : (
                       /* Desktop: stage label is non-interactive */
                       <div className="flex items-center gap-1.5 px-2 py-0.5">
-                        <span className={`text-[9.5px] font-bold uppercase tracking-widest select-none
-                          ${isCurrent ? "text-brand-600" : "text-gray-400"}`}>
+                        <span
+                          className="text-[9.5px] font-bold uppercase tracking-widest select-none"
+                          style={{
+                            color: isCurrent ? STAGE_COLORS[section.stage] : "var(--text-muted, #9ca3af)",
+                          }}
+                        >
                           {section.num}. {section.label}
                         </span>
                         {isPast && (
