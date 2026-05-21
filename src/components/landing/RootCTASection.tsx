@@ -3,8 +3,8 @@ import { IconUser, IconBuilding } from "@tabler/icons-react";
 
 /**
  * RootCTASection — dual closing CTA on icareeros.com.
- * Per Amir 2026-05-20 — page-end dual CTA matches the iJobsOS / iTalentOS
- * brand hierarchy locked in PR #267.
+ * Per Amir 2026-05-21 — page-end dual CTA carries the single iCareerOS
+ * brand (locked PR #267, simplified 2026-05-21).
  */
 export function RootCTASection() {
   return (
@@ -64,7 +64,7 @@ export function RootCTASection() {
             Six stages, AI coaching, continuous loop. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your iJobsOS — it&rsquo;s free →
+            Start your career OS — it&rsquo;s free →
           </a>
         </div>
 
@@ -106,7 +106,7 @@ export function RootCTASection() {
             Verified, opt-in talent. AI fit scoring. Direct invites. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-secondary">
-            Start your iTalentOS — it&rsquo;s free →
+            Start hiring free →
           </a>
         </div>
       </div>

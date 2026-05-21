@@ -27,7 +27,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { AppTopBar } from "@/components/AppTopBar";
@@ -109,14 +109,13 @@ interface SidebarProps {
 
 function ConfigDrivenSidebar({ config, mobileOpen, setMobileOpen }: SidebarProps) {
   const pathname = usePathname() ?? "";
-  const router   = useRouter();
 
   // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [pathname, setMobileOpen]);
 
   async function signOut() {
     try { await createClient().auth.signOut(); }
-    finally { router.push("/auth/login"); }
+    finally { window.location.href = "https://icareeros.com/"; }
   }
 
   const content = (
