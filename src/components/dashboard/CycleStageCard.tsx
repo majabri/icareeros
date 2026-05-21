@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
+import { STAGE_COLORS } from "@/lib/career-os/stage-colors";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import type { AdviceResult } from "@/services/ai/adviseService";
 import type { LearnResult } from "@/services/ai/learnService";
@@ -27,8 +28,6 @@ interface StageConfig {
   label: string;
   description: string;
   icon: string;
-  color: string;
-  bg: string;
 }
 
 const STAGE_CONFIG: Record<CareerOsStage, StageConfig> = {
@@ -36,43 +35,31 @@ const STAGE_CONFIG: Record<CareerOsStage, StageConfig> = {
     label: "Evaluate",
     description: "Assess your skills, gaps, and market fit",
     icon: "🔍",
-    color: "text-sky-700",
-    bg: "bg-sky-50 border-sky-200",
   },
   advise: {
     label: "Advise",
     description: "Get AI-powered career path recommendations",
     icon: "💡",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
   },
   learn: {
     label: "Learn",
     description: "Acquire the skills your target role demands",
     icon: "📚",
-    color: "text-violet-700",
-    bg: "bg-violet-50 border-violet-200",
   },
   act: {
     label: "Act",
     description: "Apply, network, and build real-world experience",
     icon: "🚀",
-    color: "text-green-700",
-    bg: "bg-green-50 border-green-200",
   },
   coach: {
     label: "Coach",
     description: "Interview prep, resume polish, and accountability",
     icon: "🎯",
-    color: "text-orange-700",
-    bg: "bg-orange-50 border-orange-200",
   },
   achieve: {
     label: "Achieve",
     description: "Land the role, promotion, or milestone",
     icon: "🏆",
-    color: "text-rose-700",
-    bg: "bg-rose-50 border-rose-200",
   },
 };
 
@@ -204,13 +191,21 @@ export function CycleStageCard({
       : "text-red-700 bg-red-50"
     : "";
 
+  const stageHex = STAGE_COLORS[stage];
   return (
     <div
-      className={
-        "relative rounded-xl border p-5 transition-shadow " +
-        config.bg + " " +
-        (isCurrentStage ? "shadow-md ring-2 ring-brand-400 ring-offset-2" : "shadow-sm")
-      }
+      className={"relative rounded-xl border p-5 transition-shadow " +
+        (isCurrentStage ? "shadow-md" : "shadow-sm")}
+      style={{
+        // Per-stage identity: low-opacity tint background + matched border.
+        // 0x0D ≈ 5% — soft surface; 0x33 ≈ 20% — readable border.
+        backgroundColor: stageHex + "0D",
+        borderColor:     stageHex + "33",
+        // Current stage gets a thin colored ring via outline (matches the
+        // sidebar's left-border treatment).
+        outline:       isCurrentStage ? `2px solid ${stageHex}` : "none",
+        outlineOffset: isCurrentStage ? "2px" : undefined,
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3 min-w-0">
@@ -218,7 +213,7 @@ export function CycleStageCard({
           <div className="min-w-0">
             {/* Stage name renders in full — no truncate, explicit size so
                 it never inherits a smaller font from a parent. */}
-            <h3 className={"text-base font-semibold " + config.color}>{config.label}</h3>
+            <h3 className="text-base font-semibold" style={{ color: stageHex }}>{config.label}</h3>
             <p className="mt-0.5 text-xs text-gray-500">{config.description}</p>
           </div>
         </div>

@@ -131,7 +131,7 @@ export function CareerOsRing({
               key={`arc-${node.stage}`}
               d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 0 ${sweep} ${x2} ${y2}`}
               fill="none"
-              className="stroke-green-500"
+              stroke={STAGE_COLORS[node.stage]}
               strokeWidth={3}
             />
           );
@@ -153,7 +153,9 @@ export function CareerOsRing({
               {/* Outer ring on the current stage to highlight it */}
               {isCurrent && (
                 <circle cx={x} cy={y} r={nodeR + 6}
-                        fill="none" className="stroke-brand-400 animate-pulse"
+                        fill="none"
+                        stroke={STAGE_COLORS[node.stage]}
+                        className="animate-pulse"
                         strokeWidth={2} />
               )}
 
@@ -174,6 +176,13 @@ export function CareerOsRing({
                 <circle
                   cx={x} cy={y} r={nodeR}
                   className={STATUS_NODE_CLASS[node.status]}
+                  // Per-stage identity: completed + in_progress nodes
+                  // override the status stroke with the stage color so
+                  // each node carries its identity. Pending/skipped keep
+                  // the neutral gray for the "not-yet-touched" feel.
+                  stroke={node.status === "completed" || node.status === "in_progress"
+                    ? STAGE_COLORS[node.stage]
+                    : undefined}
                   strokeWidth={2}
                 />
 
@@ -188,7 +197,7 @@ export function CareerOsRing({
                     strokeLinejoin="round"
                   />
                 ) : node.status === "in_progress" ? (
-                  <circle cx={x} cy={y} r={6} className="fill-brand-500" />
+                  <circle cx={x} cy={y} r={6} fill={STAGE_COLORS[node.stage]} />
                 ) : (
                   // Stage name is shown OUTSIDE the circle via the
                   // external label below — keep pending circles empty
