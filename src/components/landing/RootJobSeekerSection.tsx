@@ -1,89 +1,77 @@
 "use client";
-import { useEffect, useState } from "react";
 import {
   IconCompass, IconTarget, IconBooks, IconSearch, IconMicrophone, IconTrophy,
   IconBrain, IconChartBar, IconRoute, IconMessages,
   IconFileText, IconScale, IconX,
   type Icon,
 } from "@tabler/icons-react";
-import { CareerCycleSVG } from "./CareerCycleSVG";
+import { CareerCycleSVG, STAGE_COLORS } from "./CareerCycleSVG";
+import { useCycleRotation } from "./useCycleRotation";
 
 /**
  * RootJobSeekerSection — #job-seekers section on icareeros.com.
  *
- * Rich audience section that consolidates what previously lived across
- * the root #job-seekers section AND the jobs.icareeros.com landing.
- * Structure: hero copy → pain → synced cycle SVG + stage detail →
- * features grid → CTA. The synced cycle is driven by a useState
- * counter that auto-advances every 3s (paused on hover) so the SVG
- * node and the description card breathe in sync.
+ * The job-seeker side of the intelligent operating system. Pulls the
+ * pain → cycle → features → outcome narrative into one rich section,
+ * with the cycle's stage highlight + the matching description card
+ * breathing in sync (driven by the shared useCycleRotation hook).
+ *
+ * Stage colors come from STAGE_COLORS — the brand-palette rotation
+ * exported by CareerCycleSVG. Each stage card picks up its stage's
+ * color for the icon container so the cycle's color story carries
+ * through to the cards beside it.
  *
  * Per Amir 2026-05-20.
  */
 
 const STAGES = [
   { n: 1, label: "Evaluate", Icon: IconCompass,
-    body: "Skills assessment, market fit, gap identification. An honest baseline before you make a move." },
+    body: "An honest baseline. Skills, market fit, the gaps you actually have — assessed against the roles you actually want." },
   { n: 2, label: "Advise",   Icon: IconTarget,
-    body: "Resume analysis against real JDs. Fit scores before you apply. Know which roles are worth your time." },
+    body: "Real fit scores against real JDs. Resume analysis that's specific to the role. Stop guessing where to spend your time." },
   { n: 3, label: "Learn",    Icon: IconBooks,
-    body: "Personalised skill-building paths built from your gaps, your target roles, and your timeline." },
+    body: "A learning path built from your gaps, your target roles, your timeline. Not a course catalogue you have to sort yourself." },
   { n: 4, label: "Act",      Icon: IconSearch,
-    body: "AI-drafted applications tailored per role. Tracked pipeline. Outreach templates. Apply smarter, not more." },
+    body: "AI-drafted applications tailored per role. Tracked pipeline. Outreach templates. Apply with precision, not volume." },
   { n: 5, label: "Coach",    Icon: IconMicrophone,
-    body: "Role-specific interview prep, negotiation coaching, offer review. Know what to say and what to ask for." },
+    body: "Interview prep that knows the role. Negotiation coaching. Offer review. Walk in knowing what to say and what to ask for." },
   { n: 6, label: "Achieve",  Icon: IconTrophy,
-    body: "Offer management, milestone tracking, reset for the next goal. Because careers don't stop." },
+    body: "Sign the offer. Capture the milestone. Reset the loop for the next goal — because careers don't stop at one role." },
 ] as const;
 
 const PAINS = [
   "Rewriting your resume for every application, from scratch",
-  "Applying into silence — no feedback, no signal",
-  "No idea which skills are actually holding you back",
-  "Interview prep happens the night before, if at all",
-  "Offers arrive with no context on whether they're fair",
-  "The cycle repeats for the next role, just as chaotic",
+  "Sending applications into the void — no signal back",
+  "No clue which skills are actually holding you back",
+  "Interview prep starts the night before, if at all",
+  "Offers land without context — fair? not fair? who knows",
+  "Then the whole cycle repeats for the next role, just as chaotic",
 ];
 
 const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
-  { Icon: IconFileText, title: "Resume that adapts to each role",
-    body: "Your resume isn't static. iJobsOS tailors it to each role — keeping what's strong, adjusting what matters for the JD." },
+  { Icon: IconFileText, title: "A resume that actually adapts",
+    body: "Your resume isn't static. iJobsOS tailors it per role — keeps what's strong, sharpens what matters for the JD, drops what isn't earning its place." },
   { Icon: IconChartBar, title: "Fit score before you apply",
-    body: "See how well you match a role before spending two hours on the application. Apply where it counts." },
-  { Icon: IconRoute, title: "Your path, not a generic plan",
-    body: "Skill gaps identified from your actual target roles — not a course catalogue. Learn what moves the needle." },
-  { Icon: IconBrain, title: "AI-driven advice tailored to you",
-    body: "Not generic 'optimise your resume' tips. Specific guidance built from your background, your goals, and the current market." },
+    body: "See how well you match a role before sinking two hours into the application. Apply where you have a shot." },
+  { Icon: IconRoute, title: "A path built from your gaps",
+    body: "Skill gaps identified from your actual target roles — not a generic course library. Learn what moves the needle." },
+  { Icon: IconBrain, title: "Advice that knows you",
+    body: "Not generic 'optimize your headline' tips. Guidance built from your background, your goals, and what the market is paying for right now." },
   { Icon: IconMessages, title: "Interview prep that knows the role",
-    body: "Practice with questions built for the specific role and company — not generic 'tell me about yourself' drills." },
+    body: "Practice with questions built for the specific role and company — not a generic 'tell me about yourself' drill." },
   { Icon: IconScale, title: "Offer context before you sign",
-    body: "Salary benchmarks, negotiation framing, what to ask for and how. Know whether what's on the table is fair." },
+    body: "Salary benchmarks. Negotiation framing. What to ask for and how. Walk in knowing whether what's on the table is fair." },
 ];
 
-// Per-stage dwell times (ms). Stages 1-5 advance every 2s; stage 6
-// dwells for 10s before wrapping back to stage 1. Per Amir 2026-05-20.
-const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 10000];
+// Per-stage dwell (ms). Stages 1-5 → 2s. Stage 6 → 10s (the natural pause
+// at the top of the cycle before the system resets for the next goal).
+const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 10000] as const;
 
 export function RootJobSeekerSection() {
-  const [currentStage, setCurrentStage] = useState(0);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    // Respect user preference for reduced motion: no auto-advance.
-    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-    if (paused) return;
-    // setTimeout (not setInterval) so each stage can have its own dwell —
-    // stages 1-5 advance every 2s, stage 6 dwells 10s. The effect re-runs
-    // on each currentStage change which restarts the timer with the new
-    // stage's duration.
-    const id = window.setTimeout(
-      () => setCurrentStage(n => (n + 1) % STAGES.length),
-      STAGE_DURATIONS_MS[currentStage] ?? 2000,
-    );
-    return () => window.clearTimeout(id);
-  }, [currentStage, paused]);
+  const { current: currentStage, setCurrent, setPaused } = useCycleRotation(
+    STAGES.length,
+    STAGE_DURATIONS_MS,
+  );
 
   return (
     <section
@@ -103,24 +91,27 @@ export function RootJobSeekerSection() {
             For job seekers
           </div>
           <h2 style={{ fontSize: "2.6rem", fontWeight: 800, marginBottom: "1.1rem", color: "var(--neutral-900)", lineHeight: 1.15 }}>
-            iJobsOS — the intelligent career OS for job seekers.
+            iJobsOS — the intelligent career operating system.
           </h2>
           <p style={{ fontSize: "1.2rem", color: "var(--neutral-900)", maxWidth: 780, margin: "0 auto 0.75rem", lineHeight: 1.5, fontWeight: 600 }}>
             Your career doesn&rsquo;t need more advice. It needs a system.
           </p>
           <p style={{ fontSize: "1.1rem", color: "var(--neutral-700)", maxWidth: 780, margin: "0 auto", lineHeight: 1.7 }}>
-            iJobsOS runs a continuous six-stage loop — from evaluation to
-            offer — handling the mechanics of your job search so you can
-            focus on the one thing no AI can do for you: showing up and
-            performing.
+            iJobsOS runs a continuous six-stage loop — Evaluate to
+            Achieve — handling the mechanics of your job search so you
+            can focus on the one thing no AI can do for you: showing up
+            and performing.
           </p>
         </div>
 
         {/* Pain section */}
         <div style={{ maxWidth: 760, margin: "0 auto 4rem" }}>
-          <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "1.5rem", color: "var(--neutral-900)", textAlign: "center" }}>
-            The way most people job search is broken.
+          <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.5rem", color: "var(--neutral-900)", textAlign: "center" }}>
+            Most job searches feel like this.
           </h3>
+          <p style={{ textAlign: "center", color: "var(--neutral-700)", marginBottom: "1.75rem", fontSize: "1rem", lineHeight: 1.6 }}>
+            Not because anyone is doing it wrong. Because there&rsquo;s no system.
+          </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {PAINS.map(p => (
               <div
@@ -159,7 +150,7 @@ export function RootJobSeekerSection() {
           </div>
         </div>
 
-        {/* Cycle SVG + stage detail (synced) */}
+        {/* Cycle SVG + stage detail (synced; per-stage color rotation) */}
         <div className="root-js-cycle-grid" style={{ display: "grid", gap: "2.5rem", alignItems: "start", marginBottom: "4rem" }}>
           <div>
             <CareerCycleSVG
@@ -168,18 +159,19 @@ export function RootJobSeekerSection() {
               currentStage={currentStage}
             />
             <div style={{ textAlign:"center", marginTop:"0.5rem", fontSize:"0.85rem", color:"var(--neutral-700)" }}>
-              Advances every 2s · dwells 10s on stage 6 · pauses on hover
+              Advances every 2s · dwells 10s on stage 6 · hover to pause
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
             {STAGES.map(({ n, label, Icon: StageIcon, body }, i) => {
               const isActive = i === currentStage;
+              const stageColor = STAGE_COLORS[i];
               return (
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setCurrentStage(i)}
+                  onClick={() => setCurrent(i)}
                   aria-pressed={isActive}
                   style={{
                     display: "grid",
@@ -187,8 +179,8 @@ export function RootJobSeekerSection() {
                     gap: "1rem",
                     alignItems: "flex-start",
                     textAlign: "left",
-                    background: isActive ? "rgba(0,184,169,0.08)" : "var(--neutral-100)",
-                    border: `1px solid ${isActive ? "#00B8A9" : "var(--neutral-300)"}`,
+                    background: isActive ? `${stageColor}14` : "var(--neutral-100)",
+                    border: `1px solid ${isActive ? stageColor : "var(--neutral-300)"}`,
                     borderRadius: "0.85rem",
                     padding: "1rem 1.25rem",
                     cursor: "pointer",
@@ -200,15 +192,15 @@ export function RootJobSeekerSection() {
                 >
                   <div style={{
                     width: 40, height: 40,
-                    background: isActive ? "rgba(0,184,169,0.20)" : "rgba(0,184,169,0.10)",
+                    background: isActive ? stageColor : `${stageColor}1A`,
                     borderRadius: "0.6rem",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "background 400ms ease",
                   }}>
-                    <StageIcon size={20} stroke={1.5} color="#00B8A9" />
+                    <StageIcon size={20} stroke={1.5} color={isActive ? "#FFFFFF" : stageColor} />
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#00B8A9", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.15rem" }}>
+                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: stageColor, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.15rem" }}>
                       Stage {n} · {label}
                     </div>
                     <div style={{ color: "var(--neutral-800)", fontSize: "0.96rem", lineHeight: 1.55 }}>
@@ -221,11 +213,14 @@ export function RootJobSeekerSection() {
           </div>
         </div>
 
-        {/* Features grid (was 4 benefits; now 6 features lifted from jobs.* landing) */}
-        <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", textAlign: "center", marginBottom: "2.5rem" }}>
-          Built for the full search. Not just one part of it.
+        {/* Features grid */}
+        <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", textAlign: "center", marginBottom: "0.5rem" }}>
+          Built for the full search.
         </h3>
-        <div className="root-js-features-grid" style={{ display: "grid", gap: "1.5rem", marginBottom: "3rem" }}>
+        <p style={{ textAlign: "center", color: "var(--neutral-700)", marginBottom: "2.5rem", fontSize: "1rem" }}>
+          Not just one part of it.
+        </p>
+        <div className="root-js-features-grid" style={{ display: "grid", gap: "1.5rem" }}>
           {FEATURES.map(({ Icon: FeatureIcon, title, body }) => (
             <div key={title} style={{
               background: "var(--neutral-100)",
@@ -248,7 +243,6 @@ export function RootJobSeekerSection() {
             </div>
           ))}
         </div>
-
       </div>
 
       <style>{`

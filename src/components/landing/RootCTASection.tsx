@@ -3,7 +3,8 @@ import { IconUser, IconBuilding } from "@tabler/icons-react";
 
 /**
  * RootCTASection — dual closing CTA on icareeros.com.
- * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 3 — final dual CTA.
+ * Per Amir 2026-05-20 — page-end dual CTA matches the iJobsOS / iTalentOS
+ * brand hierarchy locked in PR #267.
  */
 export function RootCTASection() {
   return (
@@ -63,7 +64,7 @@ export function RootCTASection() {
             Six stages, AI coaching, continuous loop. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your iJobsOS — it's free →
+            Start your iJobsOS — it&rsquo;s free →
           </a>
         </div>
 
@@ -102,10 +103,10 @@ export function RootCTASection() {
             Hire candidates who are already prepared.
           </h2>
           <p style={{ fontSize: "1rem", marginBottom: "1.5rem", color: "var(--text-secondary, var(--neutral-700))" }}>
-            Verified, opt-in talent. AI JD analysis. Direct invites. Free to start.
+            Verified, opt-in talent. AI fit scoring. Direct invites. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-secondary">
-            Start hiring free →
+            Start your iTalentOS — it&rsquo;s free →
           </a>
         </div>
       </div>
