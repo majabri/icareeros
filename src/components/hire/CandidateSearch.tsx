@@ -2,7 +2,7 @@
 
 /**
  * Phase 2 recruiter discoverability (2026-05-17) — Candidate search UI
- * on hire.icareeros.com/dashboard.
+ * on hire.icareeros.com/select (moved from /dashboard in Sprint H1).
  *
  * Layout:
  *   Hero     — title, subtitle, prominent search bar
