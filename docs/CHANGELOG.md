@@ -4,6 +4,39 @@ Notable shipped work. Most recent first.
 
 ---
 
+## 2026-05-20 — Platform shell, theme parity, landing system overhaul
+
+**`main` HEAD after this run: `93c9f03`**
+
+Wave of landing-system work, the unified platform shell, and a series of
+polish/cleanup merges since the 2026-05-18 entry. Listed newest first.
+
+### Landing system (root domain — Platform-owned)
+
+- **#273** `feat/landing-tighten-spacing` — tighten root-page spacing; hero 60vh, sections 4rem padding.
+- **#272** `feat/cycle-color-reorder-flash` — landing cycle color reorder (coral→2, gold→3, green→4) + connector flash on stage advance.
+- **#271** `feat/landing-comprehensive-review` — comprehensive landing pass: animation fix + per-stage branding application + copy review.
+- **#270** `feat/landing-transparent-constellation` — sections go transparent over the constellation; mid-body CTA cleanup; per-stage chip refinement.
+- **#269** `feat/collapse-subdomain-landings` — collapse the subdomain landings (jobs.* / hire.*) back into root domain (PR B of 2). Both subdomains now redirect through the root.
+- **#268** `feat/landing-polish-and-content-lift` — root polish + content lifted up from the legacy subdomain landings.
+- **#267** `feat/platform-talent-os` — rebuild the hiring side around the **Talent OS** framework (Design / Select / Integrate / Support / Develop / Retain).
+- **#266** `feat/platform-landing-deep-sections` — split the root landing into deep `#platform` / `#job-seekers` / `#hiring-teams` sections.
+- **#265** `chore/sync-claude-md-7ce8bba` — in-repo CLAUDE.md sync to mid-wave HEAD.
+- **#264** `feat/platform-landing-copy` — three-domain copy overhaul; Career OS framing locked in across the brand.
+- **#263** `feat/platform-landing-alignment` — three-domain landing alignment (social proof removed; per-domain heading + CTA alignment).
+
+### Platform shell + theme parity
+
+- **#262** `feat/unified-platform-shell` — single `PlatformShell` wraps both subdomain layouts (ConstellationBackground + AppTopBar with tagline + sidebar slot + mobile-drawer state). Jobs supplies its specialised `AppSidebar` via the `customSidebar` prop; hire renders the config-driven flat nav from `HIRE_CONFIG`. Hire-side surfaces migrated from hardcoded navy to theme-aware CSS variables so light/dark mode renders identically across both platforms. Plus 10 orphan files removed.
+
+### Auth + email
+
+- **#261** `fix/sender-copy-bugs-at` — signup success-message sender label corrected from `noreply@` → `bugs@icareeros.com` to match the real SMTP Sender Email.
+- **#260** `docs/sync-state-60f5b56` — last full CHANGELOG + PLATFORM_OVERVIEW sync (covered #252–#259).
+
+---
+
+
 ## 2026-05-18 — Three-domain platform + admin overhaul
 
 **`main` HEAD after this run: `60f5b56`**
