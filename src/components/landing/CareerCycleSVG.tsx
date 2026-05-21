@@ -34,12 +34,14 @@ type Stage = {
   label: string;
 };
 
-/** Default 6-stage color palette — drawn from the iCareerOS logo SVGs. */
+/** Default 6-stage color palette — drawn from the iCareerOS logo SVGs.
+ *  Reordered 2026-05-20 (Amir): coral moves to stage 2; gold and green
+ *  slide down to stages 3 and 4. Stages 1/5/6 unchanged. */
 export const STAGE_COLORS = [
   "#00B8A9", // 1 — Teal (brand primary)
-  "#F5A623", // 2 — Gold
-  "#10B981", // 3 — Green
-  "#FF6B6B", // 4 — Coral
+  "#FF6B6B", // 2 — Coral (was 4)
+  "#F5A623", // 3 — Gold  (was 2)
+  "#10B981", // 4 — Green (was 3)
   "#7B9AC0", // 5 — Slate blue
   "#40C9C0", // 6 — Light teal
 ] as const;
@@ -232,7 +234,25 @@ export function CareerCycleSVG({
 
           return (
             <g key={`node-${s.n}`}>
-              {/* Pulse halo behind the node — only when active. */}
+              {/* Flash burst — re-triggers via the key prop each time this
+                  becomes the active stage. Runs once (~900ms) then disappears. */}
+              {isActive && (
+                <circle
+                  key={`flash-${i}-${currentStage}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={nodeR + 14}
+                  fill={color}
+                  opacity={0}
+                  style={{
+                    transformOrigin: `${p.x}px ${p.y}px`,
+                    animation: "career-cycle-flash 900ms ease-out 1 forwards",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+              {/* Pulse halo behind the node — continuous gentle pulse
+                  while the stage is active (after the flash settles). */}
               {isActive && (
                 <circle
                   cx={p.x}
@@ -295,6 +315,17 @@ export function CareerCycleSVG({
           @keyframes career-cycle-active-pulse {
             0%, 100% { opacity: 0.18; transform: scale(1); }
             50%      { opacity: 0.45; transform: scale(1.18); }
+          }
+          /* One-shot 'flash' burst that runs each time the active stage
+             changes. The consumer remounts this circle via a React key
+             keyed to the current stage so the CSS animation restarts
+             from frame 0 on every transition. Brief intense glow +
+             scale-up + fade. */
+          @keyframes career-cycle-flash {
+            0%   { opacity: 0;    transform: scale(0.85); }
+            18%  { opacity: 0.85; transform: scale(1.45); }
+            55%  { opacity: 0.50; transform: scale(1.25); }
+            100% { opacity: 0;    transform: scale(1.15); }
           }
           @media (prefers-reduced-motion: reduce) {
             svg g[style*="career-cycle-spin"],

@@ -63,9 +63,9 @@ const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
     body: "Salary benchmarks. Negotiation framing. What to ask for and how. Walk in knowing whether what's on the table is fair." },
 ];
 
-// Per-stage dwell (ms). Stages 1-5 → 2s. Stage 6 → 10s (the natural pause
-// at the top of the cycle before the system resets for the next goal).
-const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 10000] as const;
+// Per-stage dwell (ms). Stages 1-5 → 2s each. Stage 6 → 5s pause before
+// the cycle resets back to stage 1. Per Amir 2026-05-20.
+const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 5000] as const;
 
 export function RootJobSeekerSection() {
   const { current: currentStage, setCurrent, setPaused } = useCycleRotation(
@@ -159,7 +159,7 @@ export function RootJobSeekerSection() {
               currentStage={currentStage}
             />
             <div style={{ textAlign:"center", marginTop:"0.5rem", fontSize:"0.85rem", color:"var(--neutral-700)" }}>
-              Advances every 2s · dwells 10s on stage 6 · hover to pause
+              Flashes every 2s · pauses 5s on stage 6 · hover to freeze
             </div>
           </div>
 
