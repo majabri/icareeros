@@ -1,8 +1,17 @@
 # Platform overview — three-domain architecture
 
-**Status:** authoritative as of `main` HEAD `60f5b56` (2026-05-18).
+**Status:** authoritative as of `main` HEAD `93c9f03` (2026-05-20).
 
-iCareerOS is a single Next.js 15 application served on three production hosts. There is one deployment, one codebase, one Supabase project, and one auth-cookie scope. Hosts are differentiated at the edge by the middleware, and the user lands in the right experience based on a combination of the URL host they hit and the role(s) recorded against their account.
+iCareerOS is a single Next.js 15 application served on three production hosts.
+
+**Updates since 2026-05-18:**
+- Unified `PlatformShell` is now the single shell wrapper for both subdomain layouts (PR #262). Jobs supplies its specialised `AppSidebar` via the `customSidebar` slot; hire renders a config-driven flat nav from `HIRE_CONFIG`. Theme-aware CSS variables drive surface, text, and border colours on both platforms so light/dark mode renders identically.
+- Subdomain landings (jobs.* and hire.*) collapsed back into the root domain landing surface (PR #269). Unauthenticated traffic to those subdomain home routes now redirects to the relevant section anchor on `icareeros.com`.
+- Hiring side rebranded around the **Talent OS** 6-stage framework (Design → Select → Integrate → Support → Develop → Retain) (PR #267).
+- Landing cycle palette aligned to the per-stage colors used across the product (teal, coral, gold, green, slate, light teal) (PR #272).
+- Auth: signup success copy now matches the real SMTP Sender Email `bugs@icareeros.com` (PR #261). No Resend.com integration — Bluehost SMTP remains the permanent transactional channel.
+
+There is one deployment, one codebase, one Supabase project, and one auth-cookie scope. Hosts are differentiated at the edge by the middleware, and the user lands in the right experience based on a combination of the URL host they hit and the role(s) recorded against their account.
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
