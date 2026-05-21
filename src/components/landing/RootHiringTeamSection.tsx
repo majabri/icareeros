@@ -11,10 +11,10 @@ import { useCycleRotation } from "./useCycleRotation";
 /**
  * RootHiringTeamSection — #hiring-teams section on icareeros.com.
  *
- * The hire side of the intelligent operating system. iTalentOS runs the
+ * The hire side of the intelligent operating system. iCareerOS runs the
  * six-stage workforce loop — Design through Retain — built from
  * standard HR research on the People Retention Pathway and renamed
- * for the iCareerOS brand.
+ * for the single iCareerOS brand (simplified 2026-05-21).
  *
  * Stage cards beside the cycle pick up per-stage brand colors so the
  * full color rotation reads in both the SVG ring and the description
@@ -83,7 +83,7 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   {
     Icon: IconShieldCheck,
     title: "Lower avoidable turnover",
-    body:  "iTalentOS treats retention as the outcome of disciplined upstream management — clearer role design, better fit, stronger onboarding — not a single HR program bolted on at the end.",
+    body:  "iCareerOS treats retention as the outcome of disciplined upstream management — clearer role design, better fit, stronger onboarding — not a single HR program bolted on at the end.",
   },
   {
     Icon: IconClipboardList,
@@ -93,7 +93,7 @@ const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
   {
     Icon: IconHeartHandshake,
     title: "A direct line to engaged candidates",
-    body:  "iCareerOS candidates run their own iJobsOS loop — assessing fit, building skills, preparing for interviews — and they opt in to be discovered. That's a different kind of first conversation.",
+    body:  "iCareerOS candidates run their own career loop — assessing fit, building skills, preparing for interviews — and they opt in to be discovered. That's a different kind of first conversation.",
   },
 ];
 
@@ -121,7 +121,7 @@ export function RootHiringTeamSection() {
             For hiring teams
           </div>
           <h2 style={{ fontSize: "2.6rem", fontWeight: 800, marginBottom: "1.1rem", color: "var(--neutral-900)", lineHeight: 1.15 }}>
-            iTalentOS — the intelligent talent operating system.
+            iCareerOS — the intelligent hiring operating system.
           </h2>
           <p style={{ fontSize: "1.2rem", color: "var(--neutral-900)", maxWidth: 780, margin: "0 auto 0.75rem", lineHeight: 1.5, fontWeight: 600 }}>
             Hire people who chose to be found.
@@ -130,7 +130,7 @@ export function RootHiringTeamSection() {
             iCareerOS candidates aren&rsquo;t passive. They&rsquo;re
             actively managing their careers — assessing fit, building
             skills, prepping for interviews — and they&rsquo;ve opted
-            in to be discovered. iTalentOS gives hiring teams the
+            in to be discovered. iCareerOS gives hiring teams the
             system to find, engage, integrate, and retain them.
           </p>
         </div>
@@ -183,7 +183,7 @@ export function RootHiringTeamSection() {
 
         {/* Cycle SVG + stage detail with metric pairs */}
         <h3 style={{ fontSize:"1.6rem", fontWeight:700, marginBottom:"0.5rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          The six iTalentOS stages.
+          The six hiring stages.
         </h3>
         <p style={{ textAlign:"center", color:"var(--neutral-700)", maxWidth:740, margin:"0 auto 2.5rem", lineHeight:1.6 }}>
           Workforce stability is the outcome of disciplined upstream
@@ -249,7 +249,7 @@ export function RootHiringTeamSection() {
 
           <div>
             <CareerCycleSVG
-              centerLabel="iTalentOS"
+              centerLabel="iCareerOS"
               stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
               currentStage={currentStage}
             />

@@ -28,8 +28,8 @@ export function RootHeroSection() {
         <p style={{ fontSize:"1.25rem", marginBottom:"2.5rem", color:"var(--text-muted)", maxWidth:780, marginLeft:"auto", marginRight:"auto", lineHeight:1.7 }}>
           iCareerOS runs two intelligent loops — one for job seekers,
           one for hiring teams — on the same platform. Job seekers
-          run <strong style={{ color:"#00B8A9", fontWeight:700 }}>iJobsOS</strong> from
-          evaluation to offer. Hiring teams run <strong style={{ color:"#00B8A9", fontWeight:700 }}>iTalentOS</strong> from
+          run <strong style={{ color:"#00B8A9", fontWeight:700 }}>the career loop</strong> from
+          evaluation to offer. Hiring teams run <strong style={{ color:"#00B8A9", fontWeight:700 }}>the hiring loop</strong> from
           role design to retention. The system works because both
           sides are in it.
         </p>

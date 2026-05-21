@@ -1,29 +1,21 @@
 /**
  * Career-OS per-stage color palette.
  *
- * Mirrors the platform-wide palette established in
- * `src/components/landing/CareerCycleSVG.tsx` so the dashboard ring,
- * sidebar, and stage cards all read with the same identity colors as
- * the landing page's animated cycle.
+ * Re-exported from the global design tokens at `@/lib/design-tokens` so
+ * the dashboard ring, sidebar, stage cards, and landing cycle all read
+ * from a single source. Stage colors identify a stage by meaning
+ * (Evaluate = teal, Advise = coral, etc.) and stay constant across
+ * light and dark themes.
  *
- * Stage colors are not "theme tokens" — they identify a stage by
- * meaning (Evaluate is teal, Advise is coral, etc.) and stay constant
- * across light and dark themes.
- *
- * If the landing palette ever changes, update both this file and the
- * landing source in the same PR (cross-domain shared identity).
+ * If the palette ever changes, update `src/lib/design-tokens.ts`. Both
+ * `STAGE_COLORS_MAP` (keyed) and `STAGE_COLORS_ORDERED` (positional)
+ * live there.
  */
 
+import { STAGE_COLORS_MAP } from "@/lib/design-tokens";
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 
-export const STAGE_COLORS: Record<CareerOsStage, string> = {
-  evaluate: "#00B8A9", // 1 — Teal (brand primary)
-  advise:   "#FF6B6B", // 2 — Coral
-  learn:    "#F5A623", // 3 — Gold
-  act:      "#10B981", // 4 — Green
-  coach:    "#7B9AC0", // 5 — Slate blue
-  achieve:  "#40C9C0", // 6 — Light teal
-} as const;
+export const STAGE_COLORS: Record<CareerOsStage, string> = STAGE_COLORS_MAP;
 
 /**
  * Hex with low-opacity overlay, suitable for tinted backgrounds behind

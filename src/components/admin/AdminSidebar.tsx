@@ -116,7 +116,7 @@ export default function AdminSidebar({ adminRole, isOpen = false, onClose }: Adm
 
   async function handleSignOut() {
     await supabase.auth.signOut().catch(() => {});
-    router.push("/auth/login");
+    window.location.href = "https://icareeros.com/";
   }
 
   const visibleNav = NAV

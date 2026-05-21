@@ -50,7 +50,7 @@ const PAINS = [
 
 const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
   { Icon: IconFileText, title: "A resume that actually adapts",
-    body: "Your resume isn't static. iJobsOS tailors it per role — keeps what's strong, sharpens what matters for the JD, drops what isn't earning its place." },
+    body: "Your resume isn't static. iCareerOS tailors it per role — keeps what's strong, sharpens what matters for the JD, drops what isn't earning its place." },
   { Icon: IconChartBar, title: "Fit score before you apply",
     body: "See how well you match a role before sinking two hours into the application. Apply where you have a shot." },
   { Icon: IconRoute, title: "A path built from your gaps",
@@ -91,13 +91,13 @@ export function RootJobSeekerSection() {
             For job seekers
           </div>
           <h2 style={{ fontSize: "2.6rem", fontWeight: 800, marginBottom: "1.1rem", color: "var(--neutral-900)", lineHeight: 1.15 }}>
-            iJobsOS — the intelligent career operating system.
+            iCareerOS — the intelligent career operating system.
           </h2>
           <p style={{ fontSize: "1.2rem", color: "var(--neutral-900)", maxWidth: 780, margin: "0 auto 0.75rem", lineHeight: 1.5, fontWeight: 600 }}>
             Your career doesn&rsquo;t need more advice. It needs a system.
           </p>
           <p style={{ fontSize: "1.1rem", color: "var(--neutral-700)", maxWidth: 780, margin: "0 auto", lineHeight: 1.7 }}>
-            iJobsOS runs a continuous six-stage loop — Evaluate to
+            iCareerOS runs a continuous six-stage loop — Evaluate to
             Achieve — handling the mechanics of your job search so you
             can focus on the one thing no AI can do for you: showing up
             and performing.
@@ -154,7 +154,7 @@ export function RootJobSeekerSection() {
         <div className="root-js-cycle-grid" style={{ display: "grid", gap: "2.5rem", alignItems: "start", marginBottom: "4rem" }}>
           <div>
             <CareerCycleSVG
-              centerLabel="iJobsOS"
+              centerLabel="iCareerOS"
               stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
               currentStage={currentStage}
             />

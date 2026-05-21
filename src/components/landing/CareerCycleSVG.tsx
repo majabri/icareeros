@@ -1,5 +1,7 @@
 "use client";
 
+import { STAGE_COLORS_ORDERED, BRAND_COLORS } from "@/lib/design-tokens";
+
 /**
  * CareerCycleSVG — animated circular 6-stage cycle visualisation.
  *
@@ -8,9 +10,9 @@
  * full color-rotation rather than a single-tone ring:
  *
  *   stage 1 — teal       #00B8A9
- *   stage 2 — gold       #F5A623
- *   stage 3 — green      #10B981
- *   stage 4 — coral      #FF6B6B
+ *   stage 2 — coral      #FF6B6B
+ *   stage 3 — gold       #F5A623
+ *   stage 4 — green      #10B981
  *   stage 5 — slate blue #7B9AC0
  *   stage 6 — light teal #40C9C0
  *
@@ -34,17 +36,10 @@ type Stage = {
   label: string;
 };
 
-/** Default 6-stage color palette — drawn from the iCareerOS logo SVGs.
- *  Reordered 2026-05-20 (Amir): coral moves to stage 2; gold and green
- *  slide down to stages 3 and 4. Stages 1/5/6 unchanged. */
-export const STAGE_COLORS = [
-  "#00B8A9", // 1 — Teal (brand primary)
-  "#FF6B6B", // 2 — Coral (was 4)
-  "#F5A623", // 3 — Gold  (was 2)
-  "#10B981", // 4 — Green (was 3)
-  "#7B9AC0", // 5 — Slate blue
-  "#40C9C0", // 6 — Light teal
-] as const;
+/** Default 6-stage color palette — re-exported from the global
+ *  design tokens so landing, dashboard, and sidebar share one source.
+ *  See `src/lib/design-tokens.ts` STAGE_COLORS_ORDERED. */
+export const STAGE_COLORS = STAGE_COLORS_ORDERED;
 
 export function CareerCycleSVG({
   stages,
@@ -125,7 +120,7 @@ export function CareerCycleSVG({
           ))}
 
           <filter id="cycle-soft-shadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0F1B2D" floodOpacity="0.12" />
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={BRAND_COLORS.navy} floodOpacity="0.12" />
           </filter>
 
           {stageColors.map((color, i) => (
@@ -162,7 +157,7 @@ export function CareerCycleSVG({
         {/* Connecting arcs — each one in its source stage's color. */}
         {stages.map((_, i) => {
           const next = (i + 1) % stages.length;
-          const color = stageColors[i] ?? "#00B8A9";
+          const color = stageColors[i] ?? BRAND_COLORS.teal;
           const isActive = i === currentStage;
           return (
             <path
@@ -188,7 +183,7 @@ export function CareerCycleSVG({
             textAnchor="middle"
             fontSize="18"
             fontWeight="700"
-            fill="#0F1B2D"
+            fill={BRAND_COLORS.navy}
           >
             {centerLabel}
           </text>
@@ -198,7 +193,7 @@ export function CareerCycleSVG({
             textAnchor="middle"
             fontSize="10"
             fontWeight="600"
-            fill="#00B8A9"
+            fill={BRAND_COLORS.teal}
             letterSpacing="1.5"
           >
             CONTINUOUS LOOP
@@ -214,7 +209,7 @@ export function CareerCycleSVG({
               y={cy + 34}
               textAnchor="middle"
               fontSize="16"
-              fill="#00B8A9"
+              fill={BRAND_COLORS.teal}
             >
               ↻
             </text>
@@ -224,7 +219,7 @@ export function CareerCycleSVG({
         {/* Stage nodes — color-rotating ring */}
         {stages.map((s, i) => {
           const p = positions[i];
-          const color = stageColors[i] ?? "#00B8A9";
+          const color = stageColors[i] ?? BRAND_COLORS.teal;
           const isActive = i === currentStage;
 
           // Label position — push slightly outside the node along the
@@ -298,7 +293,7 @@ export function CareerCycleSVG({
                 dominantBaseline="middle"
                 fontSize="13"
                 fontWeight={isActive ? 800 : 700}
-                fill={isActive ? color : "#0F1B2D"}
+                fill={isActive ? color : BRAND_COLORS.navy}
                 style={{ transition: "fill 400ms ease, font-weight 400ms ease" }}
               >
                 {s.label}
