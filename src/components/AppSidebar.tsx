@@ -88,7 +88,7 @@ const STAGES: StageSection[] = [
     stage: "advise", num: 2, label: "Advise", icon: "resume",
     items: [
       { href: "/advise",        label: "Career Advice",  icon: "resume" },
-      { href: "/resumeadvisor", label: "Resume Advisor", icon: "resume" },
+      { href: "/resumeadvisor", label: "Resume & LinkedIn", icon: "resume" },
     ],
   },
   {

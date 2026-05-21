@@ -116,6 +116,7 @@ function EmptyRightPanel() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type ResumeSource = "vault" | "paste";
+type JdMode = "paste" | "url";
 
 export default function FitCheckPage() {
   const [userLoaded, setUserLoaded]               = useState(false);
@@ -125,6 +126,11 @@ export default function FitCheckPage() {
   const [selectedVersion, setSelectedVersion]    = useState<ResumeVersion | null>(null);
   const [pastedResume, setPastedResume]           = useState("");
   const [jobDescription, setJobDescription]       = useState("");
+  const [jdMode, setJdMode]                       = useState<JdMode>("paste");
+  const [jdUrl, setJdUrl]                         = useState("");
+  const [jdFetchedFrom, setJdFetchedFrom]         = useState<string | null>(null);
+  const [jdFetching, setJdFetching]               = useState(false);
+  const [jdFetchError, setJdFetchError]           = useState<string | null>(null);
   const [running, setRunning]                     = useState(false);
   const [error, setError]                         = useState<string | null>(null);
   const [result, setResult]                       = useState<FitCheckResult | null>(null);
@@ -188,6 +194,46 @@ export default function FitCheckPage() {
       setRunning(false);
     }
   }, [canSubmit, resumeText, jobDescription]);
+
+  // Fetch JD from a URL → POST /api/jobs/fetch-jd
+  const fetchJdFromUrl = useCallback(async () => {
+    const trimmed = jdUrl.trim();
+    if (trimmed.length === 0 || jdFetching) return;
+    setJdFetching(true);
+    setJdFetchError(null);
+    setJdFetchedFrom(null);
+    setResult(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/jobs/fetch-jd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      const body = await res.json().catch(() => ({} as { error?: string; jobDescription?: string }));
+      if (!res.ok) {
+        throw new Error(body.error || `Fetch failed (${res.status})`);
+      }
+      const text: string = (body.jobDescription ?? "").trim();
+      if (!text) {
+        throw new Error("The fetched page did not contain a usable job description.");
+      }
+      setJobDescription(text);
+      // Extract a friendly domain label
+      try {
+        setJdFetchedFrom(new URL(trimmed).hostname.replace(/^www\./, ""));
+      } catch {
+        setJdFetchedFrom(null);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Fetch failed";
+      setJdFetchError(msg);
+      // Auto-switch to paste mode so the user can recover without losing their place
+      setJdMode("paste");
+    } finally {
+      setJdFetching(false);
+    }
+  }, [jdUrl, jdFetching]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -330,19 +376,126 @@ export default function FitCheckPage() {
 
           {/* Job description */}
           <div className="mb-5">
-            <h2 className="mb-2 text-sm font-semibold text-gray-900">Job description</h2>
-            <textarea
-              value={jobDescription}
-              onChange={(e) => { setJobDescription(e.target.value); setResult(null); setError(null); }}
-              rows={10}
-              placeholder="Paste the full job description here — the more detail, the better the fit assessment…"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              {jobDescription.trim().length === 0
-                ? "Paste-only for now. URL / file import is on the roadmap."
-                : `${jobDescription.trim().split(/\s+/).length} words`}
-            </p>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Job description</h2>
+              <div
+                role="tablist"
+                aria-label="Job description source"
+                className="inline-flex rounded-md border border-gray-200 p-0.5 text-[11px] font-medium"
+              >
+                <button
+                  role="tab"
+                  aria-selected={jdMode === "paste"}
+                  onClick={() => { setJdMode("paste"); setJdFetchError(null); }}
+                  className={`rounded px-2.5 py-1 transition-colors ${
+                    jdMode === "paste"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Paste
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={jdMode === "url"}
+                  onClick={() => { setJdMode("url"); setJdFetchError(null); }}
+                  className={`rounded px-2.5 py-1 transition-colors ${
+                    jdMode === "url"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  URL
+                </button>
+              </div>
+            </div>
+
+            {/* URL mode: fetch input + read-only preview */}
+            {jdMode === "url" && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={jdUrl}
+                    onChange={(e) => { setJdUrl(e.target.value); setJdFetchError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void fetchJdFromUrl(); } }}
+                    placeholder="https://boards.greenhouse.io/…   or any job posting URL"
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <button
+                    onClick={fetchJdFromUrl}
+                    disabled={jdUrl.trim().length === 0 || jdFetching}
+                    className="inline-flex shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm transition-opacity hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {jdFetching ? (
+                      <>
+                        <svg className="mr-1.5 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                          <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                        </svg>
+                        Fetching
+                      </>
+                    ) : (
+                      "Fetch"
+                    )}
+                  </button>
+                </div>
+
+                {jdFetchedFrom && jobDescription.trim().length > 0 && (
+                  <p className="text-[11px] text-gray-500">
+                    Fetched from <span className="font-medium text-gray-700">{jdFetchedFrom}</span>
+                  </p>
+                )}
+
+                <textarea
+                  value={jobDescription}
+                  readOnly
+                  rows={8}
+                  placeholder="Paste a URL above and press Fetch to populate the job description here."
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-700 placeholder:text-gray-400 resize-y"
+                  aria-label="Fetched job description preview"
+                />
+                <p className="text-[11px] text-gray-400">
+                  {jobDescription.trim().length === 0
+                    ? "Preview is read-only. Switch to Paste to edit."
+                    : `${jobDescription.trim().split(/\s+/).length} words`}
+                </p>
+              </div>
+            )}
+
+            {/* Paste mode: editable textarea */}
+            {jdMode === "paste" && (
+              <>
+                <textarea
+                  value={jobDescription}
+                  onChange={(e) => { setJobDescription(e.target.value); setResult(null); setError(null); setJdFetchedFrom(null); }}
+                  rows={10}
+                  placeholder="Paste the full job description here — the more detail, the better the fit assessment…"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  {jobDescription.trim().length === 0
+                    ? "Paste the JD text — or switch to URL above to auto-fetch."
+                    : `${jobDescription.trim().split(/\s+/).length} words`}
+                </p>
+              </>
+            )}
+
+            {/* Fetch error — surfaces below the input, persists until user retries or edits */}
+            {jdFetchError && (
+              <div
+                role="alert"
+                className="mt-2 rounded-md border px-3 py-2 text-[11px]"
+                style={{
+                  color: CORAL_HEX,
+                  background: `${CORAL_HEX}0D`,
+                  borderColor: `${CORAL_HEX}33`,
+                }}
+              >
+                <strong className="font-semibold">Could not fetch:</strong> {jdFetchError}
+                <span className="block opacity-80">Switched to paste mode — paste the JD manually or try a different URL.</span>
+              </div>
+            )}
           </div>
 
           {/* Submit */}
