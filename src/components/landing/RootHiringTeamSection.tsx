@@ -110,7 +110,7 @@ export function RootHiringTeamSection() {
     <section
       id="hiring-teams"
       className="landing-fade-bg"
-      style={{ padding: "6rem 3rem", background: "var(--neutral-100)" }}
+      style={{ padding: "4rem 3rem", background: "var(--neutral-100)" }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >

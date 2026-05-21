@@ -78,7 +78,7 @@ export function RootJobSeekerSection() {
       id="job-seekers"
       className="landing-fade-bg"
       style={{
-        padding: "6rem 3rem",
+        padding: "4rem 3rem",
         background: "linear-gradient(135deg,#fff5f7 0%,#f5f7ff 50%,#e8f5ff 100%)",
       }}
       onMouseEnter={() => setPaused(true)}

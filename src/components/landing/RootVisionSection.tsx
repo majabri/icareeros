@@ -6,7 +6,7 @@
  */
 export function RootVisionSection() {
   return (
-    <section className="landing-fade-bg" style={{ padding:"6rem 3rem", background:"var(--neutral-100)" }}>
+    <section className="landing-fade-bg" style={{ padding:"4rem 3rem", background:"var(--neutral-100)" }}>
       <div style={{ maxWidth:780, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"2rem", color:"var(--neutral-900)", textAlign:"center" }}>
           Why we built a system, not a tool.
