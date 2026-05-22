@@ -26,7 +26,7 @@ describe("platform configs", () => {
       "/design",
       "/select",
       "/integrate",
-      "/hire-support",
+      "/support",
       "/develop",
       "/retain",
     ]);
@@ -72,9 +72,9 @@ describe("platform configs", () => {
     expect(stages.find(s => s.label === "Develop")?.locked).toBe(true);
     expect(stages.find(s => s.label === "Retain")?.locked).toBe(true);
 
-    // Stage 04 Support routes to /hire-support — avoids collision with
-    // the job-seeker /support inbox in middleware PROTECTED array.
-    expect(stages.find(s => s.label === "Support")?.href).toBe("/hire-support");
+    // Stage 04 Support routes to /support — Phase 4 middleware rewrites
+    // it to /hire/support on hire.*; PR #278 placed the page there.
+    expect(stages.find(s => s.label === "Support")?.href).toBe("/support");
   });
 
   it("isNavItemActive resolves single-prefix and multi-prefix items correctly", () => {

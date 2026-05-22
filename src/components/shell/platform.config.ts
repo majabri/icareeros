@@ -13,8 +13,9 @@
  * iCareerOS Dashboard → People Retention Pathway divider → six
  * stages (Design / Select / Integrate / Support / Develop / Retain)
  * → footer items (Company Profile / Settings). Stage 04 routes to
- * `/hire-support` (not `/support`) to avoid collision with the
- * job-seeker support inbox in the middleware PROTECTED array.
+ * `/support` — Phase 4 middleware rewrites it to `/hire/support` on
+ * hire.*, where PR #278 placed the page (no PROTECTED collision —
+ * Phase 4 returns before the PROTECTED check for hire.* paths).
  *
  * Forward-data-only: this PR populates new optional NavItem fields
  * (`type`, `stageNumber`, `color`, `locked`) but does NOT update the
@@ -163,9 +164,9 @@ export const HIRE_CONFIG: PlatformConfig = {
       locked:      true,
     },
     {
-      // /hire-support (NOT /support) — avoids collision with the
-      // job-seeker support inbox in middleware PROTECTED array.
-      href:        "/hire-support",
+      // /support — Phase 4 middleware rewrites to /hire/support on
+      // hire.*; PROTECTED check never fires for hire.* paths (returns early).
+      href:        "/support",
       label:       "Support",
       icon:        ICON.heartHandshake,
       stageNumber: "04",
