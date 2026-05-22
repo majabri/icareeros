@@ -1,5 +1,5 @@
 /**
- * /resumeadvisor — Resume Advisor v2 (renamed from /resume 2026-05-04)
+ * /resumeadvisor — Resume & LinkedIn Advisor (renamed from Resume Advisor 2026-05-21)
  *
  * Upload or pick a saved resume, paste/import a job description, get an
  * AI-powered fit assessment with actionable recommendations + 9 features:
@@ -53,6 +53,14 @@ interface CoverLetterResult {
   body: string;
   word_count: number;
   tips: string[];
+}
+
+interface LinkedInAdviceResult {
+  resumeGaps: string[];
+  bulletRewrites: Array<{ original: string; revised: string; rationale: string }>;
+  linkedinHeadline: string;
+  linkedinAbout: string;
+  linkedinTopSkills: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -143,6 +151,11 @@ export default function ResumeAdvisorPage() {
   // Action state
   const [busy, setBusy] = useState<{ kind: string; idx?: number } | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // LinkedIn & Resume advice state (2026-05-21 rebrand)
+  const [linkedinAdvice, setLinkedinAdvice] = useState<LinkedInAdviceResult | null>(null);
+  const [linkedinAdvising, setLinkedinAdvising] = useState(false);
+  const [linkedinAdviceError, setLinkedinAdviceError] = useState<string | null>(null);
 
   // Critique state (item #7)
   const [critiquing, setCritiquing] = useState(false);
@@ -562,6 +575,41 @@ export default function ResumeAdvisorPage() {
   }
 
   // ── Item #7: professional critique ─────────────────────────────────────
+  // LinkedIn & Resume advice — calls /api/resume/linkedin-advice
+  async function handleLinkedinAdvice() {
+    setLinkedinAdviceError(null);
+    if (!resolvedResumeText) {
+      setLinkedinAdviceError("Run the fit analysis first so we have your resume text.");
+      return;
+    }
+    const targetRole = jobSource === "url"
+      ? (urlFetchedJD ?? "").trim()
+      : jobDescription.trim();
+    if (!targetRole) {
+      setLinkedinAdviceError("Add a target job description above first (paste it, or fetch from a URL).");
+      return;
+    }
+    setLinkedinAdvising(true);
+    setLinkedinAdvice(null);
+    try {
+      const r = await fetch("/api/resume/linkedin-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeText: resolvedResumeText, targetRole }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({} as { error?: string }));
+        throw new Error(e.error ?? `Advice failed (${r.status})`);
+      }
+      const d = (await r.json()) as LinkedInAdviceResult;
+      setLinkedinAdvice(d);
+    } catch (e) {
+      setLinkedinAdviceError(e instanceof Error ? e.message : "Could not load LinkedIn advice");
+    } finally {
+      setLinkedinAdvising(false);
+    }
+  }
+
   async function handleCritique() {
     setCritiqueError(null);
     if (!resolvedResumeText) {
@@ -680,9 +728,9 @@ export default function ResumeAdvisorPage() {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">🎯 Resume Advisor</h1>
+          <h1 className="text-2xl font-bold text-gray-900">🎯 Resume &amp; LinkedIn Advisor</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Upload a resume, paste a job description, get an AI-powered fit score plus actions to improve it.
+            Get targeted recommendations to improve your resume and LinkedIn profile for the roles you want.
           </p>
         </div>
 
@@ -889,11 +937,15 @@ export default function ResumeAdvisorPage() {
               <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Take action</h2>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button onClick={() => void handleLinkedinAdvice()} disabled={linkedinAdvising} className="rounded-lg border border-brand-300 bg-brand-50 px-4 py-3 text-left text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50">💼 {linkedinAdvising ? "Analysing…" : "Get LinkedIn & resume advice"}</button>
                   <button onClick={() => void handleCoverLetter()} disabled={busy?.kind === "cover-letter"} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">📝 {busy?.kind === "cover-letter" ? "Generating…" : "Write cover letter"}</button>
                   <button onClick={() => void handleCritique()} disabled={critiquing} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">🔍 {critiquing ? "Reviewing…" : "Why am I not getting interviews?"}</button>
                   <button onClick={handleInterviewPrep} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">🎤 Interview prep questions →</button>
                   <button onClick={() => void handleSaveJob()} disabled={busy?.kind === "save-job"} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">⭐ {busy?.kind === "save-job" ? "Saving…" : "Save job to Opportunities"}</button>
                 </div>
+                {linkedinAdviceError && (
+                  <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{linkedinAdviceError}</p>
+                )}
 
                 {/* Apply CTA — visible when the analyzed JD has a URL or
                     the resume advisor was opened from an Opportunities card.
@@ -952,6 +1004,92 @@ export default function ResumeAdvisorPage() {
                   </div>
                 )}
               </section>
+
+              {/* LinkedIn & Resume advice result (2026-05-21 rebrand) */}
+              {linkedinAdvice && (
+                <section className="rounded-xl border border-brand-200 bg-white p-6 shadow-sm space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-gray-900">💼 Resume &amp; LinkedIn Advice</h2>
+                    <button onClick={() => setLinkedinAdvice(null)} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                  </div>
+
+                  {linkedinAdvice.resumeGaps.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">Resume gaps vs target role</h3>
+                      <ul className="space-y-1.5">
+                        {linkedinAdvice.resumeGaps.map((g, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-700">
+                            <span className="mt-0.5 text-amber-500" aria-hidden="true">●</span>
+                            <span>{g}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {linkedinAdvice.bulletRewrites.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">Bullet-level resume rewrites</h3>
+                      <ul className="space-y-3">
+                        {linkedinAdvice.bulletRewrites.map((b, i) => (
+                          <li key={i} className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                            <p className="text-xs uppercase tracking-wide text-gray-400">Before</p>
+                            <p className="mb-2 text-gray-700">{b.original}</p>
+                            <p className="text-xs uppercase tracking-wide text-emerald-600">After</p>
+                            <p className="mb-2 font-medium text-gray-900">{b.revised}</p>
+                            <p className="text-xs italic text-gray-500">{b.rationale}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {linkedinAdvice.linkedinHeadline && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">LinkedIn headline</h3>
+                      <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-900">
+                        {linkedinAdvice.linkedinHeadline}
+                      </div>
+                      <div className="mt-1 text-right">
+                        <button
+                          onClick={() => navigator.clipboard.writeText(linkedinAdvice.linkedinHeadline).catch(() => {})}
+                          className="text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {linkedinAdvice.linkedinAbout && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">LinkedIn About section</h3>
+                      <pre className="whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm leading-relaxed text-gray-800 font-sans">{linkedinAdvice.linkedinAbout}</pre>
+                      <div className="mt-1 text-right">
+                        <button
+                          onClick={() => navigator.clipboard.writeText(linkedinAdvice.linkedinAbout).catch(() => {})}
+                          className="text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {linkedinAdvice.linkedinTopSkills.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">Top 5 LinkedIn skills to add</h3>
+                      <ul className="flex flex-wrap gap-2">
+                        {linkedinAdvice.linkedinTopSkills.map((s, i) => (
+                          <li key={i} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              )}
 
               {/* Cover letter result (item #6) */}
               {coverLetter && (

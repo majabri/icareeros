@@ -79,15 +79,16 @@ const STAGES: StageSection[] = [
     // Career Profile entry remains as the data-entry surface beneath it.
     stage: "evaluate", num: 1, label: "Evaluate", icon: "profile",
     items: [
-      { href: "/evaluate", label: "Evaluate",       icon: "profile" },
-      { href: "/mycareer", label: "Career Profile", icon: "profile" },
+      { href: "/evaluate",  label: "Evaluate",       icon: "profile" },
+      { href: "/mycareer",  label: "Career Profile", icon: "profile" },
+      { href: "/fit-check", label: "Fit Check",      icon: "target"  },
     ],
   },
   {
     stage: "advise", num: 2, label: "Advise", icon: "resume",
     items: [
       { href: "/advise",        label: "Career Advice",  icon: "resume" },
-      { href: "/resumeadvisor", label: "Resume Advisor", icon: "resume" },
+      { href: "/resumeadvisor", label: "Resume & LinkedIn", icon: "resume" },
     ],
   },
   {
