@@ -9,11 +9,12 @@ Notable shipped work. Most recent first.
 
 **`main` HEAD after this run: `96bdee7`**
 
-Catch-up batch entries for hire.* PRs #281, #282, #284, #285 that shipped over the
+Catch-up batch entries for hire.* PRs #281, #282, #284, #285, #287 that shipped over the
 last 24 hours without CHANGELOG entries, plus today's #289 design-tokens migration.
 
 ### Hire — features and fixes
 
+- **#287** `feat/hire-settings-pages` — [hire] feat(hire): settings pages — privacy/billing/security + SettingsNav. 3 new pages + SettingsNav 4-tab sub-nav across all hire settings. Privacy uses `career_profiles.is_discoverable` (mirror jobs.*). Billing carries the hire.* tiers (Free / \$49 / \$149 / \$399); Stripe TODO. Security: password change + connected-accounts display. 26 new tests.
 - **#289** `feat/hire-design-tokens` — [hire] chore(hire): replace hardcoded brand hex with design tokens. 69 substitutions across 15 source files; all hire-side surfaces (components/hire/* + (hire)/hire/* + lib/hire/pathway-stages.ts) now reference `BRAND_COLORS` from `@/lib/design-tokens`. Cosmetic only — no behaviour, layout, or spacing changes. CSS-variable fallback hexes converted to template literals preserving the `var()` chain; JSX hex attrs converted to expressions; compound CSS strings (e.g. `"3px solid #00B8A9"`) to template literals. JSDoc palette tables and test-file assertion anchors intentionally preserved.
 - **#285** `feat/platform-config-driven-sidebar` — [hire] feat(hire): ConfigDrivenSidebar — stage numbers, colours, lock badges. Platform sidebar component reads new `NavItem` fields (stage number, stage colour, lock badge) so hire and jobs sidebars can render the People Retention Pathway / Career OS sequences without per-side bespoke nav code.
 - **#284** `fix/hire-auth-gate` — [hire] fix(hire): middleware auth-gate — unauthenticated hire.* redirects to login. Closes the pre-existing hire.* exposure gap (Open Issue #1 from HIRE-HANDOFF-20260521): the Phase-3 path rewrite previously hid hire routes from the PROTECTED check so unauthenticated requests landed on the page with a defensive "Not signed in" fallback. Middleware now applies the PROTECTED check before the rewrite so `/dashboard`, `/settings/*`, `/profile`, `/select`, `/design`, `/integrate`, `/support`, `/develop`, `/retain`, `/jobs`, `/invites` all 307 → `/auth/login?redirect=…&platform=hire`.
