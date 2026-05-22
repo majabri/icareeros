@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * PathwayRing — iTalentOS People Retention Pathway circular ring.
+ * PathwayRing — iCareerOS People Retention Pathway circular ring.
  *
  * Six-segment SVG ring matching the visual structure of
  * `src/components/landing/CareerCycleSVG.tsx` (read-only reference per
  * COWORK-BRIEF-hire-pathway-shell-v2). Same 6 colours in the same
- * positions as the iJobsOS career-cycle ring — only the stage labels
+ * positions as the iCareerOS career-cycle ring — only the stage labels
  * differ.
  *
  * Props:
  *   activeStageId  Optional. When supplied, that node is full-opacity
  *                  + a halo; other nodes drop to 40% opacity. When
  *                  omitted, all six nodes render at full opacity (used
- *                  on the iTalentOS Dashboard overview page where no
+ *                  on the iCareerOS Dashboard overview page where no
  *                  single stage is "active").
  *                  Note: jobs.* CareerOsRing always receives a current
  *                  stage (from cycle.current_stage), so there is no
@@ -68,7 +68,7 @@ export function PathwayRing({ activeStageId, className }: PathwayRingProps) {
       viewBox="0 0 500 500"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="iTalentOS People Retention Pathway"
+      aria-label="iCareerOS People Retention Pathway"
       className={className}
       style={{ width: "100%", maxWidth: 500, height: "auto" }}
     >
@@ -91,7 +91,7 @@ export function PathwayRing({ activeStageId, className }: PathwayRingProps) {
         );
       })}
 
-      {/* Centre badge — iTalentOS wordmark, matches CareerCycleSVG centre treatment. */}
+      {/* Centre badge — iCareerOS wordmark, matches CareerCycleSVG centre treatment. */}
       <text
         x={CX}
         y={CY - 4}
@@ -102,7 +102,7 @@ export function PathwayRing({ activeStageId, className }: PathwayRingProps) {
         fill="#0F1B2D"
         letterSpacing="-0.5"
       >
-        iTalentOS
+        iCareerOS
       </text>
       <text
         x={CX}

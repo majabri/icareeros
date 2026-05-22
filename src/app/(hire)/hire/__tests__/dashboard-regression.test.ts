@@ -16,10 +16,10 @@ describe("hire dashboard overview — Sprint H1 regression checks", () => {
     expect(src).not.toMatch(/<CandidateSearch\b/);
   });
 
-  it("/dashboard page renders PathwayRing as the iTalentOS overview", () => {
+  it("/dashboard page renders PathwayRing as the iCareerOS overview", () => {
     const src = readSource("src/app/(hire)/hire/dashboard/page.tsx");
     expect(src).toMatch(/PathwayRing/);
-    expect(src).toMatch(/iTalentOS Dashboard/);
+    expect(src).toMatch(/iCareerOS Dashboard/);
   });
 
   it("/select page exists and hosts CandidateSearch", () => {
