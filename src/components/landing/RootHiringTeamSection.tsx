@@ -1,6 +1,6 @@
 "use client";
 import {
-  IconPencilRuler, IconUserSearch, IconUsersPlus, IconHeartHandshake,
+  IconRulerMeasure, IconUserSearch, IconUsersPlus, IconHeartHandshake,
   IconTrendingUp, IconShieldCheck,
   IconBrain, IconAdjustments, IconMailForward, IconBuilding, IconX,
   type Icon,
@@ -30,7 +30,7 @@ type Stage = {
 };
 
 const STAGES: readonly Stage[] = [
-  { n: 1, label: "Design", Icon: IconPencilRuler,
+  { n: 1, label: "Design", Icon: IconRulerMeasure,
     headline: "They've already assessed their fit",
     body: "Candidates know their skills, gaps, and market position before they opt in. You're not starting a cold conversation." },
   { n: 2, label: "Select", Icon: IconUserSearch,
