@@ -145,30 +145,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 308);
   }
 
-  // Phase 4 (2026-05-19) — Public hire.* landing page.
-  //
-  // The `/` path on hire.* is no longer auto-rewritten here; it's
-  // handled below after getUser() so that:
-  //   - unauthenticated visitors render `src/app/page.tsx` (HireLanding
-  //     variant, driven by `x-platform === "hire"`)
-  //   - authenticated visitors rewrite to /hire/dashboard (unchanged)
-  //
-  // Every other path on hire.* still rewrites into the (hire) route
-  // group exactly as before.
-  if (
-    isHireHost
-    && pathname !== "/"
-    && !pathname.startsWith("/auth")
-    && !pathname.startsWith("/api")
-    && !pathname.startsWith("/_next")
-  ) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = `/hire${pathname}`;
-    return NextResponse.rewrite(rewriteUrl, {
-      request: { headers: requestHeaders },
-    });
-  }
-
   let response = NextResponse.next({
     request: { headers: requestHeaders },
   });
@@ -213,6 +189,44 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Phase 4 (2026-05-19, auth-gate added 2026-05-21) —
+  //
+  // The `/` path on hire.* is no longer auto-rewritten here; it's
+  // handled below by Phase 5 so that:
+  //   - unauthenticated visitors render `src/app/page.tsx` (HireLanding
+  //     variant, driven by `x-platform === "hire"`)
+  //   - authenticated visitors rewrite to /hire/dashboard
+  //
+  // Every other path on hire.* still rewrites into the (hire) route
+  // group — BUT must require authentication. Without an auth gate
+  // inside this block, unauthenticated visitors to /design, /select,
+  // /integrate, /support, /develop, /retain, /settings, /profile, and
+  // /candidates would reach the page directly because this block
+  // `return`s before the PROTECTED check at the bottom of middleware
+  // ever runs. The auth gate added 2026-05-21 closes that gap.
+  if (
+    isHireHost
+    && pathname !== "/"
+    && !pathname.startsWith("/auth")
+    && !pathname.startsWith("/api")
+    && !pathname.startsWith("/_next")
+  ) {
+    if (!user) {
+      // Unauthenticated → centralized auth on icareeros.com. Carry the
+      // intended destination + platform tag so the post-login flow can
+      // bring the user back to the page they wanted.
+      const loginUrl = new URL("https://icareeros.com/auth/login");
+      loginUrl.searchParams.set("redirect", `https://hire.icareeros.com${pathname}`);
+      loginUrl.searchParams.set("platform", "hire");
+      return NextResponse.redirect(loginUrl);
+    }
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/hire${pathname}`;
+    return NextResponse.rewrite(rewriteUrl, {
+      request: { headers: requestHeaders },
+    });
+  }
 
   // Phase 5 (2026-05-20) — Subdomain landings collapsed into the root.
   // The unauthenticated marketing surface used to live at jobs.* and
