@@ -16,6 +16,7 @@
  */
 
 import { getStage, type StageId } from "@/lib/hire/pathway-stages";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 export interface StageHeaderProps {
   stageId:           StageId;
@@ -105,7 +106,7 @@ export function StageHeader({ stageId, showBillingBadge = true }: StageHeaderPro
             fontFamily: "Inter, system-ui, sans-serif",
             fontSize:   "1.5rem",
             fontWeight: 700,
-            color:      "var(--text-primary, #0F1B2D)",
+            color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
             margin:     0,
           }}>
             {stage.label}

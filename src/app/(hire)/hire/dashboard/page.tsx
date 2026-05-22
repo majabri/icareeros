@@ -21,6 +21,7 @@
 import Link from "next/link";
 import { PathwayRing } from "@/components/hire/PathwayRing";
 import { PATHWAY_STAGES, type PathwayStage } from "@/lib/hire/pathway-stages";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 function statusBadge(stage: PathwayStage): { label: string; fg: string; bg: string } {
   if (stage.status === "live") {
@@ -47,7 +48,7 @@ export default function HireDashboardOverviewPage() {
             fontFamily: "Inter, system-ui, sans-serif",
             fontSize:   "1.85rem",
             fontWeight: 800,
-            color:      "var(--text-primary, #0F1B2D)",
+            color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
             margin:     0,
           }}
         >
@@ -135,7 +136,7 @@ export default function HireDashboardOverviewPage() {
                     fontFamily: "Inter, system-ui, sans-serif",
                     fontSize:   "1.05rem",
                     fontWeight: 700,
-                    color:      "var(--text-primary, #0F1B2D)",
+                    color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
                   }}>
                     {stage.label}
                   </div>

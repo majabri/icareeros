@@ -14,6 +14,7 @@
  */
 
 import { getStage, STAGE_DETAILS, type StageId } from "@/lib/hire/pathway-stages";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 export interface StageComingSoonProps {
   stageId: StageId;
@@ -65,7 +66,7 @@ export function StageComingSoon({ stageId }: StageComingSoonProps) {
           <p style={{
             margin:     "0.5rem 0 0",
             fontSize:   "0.95rem",
-            color:      "var(--text-primary, #0F1B2D)",
+            color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
             lineHeight: 1.55,
           }}>
             {detail.description}
@@ -99,7 +100,7 @@ export function StageComingSoon({ stageId }: StageComingSoonProps) {
                 alignItems: "center",
                 gap:        "0.55rem",
                 fontSize:   "0.95rem",
-                color:      "var(--text-primary, #0F1B2D)",
+                color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
               }}
             >
               <span aria-hidden="true" style={{ color: stage.color, fontWeight: 800 }}>

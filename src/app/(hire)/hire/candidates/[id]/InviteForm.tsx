@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 interface InviteFormProps {
   candidateUserId: string;
@@ -105,7 +106,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
         type="button"
         onClick={() => setPhase("expanded")}
         style={{
-          background: "#00B8A9",
+          background: BRAND_COLORS.teal,
           color: "#0B1422",
           padding: "0.65rem 1.4rem",
           borderRadius: 10,
@@ -134,14 +135,14 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
       <label style={{ display: "block" }}>
         <span
           style={{
-            color: "var(--text-muted, #7B9AC0)",
+            color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`,
             fontSize: "0.7rem",
             textTransform: "uppercase",
             letterSpacing: "0.5px",
             fontWeight: 600,
           }}
         >
-          Job title <span style={{ color: "#F5A623" }}>*</span>
+          Job title <span style={{ color: BRAND_COLORS.gold }}>*</span>
         </span>
         <input
           type="text"
@@ -167,7 +168,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
       <label style={{ display: "block" }}>
         <span
           style={{
-            color: "var(--text-muted, #7B9AC0)",
+            color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`,
             fontSize: "0.7rem",
             textTransform: "uppercase",
             letterSpacing: "0.5px",
@@ -195,7 +196,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
             outline: "none",
           }}
         />
-        <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", marginTop: "0.2rem", display: "block" }}>
+        <span style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.7rem", marginTop: "0.2rem", display: "block" }}>
           {message.length}/500
         </span>
       </label>
@@ -209,7 +210,7 @@ export function InviteForm({ candidateUserId, initialAlreadyInvited }: InviteFor
           type="submit"
           disabled={phase === "sending" || !jobTitle.trim()}
           style={{
-            background: "#00B8A9",
+            background: BRAND_COLORS.teal,
             color: "#0B1422",
             padding: "0.6rem 1.4rem",
             borderRadius: 10,
