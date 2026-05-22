@@ -35,6 +35,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase";
+import { SettingsNav } from "@/components/hire/SettingsNav";
 import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string };
@@ -214,14 +215,18 @@ export default function HireAccountPage() {
 
   if (loading)
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <SettingsNav />
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+        </div>
       </div>
     );
 
   if (!user)
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <SettingsNav />
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-600">Not signed in.</p>
         </section>
@@ -232,6 +237,7 @@ export default function HireAccountPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 space-y-6">
+      <SettingsNav />
       <header>
         <h1 className="text-2xl font-semibold text-gray-900">Account</h1>
         <p className="mt-1 text-sm text-gray-500">
