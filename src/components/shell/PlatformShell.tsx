@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase";
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { AppTopBar } from "@/components/AppTopBar";
 import { isNavItemActive, type PlatformConfig, type NavItem } from "@/components/shell/platform.config";
+import { IconLock } from "@tabler/icons-react";
 
 // Must match AppTopBar height
 const TOP_BAR_H = 72;
@@ -167,14 +168,14 @@ function ConfigDrivenSidebar({ config, mobileOpen, setMobileOpen }: SidebarProps
 
 // ── Sidebar content + visual primitives ──────────────────────────────────────
 
-function Icon({ d, size = 18 }: { d: string; size?: number }) {
+function Icon({ d, size = 18, color }: { d: string; size?: number; color?: string }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
+      stroke={color ?? "currentColor"}
       strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -187,6 +188,49 @@ function Icon({ d, size = 18 }: { d: string; size?: number }) {
 }
 
 function NavRow({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+  // ── Section divider — labelled separator, never a Link ────────────────
+  if (item.type === "section") {
+    return (
+      <div style={{ margin: "0.85rem 0 0.4rem" }}>
+        <div
+          role="separator"
+          aria-hidden
+          style={{ height: 1, background: BORDER, margin: "0 1rem 0.5rem" }}
+        />
+        <div
+          style={{
+            padding:       "0 0.95rem",
+            fontSize:      "0.65rem",
+            fontWeight:    700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color:         MUTED,
+          }}
+        >
+          {item.label}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Stage number prefix — inline mono prefix before the label ─────────
+  // Only rendered when item.stageNumber is present (HIRE_CONFIG pathway).
+  const stageNumberEl = item.stageNumber ? (
+    <span
+      aria-hidden
+      style={{
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize:   "0.7rem",
+        fontWeight: 600,
+        color:      MUTED,
+        flexShrink: 0,
+      }}
+    >
+      {item.stageNumber}
+    </span>
+  ) : null;
+
+  // ── Coming-soon branch — visually muted div, no nav, "Soon" badge ─────
   if (item.comingSoon) {
     return (
       <div
@@ -207,7 +251,8 @@ function NavRow({ item, active, onClick }: { item: NavItem; active: boolean; onC
           cursor:       "default",
         }}
       >
-        <Icon d={item.icon} />
+        <Icon d={item.icon} color={item.color} />
+        {stageNumberEl}
         <span style={{ flex: 1 }}>{item.label}</span>
         <span
           style={{
@@ -227,6 +272,43 @@ function NavRow({ item, active, onClick }: { item: NavItem; active: boolean; onC
     );
   }
 
+  // ── Locked branch — Starter+ gate. Non-clickable, lock badge, tooltip ─
+  // Visible (not hidden) so Free-plan employers see the gated stages.
+  if (item.locked) {
+    return (
+      <div
+        role="link"
+        aria-disabled="true"
+        tabIndex={-1}
+        title="Upgrade to Starter to access"
+        style={{
+          display:        "flex",
+          alignItems:     "center",
+          gap:            "0.65rem",
+          padding:        "0.5rem 0.75rem",
+          margin:         "0 0.5rem 0.15rem",
+          borderRadius:   "0.5rem",
+          color:          TEXT,
+          opacity:        0.5,
+          fontSize:       "0.875rem",
+          fontWeight:     500,
+          cursor:         "not-allowed",
+        }}
+      >
+        <Icon d={item.icon} color={item.color} />
+        {stageNumberEl}
+        <span style={{ flex: 1 }}>{item.label}</span>
+        <IconLock
+          size={12}
+          strokeWidth={1.5}
+          aria-hidden
+          style={{ color: MUTED, flexShrink: 0 }}
+        />
+      </div>
+    );
+  }
+
+  // ── Default — clickable Link, with optional stage colour + number ─────
   return (
     <Link
       href={item.href}
@@ -247,7 +329,8 @@ function NavRow({ item, active, onClick }: { item: NavItem; active: boolean; onC
         transition:     "background 120ms ease, color 120ms ease",
       }}
     >
-      <Icon d={item.icon} />
+      <Icon d={item.icon} color={item.color} />
+      {stageNumberEl}
       <span>{item.label}</span>
     </Link>
   );
