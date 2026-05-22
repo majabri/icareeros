@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
  * Phase 3 (2026-05-17) — Job Postings stub.
@@ -14,7 +15,7 @@ export default function HireJobsStubPage() {
   return (
     <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "var(--text-primary, #E5EEFA)" }}>
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0 }}>Job Postings</h1>
-      <p style={{ marginTop: "0.75rem", color: "var(--text-muted, #7B9AC0)", lineHeight: 1.55 }}>
+      <p style={{ marginTop: "0.75rem", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, lineHeight: 1.55 }}>
         Coming soon. Post a job, manage candidates, and track your hiring funnel
         — all from one place. We&apos;re building this next.
       </p>
@@ -30,7 +31,7 @@ export default function HireJobsStubPage() {
         <p style={{ margin: 0, fontWeight: 600 }}>
           In the meantime, you can already find talent.
         </p>
-        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: "var(--text-muted, #7B9AC0)" }}>
+        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})` }}>
           Search profiles by skill, role, and location — and invite candidates
           directly.
         </p>
@@ -40,7 +41,7 @@ export default function HireJobsStubPage() {
             display:        "inline-flex",
             alignItems:     "center",
             padding:        "0.5rem 1rem",
-            background:     "#00B8A9",
+            background:     BRAND_COLORS.teal,
             color:          "#0B1422",
             fontWeight:     600,
             textDecoration: "none",

@@ -1,3 +1,5 @@
+import { BRAND_COLORS } from "@/lib/design-tokens";
+
 /**
  * iCareerOS People Retention Pathway — stage configuration.
  *
@@ -52,7 +54,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Design",
     tagline: "Define the need before the hire",
     icon:    "⬡",
-    color:   "#00B8A9",   // teal — position 1, matches iCareerOS ring
+    color:   BRAND_COLORS.teal,   // teal — position 1, matches iCareerOS ring
     route:   "/design",
     billing: "free",
     status:  "planned",
@@ -63,7 +65,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Select",
     tagline: "Find and choose the best fit",
     icon:    "◈",
-    color:   "#FF6B6B",   // coral — position 2, matches iCareerOS ring
+    color:   BRAND_COLORS.coral,   // coral — position 2, matches iCareerOS ring
     route:   "/select",
     billing: "free",
     status:  "live",
@@ -74,7 +76,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Integrate",
     tagline: "Accelerate time-to-productivity",
     icon:    "◎",
-    color:   "#F5A623",   // gold — position 3, matches iCareerOS ring
+    color:   BRAND_COLORS.gold,   // gold — position 3, matches iCareerOS ring
     route:   "/integrate",
     billing: "starter",
     status:  "planned",
@@ -85,7 +87,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Support",
     tagline: "Remove friction, strengthen engagement",
     icon:    "◉",
-    color:   "#10B981",   // green — position 4, matches iCareerOS ring
+    color:   BRAND_COLORS.green,   // green — position 4, matches iCareerOS ring
     route:   "/support",
     billing: "starter",
     status:  "planned",
@@ -96,7 +98,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Develop",
     tagline: "Build capability and future readiness",
     icon:    "◆",
-    color:   "#7B9AC0",   // slate blue — position 5, matches iCareerOS ring
+    color:   BRAND_COLORS.slateBlue,   // slate blue — position 5, matches iCareerOS ring
     route:   "/develop",
     billing: "starter",
     status:  "planned",
@@ -107,7 +109,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Retain",
     tagline: "Protect your talent investment",
     icon:    "★",
-    color:   "#40C9C0",   // light teal — position 6, matches iCareerOS ring
+    color:   BRAND_COLORS.tealLight,   // light teal — position 6, matches iCareerOS ring
     route:   "/retain",
     billing: "starter",
     status:  "planned",

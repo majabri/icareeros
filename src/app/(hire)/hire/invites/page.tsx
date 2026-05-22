@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
  * Phase 3 (2026-05-17) — Invites Sent stub.
@@ -14,7 +15,7 @@ export default function HireInvitesStubPage() {
   return (
     <div style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto", color: "var(--text-primary, #E5EEFA)" }}>
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0 }}>Invites Sent</h1>
-      <p style={{ marginTop: "0.75rem", color: "var(--text-muted, #7B9AC0)", lineHeight: 1.55 }}>
+      <p style={{ marginTop: "0.75rem", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, lineHeight: 1.55 }}>
         Coming soon. A unified inbox showing every candidate you&apos;ve invited,
         their response status, and follow-up reminders.
       </p>
@@ -28,7 +29,7 @@ export default function HireInvitesStubPage() {
         }}
       >
         <p style={{ margin: 0, fontWeight: 600 }}>Ready to invite more candidates?</p>
-        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: "var(--text-muted, #7B9AC0)" }}>
+        <p style={{ marginTop: "0.5rem", marginBottom: "1rem", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})` }}>
           Find the right people on Find Talent and send your first outreach.
         </p>
         <Link
@@ -37,7 +38,7 @@ export default function HireInvitesStubPage() {
             display:        "inline-flex",
             alignItems:     "center",
             padding:        "0.5rem 1rem",
-            background:     "#00B8A9",
+            background:     BRAND_COLORS.teal,
             color:          "#0B1422",
             fontWeight:     600,
             textDecoration: "none",

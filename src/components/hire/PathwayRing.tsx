@@ -30,6 +30,7 @@
 
 import { useRouter } from "next/navigation";
 import { PATHWAY_STAGES, type StageId } from "@/lib/hire/pathway-stages";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 const CX     = 250;
 const CY     = 250;
@@ -99,7 +100,7 @@ export function PathwayRing({ activeStageId, className }: PathwayRingProps) {
         fontFamily="Inter, system-ui, sans-serif"
         fontSize="22"
         fontWeight="800"
-        fill="#0F1B2D"
+        fill={BRAND_COLORS.navy}
         letterSpacing="-0.5"
       >
         iCareerOS
@@ -188,7 +189,7 @@ export function PathwayRing({ activeStageId, className }: PathwayRingProps) {
               fontFamily="Inter, system-ui, sans-serif"
               fontSize="13"
               fontWeight={isActive ? 800 : 600}
-              fill={isActive ? stage.color : "#0F1B2D"}
+              fill={isActive ? stage.color : BRAND_COLORS.navy}
             >
               {stage.label}
             </text>

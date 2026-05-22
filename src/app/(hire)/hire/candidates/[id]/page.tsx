@@ -8,6 +8,7 @@ import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { isBlockedFor } from "@/lib/hire/blockedCompaniesFilter";
 import { arr, num, str } from "@/lib/career-os/normalize";
 import { InviteForm } from "./InviteForm";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
  * Phase 3 (2026-05-17) — Recruiter-facing candidate detail page.
@@ -182,7 +183,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         <section
           style={{
             background: "var(--surface-card, #1A2D45)",
-            borderLeft: "3px solid #00B8A9",
+            borderLeft: `3px solid ${BRAND_COLORS.teal}`,
             borderRadius: 14,
             padding: "1.75rem",
             marginBottom: "1.25rem",
@@ -197,7 +198,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             aria-hidden
             style={{
               width: 64, height: 64, borderRadius: "50%",
-              background: "#7B9AC0", color: "#0F1B2D",
+              background: BRAND_COLORS.slateBlue, color: BRAND_COLORS.navy,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               fontWeight: 800, fontSize: "1.15rem",
             }}
@@ -226,14 +227,14 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           {/* Market fit score */}
           {marketFitScore > 0 && (
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "2.25rem", fontWeight: 800, color: "#F5A623", lineHeight: 1 }}>
+              <div style={{ fontSize: "2.25rem", fontWeight: 800, color: BRAND_COLORS.gold, lineHeight: 1 }}>
                 {marketFitScore}
               </div>
-              <div style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "0.15rem" }}>
+              <div style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "0.15rem" }}>
                 market fit
               </div>
               <div style={{ marginTop: "0.4rem", height: 4, width: 80, borderRadius: 4, background: "rgba(123,154,192,0.25)", overflow: "hidden", margin: "0.4rem auto 0" }}>
-                <div style={{ height: "100%", width: `${Math.max(0, Math.min(100, marketFitScore))}%`, background: "#F5A623" }} />
+                <div style={{ height: "100%", width: `${Math.max(0, Math.min(100, marketFitScore))}%`, background: BRAND_COLORS.gold }} />
               </div>
             </div>
           )}
@@ -318,7 +319,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                     >
                       <span style={{ fontWeight: 600 }}>{str(path.title)}</span>
                       {typeof path.matchScore === "number" && (
-                        <span style={{ color: "#F5A623", fontWeight: 700, fontSize: "0.85rem" }}>
+                        <span style={{ color: BRAND_COLORS.gold, fontWeight: 700, fontSize: "0.85rem" }}>
                           {Math.round(num(path.matchScore))}% match
                         </span>
                       )}
@@ -327,7 +328,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 })}
               </ul>
               {adviseTimeline > 0 && (
-                <p style={{ marginTop: "0.5rem", color: "var(--text-muted, #7B9AC0)", fontSize: "0.8rem" }}>
+                <p style={{ marginTop: "0.5rem", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.8rem" }}>
                   Path-to-target estimate: ~{adviseTimeline} weeks
                 </p>
               )}
@@ -448,7 +449,7 @@ const sectionHeadingStyle: React.CSSProperties = {
   fontSize: "0.7rem",
   textTransform: "uppercase",
   letterSpacing: "0.6px",
-  color: "var(--text-muted, #7B9AC0)",
+  color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`,
   fontWeight: 700,
   marginBottom: "0.75rem",
 };
@@ -478,7 +479,7 @@ function BadgeChip({ children, variant }: { children: React.ReactNode; variant?:
 function SubLabel({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
-      color: "var(--text-muted, #7B9AC0)",
+      color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`,
       fontSize: "0.7rem",
       textTransform: "uppercase",
       letterSpacing: "0.5px",

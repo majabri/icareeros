@@ -116,7 +116,7 @@ export default function HireSecuritySettingsPage() {
       <SettingsNav />
 
       <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)", margin: 0 }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})`, margin: 0 }}>
           Security
         </h1>
         <p style={{ marginTop: "0.4rem", fontSize: "0.9rem", color: "var(--text-muted, #64748B)" }}>
@@ -132,7 +132,7 @@ export default function HireSecuritySettingsPage() {
         padding:      "1.25rem 1.5rem",
         marginBottom: "1.5rem",
       }}>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
           Change password
         </h2>
         <p style={{ marginTop: "0.35rem", fontSize: "0.85rem", color: "var(--text-muted, #64748B)" }}>
@@ -141,7 +141,7 @@ export default function HireSecuritySettingsPage() {
 
         <form onSubmit={handleSubmit} style={{ marginTop: "1rem", display: "grid", gap: "0.85rem", maxWidth: 420 }}>
           <label style={{ display: "block" }}>
-            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #0F1B2D)", marginBottom: "0.3rem" }}>
+            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: `var(--text-primary, ${BRAND_COLORS.navy})`, marginBottom: "0.3rem" }}>
               Current password
             </span>
             <input
@@ -160,7 +160,7 @@ export default function HireSecuritySettingsPage() {
             />
           </label>
           <label style={{ display: "block" }}>
-            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #0F1B2D)", marginBottom: "0.3rem" }}>
+            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: `var(--text-primary, ${BRAND_COLORS.navy})`, marginBottom: "0.3rem" }}>
               New password
             </span>
             <input
@@ -180,7 +180,7 @@ export default function HireSecuritySettingsPage() {
             />
           </label>
           <label style={{ display: "block" }}>
-            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #0F1B2D)", marginBottom: "0.3rem" }}>
+            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: `var(--text-primary, ${BRAND_COLORS.navy})`, marginBottom: "0.3rem" }}>
               Confirm new password
             </span>
             <input
@@ -244,7 +244,7 @@ export default function HireSecuritySettingsPage() {
         borderRadius: 12,
         padding:      "1.25rem 1.5rem",
       }}>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
           Connected accounts
         </h2>
         <p style={{ marginTop: "0.35rem", fontSize: "0.85rem", color: "var(--text-muted, #64748B)" }}>
@@ -265,7 +265,7 @@ export default function HireSecuritySettingsPage() {
                   borderRadius:   8,
                 }}
               >
-                <span style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--text-primary, #0F1B2D)" }}>
+                <span style={{ fontSize: "0.92rem", fontWeight: 600, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
                   {PROVIDER_LABELS[id]}
                 </span>
                 {connected

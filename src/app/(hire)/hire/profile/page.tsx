@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
 
@@ -192,7 +193,7 @@ export default function EmployerProfilePage() {
               type="submit"
               disabled={saving || loading || !companyName.trim()}
               style={{
-                background: "#00B8A9",
+                background: BRAND_COLORS.teal,
                 color: "#0B1422",
                 padding: "0.6rem 1.5rem",
                 borderRadius: 10,
@@ -242,7 +243,7 @@ function FormField({
     <label style={{ display: "block" }}>
       <span
         style={{
-          color: "var(--text-muted, #7B9AC0)",
+          color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`,
           fontSize: "0.72rem",
           textTransform: "uppercase",
           letterSpacing: "0.5px",
@@ -252,7 +253,7 @@ function FormField({
         }}
       >
         {label}
-        {required && <span style={{ color: "#F5A623", marginLeft: "0.25rem" }}>*</span>}
+        {required && <span style={{ color: BRAND_COLORS.gold, marginLeft: "0.25rem" }}>*</span>}
       </span>
       {children}
     </label>

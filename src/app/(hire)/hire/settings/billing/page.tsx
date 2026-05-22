@@ -91,7 +91,7 @@ export default function HireBillingSettingsPage() {
       <SettingsNav />
 
       <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)", margin: 0 }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})`, margin: 0 }}>
           Plan &amp; Billing
         </h1>
         <p style={{ marginTop: "0.4rem", fontSize: "0.9rem", color: "var(--text-muted, #64748B)" }}>
@@ -115,7 +115,7 @@ export default function HireBillingSettingsPage() {
           marginTop: "0.35rem",
           fontSize:  "1.4rem",
           fontWeight: 800,
-          color:     "var(--text-primary, #0F1B2D)",
+          color:     `var(--text-primary, ${BRAND_COLORS.navy})`,
         }}>
           {loading ? "—" : `${currentTier.label} plan`}
         </div>
@@ -173,7 +173,7 @@ export default function HireBillingSettingsPage() {
         borderRadius: 12,
         padding:      "1.25rem 1.5rem",
       }}>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
           What&apos;s included
         </h2>
         <p style={{ marginTop: "0.3rem", fontSize: "0.85rem", color: "var(--text-muted, #64748B)" }}>
@@ -200,7 +200,7 @@ export default function HireBillingSettingsPage() {
                 }}
               >
                 <div style={{ minWidth: 120 }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--text-primary, #0F1B2D)" }}>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
                     {tier.label}
                   </div>
                   <div style={{ marginTop: "0.15rem", fontSize: "0.82rem", color: BRAND_COLORS.teal, fontWeight: 600 }}>

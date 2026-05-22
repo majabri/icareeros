@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 interface Candidate {
   user_id:          string;
@@ -174,7 +175,7 @@ export function CandidateSearch() {
           >
             <div style={{ fontSize: "1.5rem" }} aria-hidden>🏢</div>
             <div style={{ flex: 1, minWidth: "200px" }}>
-              <div style={{ color: "#F5A623", fontWeight: 700, fontSize: "0.95rem" }}>
+              <div style={{ color: BRAND_COLORS.gold, fontWeight: 700, fontSize: "0.95rem" }}>
                 Complete your company profile to enable candidate search.
               </div>
               <p style={{ color: "#A5B5CF", fontSize: "0.85rem", marginTop: "0.25rem", lineHeight: 1.5 }}>
@@ -186,7 +187,7 @@ export function CandidateSearch() {
             <Link
               href="/profile"
               style={{
-                background: "#00B8A9",
+                background: BRAND_COLORS.teal,
                 color: "#0B1422",
                 padding: "0.5rem 1.1rem",
                 borderRadius: 10,
@@ -239,7 +240,7 @@ export function CandidateSearch() {
             <button
               type="submit"
               style={{
-                background: "#00B8A9",
+                background: BRAND_COLORS.teal,
                 color: "#0B1422",
                 fontWeight: 700,
                 padding: "0.5rem 1.5rem",
@@ -299,14 +300,14 @@ export function CandidateSearch() {
               type="checkbox"
               checked={remote}
               onChange={(e) => setRemote(e.target.checked)}
-              style={{ accentColor: "#00B8A9" }}
+              style={{ accentColor: BRAND_COLORS.teal }}
             />
             Open to remote
           </label>
         </div>
 
         {/* Results summary */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: "var(--text-muted, #7B9AC0)", fontSize: "0.85rem", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.85rem", marginBottom: "1rem" }}>
           <span>
             {loading ? "Searching…" : `${total} candidate${total === 1 ? "" : "s"}`}
           </span>
@@ -349,7 +350,7 @@ function FilterInput({
 }) {
   return (
     <label style={{ display: "block" }}>
-      <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+      <span style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
         {label}
       </span>
       <input
@@ -386,7 +387,7 @@ function FilterSelect({
 }) {
   return (
     <label style={{ display: "block" }}>
-      <span style={{ color: "var(--text-muted, #7B9AC0)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+      <span style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
         {label}
       </span>
       <select
@@ -442,7 +443,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
     <article
       style={{
         background: "var(--surface-card, #1A2D45)",
-        borderLeft: "3px solid #00B8A9",
+        borderLeft: `3px solid ${BRAND_COLORS.teal}`,
         borderRadius: 12,
         padding: "1.25rem 1.5rem",
         color: "var(--text-primary, #E5EEFA)",
@@ -456,8 +457,8 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
             width: 40,
             height: 40,
             borderRadius: "50%",
-            background: "#7B9AC0",
-            color: "#0F1B2D",
+            background: BRAND_COLORS.slateBlue,
+            color: BRAND_COLORS.navy,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -482,7 +483,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
       {openTo.length > 0 && (
         <div style={{ marginBottom: "0.5rem", fontSize: "0.85rem", color: "#A5B5CF" }}>
-          <span style={{ color: "var(--text-muted, #7B9AC0)", fontWeight: 600 }}>Open to:</span> {openTo.join(" · ")}
+          <span style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontWeight: 600 }}>Open to:</span> {openTo.join(" · ")}
           {c.experience_level && <> · {c.experience_level}</>}
         </div>
       )}
@@ -509,8 +510,8 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
       {target && (
         <div style={{ fontSize: "0.85rem", color: "#A5B5CF", marginBottom: "0.85rem" }}>
-          <span style={{ color: "var(--text-muted, #7B9AC0)", fontWeight: 600 }}>Target:</span>{" "}
-          <span style={{ color: "#F5A623", fontWeight: 600 }}>{target}</span>
+          <span style={{ color: `var(--text-muted, ${BRAND_COLORS.slateBlue})`, fontWeight: 600 }}>Target:</span>{" "}
+          <span style={{ color: BRAND_COLORS.gold, fontWeight: 600 }}>{target}</span>
         </div>
       )}
 
@@ -559,7 +560,7 @@ function EmptyState() {
           display: "inline-flex",
           alignItems: "center",
           gap: "0.4rem",
-          background: "#00B8A9",
+          background: BRAND_COLORS.teal,
           color: "#0B1422",
           fontWeight: 700,
           padding: "0.6rem 1.25rem",

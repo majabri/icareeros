@@ -107,7 +107,7 @@ export default function HirePrivacySettingsPage() {
       <SettingsNav />
 
       <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)", margin: 0 }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})`, margin: 0 }}>
           Privacy &amp; Discoverability
         </h1>
         <p style={{ marginTop: "0.4rem", fontSize: "0.9rem", color: "var(--text-muted, #64748B)" }}>
@@ -150,7 +150,7 @@ export default function HirePrivacySettingsPage() {
       }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1.5rem" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)" }}>
+            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
               Show my profile to hiring teams
             </h2>
             <p style={{ marginTop: "0.45rem", fontSize: "0.88rem", color: "var(--text-muted, #64748B)", lineHeight: 1.5 }}>
@@ -201,7 +201,7 @@ export default function HirePrivacySettingsPage() {
         borderRadius: 12,
         padding:      "1.25rem 1.5rem",
       }}>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #0F1B2D)" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: `var(--text-primary, ${BRAND_COLORS.navy})` }}>
           Blocked employers
         </h2>
         {blockedCompanies.length === 0 ? (
@@ -220,7 +220,7 @@ export default function HirePrivacySettingsPage() {
                   borderRadius: 999,
                   background: "var(--surface-muted, #F1F5F9)",
                   fontSize: "0.85rem",
-                  color: "var(--text-primary, #0F1B2D)",
+                  color: `var(--text-primary, ${BRAND_COLORS.navy})`,
                   width: "fit-content",
                 }}
               >

@@ -19,6 +19,7 @@
 
 import Link from "next/link";
 import { getStage, STAGE_DETAILS, type StageId } from "@/lib/hire/pathway-stages";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 export interface StageLockedProps {
   stageId: StageId;
@@ -70,7 +71,7 @@ export function StageLocked({ stageId }: StageLockedProps) {
           <p style={{
             margin:     "0.5rem 0 0",
             fontSize:   "0.95rem",
-            color:      "var(--text-primary, #0F1B2D)",
+            color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
             lineHeight: 1.55,
           }}>
             {detail.description}
@@ -104,7 +105,7 @@ export function StageLocked({ stageId }: StageLockedProps) {
                 alignItems: "center",
                 gap:        "0.55rem",
                 fontSize:   "0.95rem",
-                color:      "var(--text-primary, #0F1B2D)",
+                color:      `var(--text-primary, ${BRAND_COLORS.navy})`,
               }}
             >
               <span aria-hidden="true" style={{ color: stage.color, fontWeight: 800 }}>
