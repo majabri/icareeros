@@ -193,7 +193,7 @@ export const HIRE_CONFIG: PlatformConfig = {
     },
   ],
   footerItems: [
-    { href: "/company",  label: "Company Profile", icon: ICON.company },
+    { href: "/profile",  label: "Company Profile", icon: ICON.company },
     { href: "/settings", label: "Settings",        icon: ICON.settings },
   ],
 };

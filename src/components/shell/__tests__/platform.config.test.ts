@@ -42,7 +42,7 @@ describe("platform configs", () => {
 
     // Footer items: Company Profile + Settings, in that order.
     expect(HIRE_CONFIG.footerItems).toHaveLength(2);
-    expect(HIRE_CONFIG.footerItems.map(i => i.href)).toEqual(["/company", "/settings"]);
+    expect(HIRE_CONFIG.footerItems.map(i => i.href)).toEqual(["/profile", "/settings"]);
     expect(HIRE_CONFIG.footerItems.map(i => i.label)).toEqual(["Company Profile", "Settings"]);
   });
 
