@@ -1,103 +1,76 @@
 "use client";
 import {
-  IconRulerMeasure, IconUserSearch, IconPuzzle, IconLifebuoy, IconStairsUp, IconAward,
-  IconShieldCheck, IconReportAnalytics, IconClipboardList, IconHeartHandshake,
-  IconBuilding, IconMailForward, IconAdjustments, IconBrain, IconX,
+  IconPencilRuler, IconUserSearch, IconUsersPlus, IconHeartHandshake,
+  IconTrendingUp, IconShieldCheck,
+  IconBrain, IconAdjustments, IconMailForward, IconBuilding, IconX,
   type Icon,
 } from "@tabler/icons-react";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 import { CareerCycleSVG, STAGE_COLORS } from "./CareerCycleSVG";
 import { useCycleRotation } from "./useCycleRotation";
 
 /**
  * RootHiringTeamSection — #hiring-teams section on icareeros.com.
  *
- * The hire side of the intelligent operating system. iCareerOS runs the
- * six-stage workforce loop — Design through Retain — built from
- * standard HR research on the People Retention Pathway and renamed
- * for the single iCareerOS brand (simplified 2026-05-21).
- *
- * Stage cards beside the cycle pick up per-stage brand colors so the
- * full color rotation reads in both the SVG ring and the description
- * column.
- *
- * Per Amir 2026-05-20.
+ * Sprint Platform-Closure 2026-05-22:
+ *   - Eyebrow: Title Case ("For Hiring Teams")
+ *   - Six EMPLOYER-perspective stage cards in a 3-column grid
+ *   - Section heading + subhead per brief
+ *   - 5 employer feature cards
+ *   - Section-end CTA
+ *   - Cycle SVG retained above the grid as a supporting visual
  */
 
-const STAGES = [
-  {
-    n: 1, label: "Design", Icon: IconRulerMeasure,
-    body: "Define the business need before hiring begins — workforce planning, role scoping, required capabilities, success measures. Cuts role ambiguity and costly mishires.",
-    metrics: "Job description quality · Time to approval",
-  },
-  {
-    n: 2, label: "Select", Icon: IconUserSearch,
-    body: "Source, screen, choose the best-fit candidate with structured interviews and consistent criteria. Improves quality of hire and reduces turnover from poor role fit.",
-    metrics: "Time to hire · Quality of hire",
-  },
-  {
-    n: 3, label: "Integrate", Icon: IconPuzzle,
-    body: "Onboarding and early assimilation — orientation, 30-60-90 day plans, system access, manager check-ins. Speeds time-to-productivity and reduces early attrition.",
-    metrics: "90-day retention · Time to productivity",
-  },
-  {
-    n: 4, label: "Support", Icon: IconLifebuoy,
-    body: "The daily employee experience after onboarding — leadership support, recognition, workload balance, feedback loops. Removes friction before it becomes turnover.",
-    metrics: "Engagement scores · Manager effectiveness",
-  },
-  {
-    n: 5, label: "Develop", Icon: IconStairsUp,
-    body: "Capability and future readiness — coaching, training, cross-skilling, leadership development, career pathing. People stay when they see real growth ahead.",
-    metrics: "Training completion · Internal promotion rate",
-  },
-  {
-    n: 6, label: "Retain", Icon: IconAward,
-    body: "Active preservation of key talent — compensation review, flexibility, stay interviews, retention-risk tracking. Protects institutional knowledge; cuts replacement cost.",
-    metrics: "Turnover rate · Regretted-loss rate · Stay-interview themes",
-  },
+type Stage = {
+  n: number;
+  label: string;
+  Icon: Icon;
+  headline: string;
+  body: string;
+};
+
+const STAGES: readonly Stage[] = [
+  { n: 1, label: "Design", Icon: IconPencilRuler,
+    headline: "They've already assessed their fit",
+    body: "Candidates know their skills, gaps, and market position before they opt in. You're not starting a cold conversation." },
+  { n: 2, label: "Select", Icon: IconUserSearch,
+    headline: "They've been matched to roles like yours",
+    body: "The OS has already scored their fit against job descriptions in your category. They know where they stand." },
+  { n: 3, label: "Integrate", Icon: IconUsersPlus,
+    headline: "They're actively closing skill gaps",
+    body: "The candidates you find are working on the gaps relevant to their target roles — including yours." },
+  { n: 4, label: "Support", Icon: IconHeartHandshake,
+    headline: "They're applying with precision",
+    body: "iCareerOS candidates apply deliberately — tailored applications to roles that match. Less noise in your pipeline." },
+  { n: 5, label: "Develop", Icon: IconTrendingUp,
+    headline: "They've done interview prep for your role",
+    body: "Role-specific preparation built into the OS. First conversations are more substantive." },
+  { n: 6, label: "Retain", Icon: IconShieldCheck,
+    headline: "They know what a fair offer looks like",
+    body: "Offer-stage surprises are rarer. Candidates have salary benchmarks and know how to evaluate what's on the table." },
 ] as const;
 
 const PAINS = [
-  "Sourcing lists full of people who haven't looked for a job in three years",
-  "InMails ignored because the candidates aren't actually looking",
-  "Screening calls where the resume turns out to be a stretch",
+  "Sourcing lists full of people who haven't looked for a job in years",
+  "Messages ignored because candidates aren't actually looking",
+  "Screening calls that reveal the resume was a stretch",
   "Offer-stage surprises — salary expectations nowhere near reality",
   "Time-to-fill measured in months, not weeks",
 ];
 
 const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
-  { Icon: IconBrain, title: "AI JD analysis",
-    body: "Paste a job description. Get instant fit scoring against your candidate pool. Know who to talk to before you start talking." },
+  { Icon: IconBrain, title: "AI JD Analysis",
+    body: "Paste a job description. Get instant fit scoring against your candidate pool before you start reviewing." },
   { Icon: IconShieldCheck, title: "Verified, opt-in candidates",
-    body: "No scraped profiles. No cold lists. Every candidate signed up and chose to be found — which means they're actually looking." },
+    body: "Every profile you see belongs to someone who created an account and chose to be found." },
   { Icon: IconAdjustments, title: "Filters that matter",
-    body: "Role, location, experience level, remote preference. Filter to candidates who match your actual requirements — not keyword guesses." },
+    body: "Role, location, experience level, remote preference. Filter to candidates who match your actual requirements." },
   { Icon: IconMailForward, title: "Direct in-app invites",
-    body: "Reach candidates where they're already managing their job search. Track invite status. See who's engaged and who isn't." },
+    body: "Reach candidates where they're managing their job search. Track invite status and engagement." },
   { Icon: IconBuilding, title: "Company profile",
-    body: "Show candidates who you are before they decide whether to respond. Culture, mission, open roles — in one employer page." },
-  { Icon: IconReportAnalytics, title: "Measurable per-stage outcomes",
-    body: "Each stage has an owner, a workflow, and a metric — time-to-hire, 90-day retention, internal promotion rate. The system runs on signals, not intuition." },
+    body: "Show candidates who you are before they decide whether to respond. Culture, mission, open roles." },
 ];
 
-const BENEFITS: Array<{ Icon: Icon; title: string; body: string }> = [
-  {
-    Icon: IconShieldCheck,
-    title: "Lower avoidable turnover",
-    body:  "iCareerOS treats retention as the outcome of disciplined upstream management — clearer role design, better fit, stronger onboarding — not a single HR program bolted on at the end.",
-  },
-  {
-    Icon: IconClipboardList,
-    title: "Closed loop, not a bolt-on",
-    body:  "Design feeds Select; Select feeds Integrate; Integrate feeds Support; Retain feeds the next Design cycle. Continuous workforce improvement, not a series of disconnected HR projects.",
-  },
-  {
-    Icon: IconHeartHandshake,
-    title: "A direct line to engaged candidates",
-    body:  "iCareerOS candidates run their own career loop — assessing fit, building skills, preparing for interviews — and they opt in to be discovered. That's a different kind of first conversation.",
-  },
-];
-
-// Same per-stage dwell shape as the job-seeker side: 5×2s + 5s on stage 6.
 const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 5000] as const;
 
 export function RootHiringTeamSection() {
@@ -117,28 +90,25 @@ export function RootHiringTeamSection() {
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         {/* Heading block */}
         <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-          <div style={{ color: "#00B8A9", fontWeight: 600, fontSize: "0.95rem", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "1px" }}>
-            For hiring teams
+          <div style={{ color: BRAND_COLORS.teal, fontWeight: 600, fontSize: "0.95rem", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "1px" }}>
+            For Hiring Teams
           </div>
           <h2 style={{ fontSize: "2.6rem", fontWeight: 800, marginBottom: "1.1rem", color: "var(--neutral-900)", lineHeight: 1.15 }}>
-            iCareerOS — the intelligent hiring operating system.
-          </h2>
-          <p style={{ fontSize: "1.2rem", color: "var(--neutral-900)", maxWidth: 780, margin: "0 auto 0.75rem", lineHeight: 1.5, fontWeight: 600 }}>
             Hire people who chose to be found.
-          </p>
+          </h2>
           <p style={{ fontSize: "1.1rem", color: "var(--neutral-700)", maxWidth: 780, margin: "0 auto", lineHeight: 1.7 }}>
             iCareerOS candidates aren&rsquo;t passive. They&rsquo;re
             actively managing their careers — assessing fit, building
-            skills, prepping for interviews — and they&rsquo;ve opted
-            in to be discovered. iCareerOS gives hiring teams the
-            system to find, engage, integrate, and retain them.
+            skills, preparing for interviews — and they&rsquo;ve opted
+            in to be discovered. That&rsquo;s a different kind of
+            candidate.
           </p>
         </div>
 
         {/* Pain section */}
         <div style={{ maxWidth: 760, margin: "0 auto 4rem" }}>
           <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.5rem", color: "var(--neutral-900)", textAlign: "center" }}>
-            Most hiring tools solve the wrong problem.
+            Most hiring tools were built for the wrong problem.
           </h3>
           <p style={{ textAlign: "center", color: "var(--neutral-700)", marginBottom: "1.75rem", fontSize: "1rem", lineHeight: 1.6 }}>
             They give you access to more people. You need access to the right ones.
@@ -170,7 +140,7 @@ export function RootHiringTeamSection() {
                     height: "1.5rem",
                     borderRadius: "9999px",
                     background: "rgba(255, 107, 107, 0.12)",
-                    color: "#FF6B6B",
+                    color: BRAND_COLORS.coral,
                   }}
                 >
                   <IconX size={16} stroke={1.5} />
@@ -181,95 +151,103 @@ export function RootHiringTeamSection() {
           </div>
         </div>
 
-        {/* Cycle SVG + stage detail with metric pairs */}
-        <h3 style={{ fontSize:"1.6rem", fontWeight:700, marginBottom:"0.5rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          The six hiring stages.
-        </h3>
-        <p style={{ textAlign:"center", color:"var(--neutral-700)", maxWidth:740, margin:"0 auto 2.5rem", lineHeight:1.6 }}>
-          Workforce stability is the outcome of disciplined upstream
-          management. Each stage has an owner, a workflow, and a
-          measurable outcome — the system runs on signals, not
-          intuition.
-        </p>
-        <div className="root-ht-cycle-grid" style={{ display: "grid", gap: "2.5rem", alignItems: "start", marginBottom: "4rem" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {STAGES.map(({ n, label, Icon: StageIcon, body, metrics }, i) => {
-              const isActive = i === currentStage;
-              const stageColor = STAGE_COLORS[i];
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setCurrent(i)}
-                  aria-pressed={isActive}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "3rem 1fr",
-                    gap: "1rem",
-                    alignItems: "flex-start",
-                    textAlign: "left",
-                    background: isActive ? `${stageColor}14` : "var(--neutral-100)",
-                    border: `1px solid ${isActive ? stageColor : "var(--neutral-300)"}`,
-                    borderRadius: "0.85rem",
-                    padding: "1rem 1.25rem",
-                    cursor: "pointer",
-                    transition: "background 400ms ease, border-color 400ms ease, transform 400ms ease",
-                    transform: isActive ? "translateX(-4px)" : "translateX(0)",
-                    width: "100%",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  <div style={{
-                    width: 40, height: 40,
-                    background: isActive ? stageColor : `${stageColor}1A`,
-                    borderRadius: "0.6rem",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "background 400ms ease",
-                  }}>
-                    <StageIcon size={20} stroke={1.5} color={isActive ? "#FFFFFF" : stageColor} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: stageColor, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.15rem" }}>
-                      Stage {n} · {label}
-                    </div>
-                    <div style={{ color: "var(--neutral-800)", fontSize: "0.96rem", lineHeight: 1.55, marginBottom: "0.5rem" }}>
-                      {body}
-                    </div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--neutral-700)" }}>
-                      <span style={{ fontWeight:700, color: stageColor, textTransform:"uppercase", letterSpacing:"1px", fontSize:"0.7rem", marginRight:"0.4rem" }}>
-                        Outcomes
-                      </span>
-                      {metrics}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div>
-            <CareerCycleSVG
-              centerLabel="iCareerOS"
-              stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
-              currentStage={currentStage}
-            />
-            <div style={{ textAlign:"center", marginTop:"0.5rem", fontSize:"0.85rem", color:"var(--neutral-700)" }}>
-              Flashes every 2s · pauses 5s on stage 6 · hover to freeze
-            </div>
-          </div>
+        {/* Stages — heading + subhead + supporting cycle SVG + 3-column grid */}
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+          <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", marginBottom: "0.6rem" }}>
+            The six stages — from the employer side.
+          </h3>
+          <p style={{ fontSize: "1rem", color: "var(--neutral-700)", maxWidth: 720, margin: "0 auto", lineHeight: 1.65 }}>
+            Every candidate you reach is already working through this
+            loop. That&rsquo;s what makes them different.
+          </p>
         </div>
 
-        {/* Features grid */}
-        <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", textAlign: "center", marginBottom: "0.5rem" }}>
-          Everything you need.
-        </h3>
-        <p style={{ textAlign: "center", color: "var(--neutral-700)", marginBottom: "2.5rem", fontSize: "1rem" }}>
-          Nothing you don&rsquo;t.
+        {/* Supporting cycle SVG above the grid */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "2rem", maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
+          <CareerCycleSVG
+            centerLabel="iCareerOS"
+            stages={STAGES.map(s => ({ n: s.n, label: s.label }))}
+            currentStage={currentStage}
+          />
+        </div>
+
+        {/* 3-column employer stage card grid */}
+        <div className="root-ht-stage-grid" style={{ display: "grid", gap: "1.25rem", marginBottom: "1.25rem" }}>
+          {STAGES.map(({ n, label, Icon: StageIcon, headline, body }, i) => {
+            const isActive = i === currentStage;
+            const stageColor = STAGE_COLORS[i];
+            const stageNumber = String(n).padStart(2, "0");
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCurrent(i)}
+                aria-pressed={isActive}
+                style={{
+                  position: "relative",
+                  background: isActive ? `${stageColor}10` : "var(--surface-card, #ffffff)",
+                  border: `1px solid ${isActive ? stageColor : "var(--neutral-300)"}`,
+                  borderTop: `3px solid ${stageColor}`,
+                  borderRadius: "1rem",
+                  padding: "1.6rem 1.4rem 1.4rem",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  transition: "background 400ms ease, border-color 400ms ease, transform 400ms ease",
+                  transform: isActive ? "translateY(-2px)" : "translateY(0)",
+                  width: "100%",
+                  fontFamily: "inherit",
+                }}
+              >
+                <div aria-hidden style={{
+                  position: "absolute",
+                  top: "0.5rem",
+                  right: "1rem",
+                  fontSize: "3rem",
+                  fontWeight: 800,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  color: `${stageColor}1A`,
+                  lineHeight: 1,
+                  letterSpacing: "-0.05em",
+                  pointerEvents: "none",
+                }}>
+                  {stageNumber}
+                </div>
+                <div style={{
+                  width: 44, height: 44,
+                  background: `${stageColor}1A`,
+                  borderRadius: "0.65rem",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  marginBottom: "1rem",
+                }}>
+                  <StageIcon size={20} stroke={1.5} color={stageColor} />
+                </div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: stageColor, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.35rem" }}>
+                  Stage {n} · {label}
+                </div>
+                <h4 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--neutral-900)", marginBottom: "0.5rem", lineHeight: 1.3 }}>
+                  {headline}
+                </h4>
+                <p style={{ fontSize: "0.95rem", color: "var(--neutral-700)", lineHeight: 1.6 }}>
+                  {body}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Loop caption */}
+        <p style={{ textAlign: "center", fontSize: "0.9rem", color: "var(--neutral-700)", marginBottom: "4rem", fontStyle: "italic" }}>
+          The loop keeps running — for their next goal, and your next hire.
         </p>
+
+        {/* Features grid */}
+        <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", textAlign: "center", marginBottom: "2rem" }}>
+          Everything you need. Nothing you don&rsquo;t.
+        </h3>
         <div className="root-ht-features-grid" style={{ display: "grid", gap: "1.5rem", marginBottom: "3rem" }}>
           {FEATURES.map(({ Icon: FeatureIcon, title, body }) => (
             <div key={title} style={{
-              background: "var(--neutral-100)",
+              background: "var(--surface-card, #ffffff)",
               padding: "2rem 1.75rem",
               borderRadius: "1.25rem",
               border: "1px solid var(--neutral-300)",
@@ -282,7 +260,7 @@ export function RootHiringTeamSection() {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 marginBottom: "1.1rem",
               }}>
-                <FeatureIcon size={20} stroke={1.5} color="#00B8A9" />
+                <FeatureIcon size={20} stroke={1.5} color={BRAND_COLORS.teal} />
               </div>
               <h4 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.55rem", color: "var(--neutral-900)" }}>{title}</h4>
               <p style={{ color: "var(--neutral-700)", fontSize: "0.97rem", lineHeight: 1.6 }}>{body}</p>
@@ -290,47 +268,36 @@ export function RootHiringTeamSection() {
           ))}
         </div>
 
-        {/* Benefits / why it works */}
-        <h3 style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--neutral-900)", textAlign: "center", marginBottom: "2rem" }}>
-          Why it works.
-        </h3>
-        <div className="root-ht-benefits-grid" style={{ display: "grid", gap: "1.5rem" }}>
-          {BENEFITS.map(({ Icon: BenefitIcon, title, body }) => (
-            <div key={title} style={{
-              background: "var(--neutral-100)",
-              padding: "1.75rem 1.5rem",
-              borderRadius: "1.25rem",
-              border: "1px solid var(--neutral-300)",
-              textAlign: "left",
-            }}>
-              <div style={{
-                width: 44, height: 44,
-                background: "rgba(0,184,169,0.10)",
-                borderRadius: "0.65rem",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                marginBottom: "1rem",
-              }}>
-                <BenefitIcon size={20} stroke={1.5} color="#00B8A9" />
-              </div>
-              <h4 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem", color: "var(--neutral-900)" }}>{title}</h4>
-              <p style={{ color: "var(--neutral-700)", fontSize: "0.95rem", lineHeight: 1.6 }}>{body}</p>
-            </div>
-          ))}
+        {/* Section CTA */}
+        <div style={{ textAlign: "center" }}>
+          <a
+            href="https://icareeros.com/auth/signup?role=employer"
+            className="btn btn-primary"
+            style={{
+              display: "inline-block",
+              padding: "0.85rem 1.6rem",
+              borderRadius: "0.6rem",
+              background: BRAND_COLORS.teal,
+              color: "#ffffff",
+              fontSize: "1rem",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            Start hiring free →
+          </a>
         </div>
       </div>
 
       <style>{`
-        .root-ht-cycle-grid     { grid-template-columns: 1fr; }
+        .root-ht-stage-grid     { grid-template-columns: 1fr; }
         .root-ht-features-grid  { grid-template-columns: 1fr; }
-        .root-ht-benefits-grid  { grid-template-columns: 1fr; }
         @media (min-width: 768px) {
-          .root-ht-features-grid  { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .root-ht-benefits-grid  { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
-        @media (min-width: 900px) {
-          .root-ht-cycle-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+          .root-ht-stage-grid    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .root-ht-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (min-width: 1100px) {
+          .root-ht-stage-grid    { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .root-ht-features-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
       `}</style>
