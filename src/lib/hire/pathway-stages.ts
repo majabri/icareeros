@@ -1,5 +1,5 @@
 /**
- * iTalentOS People Retention Pathway — stage configuration.
+ * iCareerOS People Retention Pathway — stage configuration.
  *
  * Single source of truth for the six pathway stages on hire.icareeros.com:
  * Design → Select → Integrate → Support → Develop → Retain.
@@ -7,7 +7,7 @@
  * Locked by ADR-HIRE-001 v3 (Drive: `19XMEdoY_AJvqJQ-rns0sUXFA2H33JOdG`)
  * + COWORK-BRIEF-hire-pathway-shell-v2 (Drive: `1_3sNmfuTQKPFkayTA-k_JUftIN2NoxSh`).
  *
- * Colours are positionally matched to the iJobsOS career-cycle ring
+ * Colours are positionally matched to the iCareerOS career-cycle ring
  * (`src/lib/career-os/stage-colors.ts`) so both subdomains' cycles use
  * the same 6 colours in the same positions; only the stage labels differ.
  *
@@ -39,7 +39,7 @@ export interface PathwayStage {
   label:    string;
   tagline:  string;
   icon:     string;     // single-char unicode glyph; visual identity only
-  color:    string;     // hex; matches iJobsOS ring positional parity
+  color:    string;     // hex; matches iCareerOS ring positional parity
   route:    string;     // /design, /select, /integrate, …
   billing:  StageBilling;
   status:   StageStatus;
@@ -52,7 +52,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Design",
     tagline: "Define the need before the hire",
     icon:    "⬡",
-    color:   "#00B8A9",   // teal — position 1, matches iJobsOS ring
+    color:   "#00B8A9",   // teal — position 1, matches iCareerOS ring
     route:   "/design",
     billing: "free",
     status:  "planned",
@@ -63,7 +63,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Select",
     tagline: "Find and choose the best fit",
     icon:    "◈",
-    color:   "#FF6B6B",   // coral — position 2, matches iJobsOS ring
+    color:   "#FF6B6B",   // coral — position 2, matches iCareerOS ring
     route:   "/select",
     billing: "free",
     status:  "live",
@@ -74,7 +74,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Integrate",
     tagline: "Accelerate time-to-productivity",
     icon:    "◎",
-    color:   "#F5A623",   // gold — position 3, matches iJobsOS ring
+    color:   "#F5A623",   // gold — position 3, matches iCareerOS ring
     route:   "/integrate",
     billing: "starter",
     status:  "planned",
@@ -85,7 +85,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Support",
     tagline: "Remove friction, strengthen engagement",
     icon:    "◉",
-    color:   "#10B981",   // green — position 4, matches iJobsOS ring
+    color:   "#10B981",   // green — position 4, matches iCareerOS ring
     route:   "/support",
     billing: "starter",
     status:  "planned",
@@ -96,7 +96,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Develop",
     tagline: "Build capability and future readiness",
     icon:    "◆",
-    color:   "#7B9AC0",   // slate blue — position 5, matches iJobsOS ring
+    color:   "#7B9AC0",   // slate blue — position 5, matches iCareerOS ring
     route:   "/develop",
     billing: "starter",
     status:  "planned",
@@ -107,7 +107,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     label:   "Retain",
     tagline: "Protect your talent investment",
     icon:    "★",
-    color:   "#40C9C0",   // light teal — position 6, matches iJobsOS ring
+    color:   "#40C9C0",   // light teal — position 6, matches iCareerOS ring
     route:   "/retain",
     billing: "starter",
     status:  "planned",
@@ -138,7 +138,7 @@ export const STAGE_DETAILS: Record<StageId, StageDetail> = {
       "AI-assisted job description builder",
       "Role scorecard & success metrics",
       "Workforce gap analysis",
-      "Publish to iJobsOS job board",
+      "Publish to iCareerOS job board",
     ],
   },
   select: {

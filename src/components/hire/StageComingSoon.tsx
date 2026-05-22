@@ -117,7 +117,7 @@ export function StageComingSoon({ stageId }: StageComingSoonProps) {
         color:     "var(--text-muted, #64748B)",
         fontStyle: "italic",
       }}>
-        Included with every iTalentOS plan — no upgrade needed.
+        Included with every iCareerOS plan — no upgrade needed.
       </p>
     </section>
   );

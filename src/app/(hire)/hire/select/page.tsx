@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Select — iCareerOS for Hiring" };
  *
  * The CandidateSearch component was previously hosted at /dashboard;
  * Sprint H1 migrated it here so the dashboard could become the
- * iTalentOS overview. CandidateSearch itself is unchanged — same
+ * iCareerOS overview. CandidateSearch itself is unchanged — same
  * Phase 2/3 behaviour (career_profiles read, blocked_companies
  * filter, employer-profile gate).
  *

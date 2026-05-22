@@ -32,7 +32,7 @@ describe("PATHWAY_STAGES (single source of truth)", () => {
     expect(PATHWAY_STAGES[1].color.toUpperCase()).toBe("#FF6B6B");
   });
 
-  it("colour map matches iJobsOS positional parity (PR #272)", () => {
+  it("colour map matches iCareerOS positional parity (PR #272)", () => {
     expect(PATHWAY_STAGES.map((s) => s.color.toUpperCase())).toEqual([
       "#00B8A9", // 1 teal
       "#FF6B6B", // 2 coral
@@ -72,9 +72,9 @@ describe("PATHWAY_STAGES (single source of truth)", () => {
     }
   });
 
-  it("Design action 4 publishes to the iJobsOS job board (cross-side spec, ADR v3 A7)", () => {
+  it("Design action 4 publishes to the iCareerOS job board (cross-side spec, ADR v3 A7)", () => {
     const actions = STAGE_DETAILS.design.actions;
-    expect(actions.some((a) => /iJobsOS/.test(a))).toBe(true);
+    expect(actions.some((a) => /iCareerOS/.test(a))).toBe(true);
   });
 
   it("getStage returns null for unknown ids", () => {

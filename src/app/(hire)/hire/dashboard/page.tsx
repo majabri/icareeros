@@ -1,5 +1,5 @@
 /**
- * /dashboard on hire.icareeros.com — iTalentOS Dashboard overview.
+ * /dashboard on hire.icareeros.com — iCareerOS Dashboard overview.
  *
  * Sprint H1 (COWORK-BRIEF-hire-pathway-shell-v2): the dashboard becomes
  * the People Retention Pathway overview, NOT the candidate search.
@@ -51,7 +51,7 @@ export default function HireDashboardOverviewPage() {
             margin:     0,
           }}
         >
-          iTalentOS Dashboard
+          iCareerOS Dashboard
         </h1>
         <p
           style={{
