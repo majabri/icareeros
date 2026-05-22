@@ -5,6 +5,22 @@ Notable shipped work. Most recent first.
 ---
 
 
+## 2026-05-22 — hire.* token migration + middleware / sidebar catch-up
+
+**`main` HEAD after this run: `96bdee7`**
+
+Catch-up batch entries for hire.* PRs #281, #282, #284, #285 that shipped over the
+last 24 hours without CHANGELOG entries, plus today's #289 design-tokens migration.
+
+### Hire — features and fixes
+
+- **#289** `feat/hire-design-tokens` — [hire] chore(hire): replace hardcoded brand hex with design tokens. 69 substitutions across 15 source files; all hire-side surfaces (components/hire/* + (hire)/hire/* + lib/hire/pathway-stages.ts) now reference `BRAND_COLORS` from `@/lib/design-tokens`. Cosmetic only — no behaviour, layout, or spacing changes. CSS-variable fallback hexes converted to template literals preserving the `var()` chain; JSX hex attrs converted to expressions; compound CSS strings (e.g. `"3px solid #00B8A9"`) to template literals. JSDoc palette tables and test-file assertion anchors intentionally preserved.
+- **#285** `feat/platform-config-driven-sidebar` — [hire] feat(hire): ConfigDrivenSidebar — stage numbers, colours, lock badges. Platform sidebar component reads new `NavItem` fields (stage number, stage colour, lock badge) so hire and jobs sidebars can render the People Retention Pathway / Career OS sequences without per-side bespoke nav code.
+- **#284** `fix/hire-auth-gate` — [hire] fix(hire): middleware auth-gate — unauthenticated hire.* redirects to login. Closes the pre-existing hire.* exposure gap (Open Issue #1 from HIRE-HANDOFF-20260521): the Phase-3 path rewrite previously hid hire routes from the PROTECTED check so unauthenticated requests landed on the page with a defensive "Not signed in" fallback. Middleware now applies the PROTECTED check before the rewrite so `/dashboard`, `/settings/*`, `/profile`, `/select`, `/design`, `/integrate`, `/support`, `/develop`, `/retain`, `/jobs`, `/invites` all 307 → `/auth/login?redirect=…&platform=hire`.
+- **#282** `fix/hire-stage-04-route` — [hire] fix(hire): Stage 04 route `/hire-support` → `/support`. Restores the canonical Stage 04 route after an inadvertent rename. Internal links re-pointed.
+- **#281** `feat/hire-config-pathway-nav` — [hire] feat(hire): HIRE_CONFIG — People Retention Pathway nav in platform.config.ts. Adds the six-stage Pathway block to the hire sidebar config (Design / Select / Integrate / Support / Develop / Retain) so the new pathway shell from PR #278 has the matching sidebar entry-points.
+
+
 ## 2026-05-21 — hire.* settings + iTalentOS Pathway shell
 
 **`main` HEAD after this run: `6573fde`**
