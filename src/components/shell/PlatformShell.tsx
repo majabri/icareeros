@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase";
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { AppTopBar } from "@/components/AppTopBar";
 import { isNavItemActive, type PlatformConfig, type NavItem } from "@/components/shell/platform.config";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 import { IconLock } from "@tabler/icons-react";
 
 // Must match AppTopBar height
@@ -48,7 +49,9 @@ const SURFACE_DEEP = "var(--surface-page, #ffffff)";
 const BORDER       = "var(--surface-border, #e5e7eb)";
 const TEXT         = "var(--text-primary, #0f172a)";
 const MUTED        = "var(--text-muted, #6b7280)";
-const TEAL         = "#00B8A9";
+// TEAL routed through design-tokens; TEAL_TINT remains an rgba literal
+// per the brief's CSS-string-context exception.
+const TEAL         = BRAND_COLORS.teal;
 const TEAL_TINT    = "rgba(0,184,169,0.12)";
 
 interface PlatformShellProps {

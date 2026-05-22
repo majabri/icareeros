@@ -1,10 +1,11 @@
 "use client";
 import { IconUser, IconBuilding } from "@tabler/icons-react";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
  * RootCTASection — dual closing CTA on icareeros.com.
- * Per Amir 2026-05-21 — page-end dual CTA carries the single iCareerOS
- * brand (locked PR #267, simplified 2026-05-21).
+ * Sprint Platform-Closure 2026-05-22: Title-Case eyebrows above each
+ * card; button labels per brief (no "— it's free" suffix on dual CTA).
  */
 export function RootCTASection() {
   return (
@@ -39,7 +40,7 @@ export function RootCTASection() {
           }}
           onMouseEnter={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = "#00B8A9";
+            el.style.borderColor = BRAND_COLORS.teal;
             el.style.boxShadow = "0 20px 60px rgba(0,184,169,0.15)";
           }}
           onMouseLeave={(e) => {
@@ -55,7 +56,10 @@ export function RootCTASection() {
             borderRadius: "0.75rem",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <IconUser size={20} stroke={1.5} color="#00B8A9" />
+            <IconUser size={20} stroke={1.5} color={BRAND_COLORS.teal} />
+          </div>
+          <div style={{ color: BRAND_COLORS.teal, fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.5rem" }}>
+            Job Seekers
           </div>
           <h2 style={{ fontSize: "1.5rem", marginBottom: "0.75rem", color: "var(--text-primary, var(--neutral-900))" }}>
             Run your career like a system.
@@ -64,7 +68,7 @@ export function RootCTASection() {
             Six stages, AI coaching, continuous loop. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
-            Start your career OS — it&rsquo;s free →
+            Start your career OS →
           </a>
         </div>
 
@@ -81,7 +85,7 @@ export function RootCTASection() {
           }}
           onMouseEnter={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = "#00B8A9";
+            el.style.borderColor = BRAND_COLORS.teal;
             el.style.boxShadow = "0 20px 60px rgba(0,184,169,0.15)";
           }}
           onMouseLeave={(e) => {
@@ -97,13 +101,16 @@ export function RootCTASection() {
             borderRadius: "0.75rem",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <IconBuilding size={20} stroke={1.5} color="#00B8A9" />
+            <IconBuilding size={20} stroke={1.5} color={BRAND_COLORS.teal} />
+          </div>
+          <div style={{ color: BRAND_COLORS.teal, fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.5rem" }}>
+            Hiring Teams
           </div>
           <h2 style={{ fontSize: "1.5rem", marginBottom: "0.75rem", color: "var(--text-primary, var(--neutral-900))" }}>
             Hire candidates who are already prepared.
           </h2>
           <p style={{ fontSize: "1rem", marginBottom: "1.5rem", color: "var(--text-secondary, var(--neutral-700))" }}>
-            Verified, opt-in talent. AI fit scoring. Direct invites. Free to start.
+            Verified, opt-in talent. AI JD analysis. Direct invites. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-secondary">
             Start hiring free →
