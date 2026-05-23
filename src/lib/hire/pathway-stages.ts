@@ -57,7 +57,7 @@ export const PATHWAY_STAGES: readonly PathwayStage[] = [
     color:   BRAND_COLORS.teal,   // teal — position 1, matches iCareerOS ring
     route:   "/design",
     billing: "free",
-    status:  "planned",
+    status:  "live",   // Sprint H2 ships JD builder + AI agent + write path to job_postings
   },
   {
     id:      "select",

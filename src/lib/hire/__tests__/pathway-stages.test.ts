@@ -58,9 +58,14 @@ describe("PATHWAY_STAGES (single source of truth)", () => {
     }
   });
 
-  it("Select is the only stage with status='live' in Sprint H1", () => {
-    const live = PATHWAY_STAGES.filter((s) => s.status === "live");
-    expect(live.map((s) => s.id)).toEqual(["select"]);
+  it("live stages reflect the current sprint set", () => {
+    // Sprint H1 shipped Select live; Sprint H2 (PR #294) ships Design
+    // live too with the JD builder + AI agent + write path to
+    // opportunities. Future sprints will add Integrate / Support /
+    // Develop / Retain to this set as each stage's full build merges.
+    const live = PATHWAY_STAGES.filter((s) => s.status === "live").map((s) => s.id);
+    expect(live).toContain("select");
+    expect(live).toContain("design");
   });
 
   it("STAGE_DETAILS covers every stage with description + 4 actions", () => {
