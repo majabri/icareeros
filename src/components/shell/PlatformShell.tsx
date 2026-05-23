@@ -360,43 +360,12 @@ function SidebarContent({
         borderRight:    `1px solid ${BORDER}`,
       }}
     >
-      {/* Sidebar header — iCareerOS wordmark + teal pill platform badge */}
+      {/* Sidebar header — teal pill platform badge (iC + iCareerOS link removed 2026-05-22 per Platform Chat) */}
       <div style={{ padding: "1rem 1rem 0.75rem" }}>
-        <Link
-          href="/dashboard"
-          onClick={onItemClick}
-          aria-label={`${config.sidebarLabel} — home`}
-          style={{
-            display:        "flex",
-            alignItems:     "center",
-            gap:            "0.6rem",
-            textDecoration: "none",
-            color:          TEXT,
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              display:        "inline-flex",
-              alignItems:     "center",
-              justifyContent: "center",
-              width:          28,
-              height:         28,
-              borderRadius:   6,
-              background:     TEAL,
-              color:          "#ffffff",
-              fontWeight:     700,
-              fontSize:       "0.85rem",
-            }}
-          >
-            iC
-          </span>
-          <span style={{ fontWeight: 700, letterSpacing: "0.3px" }}>iCareerOS</span>
-        </Link>
         <span
           style={{
             display:      "inline-block",
-            marginTop:    "0.5rem",
+            marginTop:    "1rem",
             fontSize:     "0.65rem",
             fontWeight:   700,
             letterSpacing: "0.05em",
