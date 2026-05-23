@@ -90,8 +90,10 @@ describe("/design page assembly", () => {
     expect(src).toMatch(/initialValues/);
   });
 
-  it("does NOT render StageComingSoon any more (regression — Sprint H2 ships full build)", () => {
-    expect(src).not.toMatch(/StageComingSoon/);
+  it("does NOT import or render StageComingSoon any more (regression — Sprint H2 ships full build)", () => {
+    // Docstring mentions are fine; scope to actual import + JSX usage.
+    expect(src).not.toMatch(/import\s*\{[^}]*StageComingSoon[^}]*\}/);
+    expect(src).not.toMatch(/<StageComingSoon\b/);
   });
 });
 
