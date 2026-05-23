@@ -283,6 +283,7 @@ export type Database = {
           job_type: string | null
           location: string | null
           nice_to_haves: string | null
+          published_at: string | null
           requirements: string | null
           salary_max: number | null
           salary_min: number | null
@@ -302,6 +303,7 @@ export type Database = {
           job_type?: string | null
           location?: string | null
           nice_to_haves?: string | null
+          published_at?: string | null
           requirements?: string | null
           salary_max?: number | null
           salary_min?: number | null
@@ -321,6 +323,7 @@ export type Database = {
           job_type?: string | null
           location?: string | null
           nice_to_haves?: string | null
+          published_at?: string | null
           requirements?: string | null
           salary_max?: number | null
           salary_min?: number | null
