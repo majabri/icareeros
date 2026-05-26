@@ -1,17 +1,22 @@
 /**
- * /resumeadvisor — Resume & LinkedIn Advisor (renamed from Resume Advisor 2026-05-21)
+ * /evaluate/job-fit — Job Application Fit (Evaluate stage)
  *
- * Upload or pick a saved resume, paste/import a job description, get an
- * AI-powered fit assessment with actionable recommendations + 9 features:
- *   1. URL renamed to /resumeadvisor (this folder)
- *   2. Different file upload offers to update Career Profile
- *   3. Missing skills can be added to Career Profile (one-click)
- *   4. Recommendations can be added to Target Skills (one-click)
- *   5. Rewrite resume → Save to Vault + Export DOCX / PDF / TXT / ATS
- *   6. Generate Cover Letter (one-click)
- *   7. Professional Critique — "why no interviews" (combined self + market)
- *   8. Interview Prep Questions (links to /interview with this JD)
- *   9. Save Job to Opportunities (writes opportunities row)
+ * Consolidation of the former /resumeadvisor (Advise) + /fit-check (Evaluate)
+ * pages per the 2026-05-26 Option-1 rationalization. Compare your profile or
+ * an alternate resume against a specific job description. Output:
+ *
+ *   1. Fit score + strengths / gaps / missing skills / recommendations
+ *   2. One-click "add missing skills to Career Profile"
+ *   3. One-click "add recommendations to Target Skills" (Learn stage handoff)
+ *   4. Rewrite resume → Save to Vault + Export DOCX / PDF / TXT / ATS
+ *   5. Generate Cover Letter
+ *   6. Professional Critique — "why no interviews" (combined self + market)
+ *   7. Interview Prep Questions (links to /interview with this JD)
+ *   8. Save Job to Opportunities (writes opportunities row)
+ *   9. LinkedIn rewrite advice
+ *
+ * Sister page: /evaluate/goal — compares profile against the user's TARGET
+ * career role(s) instead of a specific JD.
  */
 "use client";
 

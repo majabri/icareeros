@@ -15,7 +15,7 @@ import { createTracedClient } from "@/lib/observability/langfuse";
  *   - top 5 LinkedIn skills to add
  *
  * Powers the "Resume & LinkedIn Advisor" surface (the rebranded
- * /resumeadvisor page).
+ * /evaluate/job-fit page).
  */
 
 export const dynamic = "force-dynamic";

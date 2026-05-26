@@ -2,7 +2,7 @@
  * resumeService.ts
  *
  * Client-side service for the Career Profile (/mycareer/profile) and
- * Resume Advisor (/resumeadvisor) pages.
+ * Resume Advisor (/evaluate/job-fit) pages.
  *
  * Resume PARSING runs a tiered cascade:
  *

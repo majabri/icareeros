@@ -147,7 +147,7 @@ export default function InterviewPage() {
       .catch(() => setHistoryLoaded(true));
   }, []);
 
-  // UAT 2026-05-10: pre-fill from /resumeadvisor handoff.
+  // UAT 2026-05-10: pre-fill from /evaluate/job-fit handoff.
   // The Resume Advisor's "Interview prep questions" button stashes the JD
   // and the resolved resume text in sessionStorage. Consume them on mount
   // and clear so they don't bleed into a future visit.
