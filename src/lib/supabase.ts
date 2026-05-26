@@ -20,9 +20,20 @@
  * That matches what middleware.ts does on the server side via
  * `isProductionHost(host)`, and is more precise than NODE_ENV
  * (Vercel preview deploys run with NODE_ENV='production' too).
+ *
+ * Cross-tab refresh lock (2026-05-25, fix/cross-tab-refresh-token-race) —
+ * The shared cookie domain above means every tab across the three
+ * subdomains uses the same refresh_token. Without coordination, they
+ * all race to refresh near token expiry, the first succeeds, the rest
+ * fail with refresh_token_already_used, the SDK retries, and the
+ * project-wide /token rate-limit bucket is drained within seconds. See
+ * incident memo `incident_2026-05-24_auth_lockout_smtp`. We pass a
+ * `navigatorLock` (Web Locks API) to `auth.lock` so only one tab
+ * refreshes at a time; the others wait for the first one's result.
  */
 
 import { createBrowserClient } from "@supabase/ssr";
+import { navigatorLock } from "./supabase-browser-lock";
 
 /**
  * Resolve the cookie-Domain attribute for the current page. Returns
@@ -40,7 +51,14 @@ export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    domain ? { cookieOptions: { domain } } : undefined,
+    {
+      ...(domain ? { cookieOptions: { domain } } : {}),
+      auth: {
+        // Cross-tab single-flight refresh. See supabase-browser-lock.ts
+        // for full rationale (2026-05-24 incident).
+        lock: navigatorLock,
+      },
+    },
   );
 }
 
