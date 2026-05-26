@@ -12,7 +12,7 @@ describe("navigatorLock", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     // Reset whatever we may have stubbed onto globalThis.navigator
-    // @ts-expect-error — best-effort cleanup
+    // (cast keeps this assignable without @ts-expect-error)
     delete (globalThis as { navigator?: unknown }).navigator;
   });
 
