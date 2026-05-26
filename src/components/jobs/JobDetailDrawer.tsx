@@ -113,7 +113,7 @@ export function JobDetailDrawer({ job, onClose, cycleId }: JobDetailDrawerProps)
         }),
       );
     } catch { /* private mode — ignore */ }
-    router.push("/resumeadvisor");
+    router.push("/evaluate/job-fit");
   }
 
   async function handleDeepFit(opts?: { refresh?: boolean }) {

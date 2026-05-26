@@ -8,7 +8,7 @@ import { fetchJobFromUrl } from "@/lib/jobs/fetchJobFromUrl";
  *
  * Lightweight wrapper around the existing fetchJobFromUrl library, exposed
  * as a public-facing endpoint with a simple contract for client surfaces
- * (e.g. /fit-check) that only need the plain-text description.
+ * (e.g. /evaluate/job-fit) that only need the plain-text description.
  *
  * Request  : { url: string }
  * Response : { jobDescription: string, source?: string, title?: string,

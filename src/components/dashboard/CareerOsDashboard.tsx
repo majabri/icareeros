@@ -663,7 +663,7 @@ export function CareerOsDashboard() {
                 Not ready? You can also{" "}
                 <a href="/mycareer/profile" className="underline hover:text-gray-600">build your profile</a>,{" "}
                 <a href="/jobs" className="underline hover:text-gray-600">browse opportunities</a>, or{" "}
-                <a href="/resumeadvisor" className="underline hover:text-gray-600">try the resume advisor</a>.
+                <a href="/evaluate/job-fit" className="underline hover:text-gray-600">open Job Application Fit</a>.
               </p>
             </>
           )}

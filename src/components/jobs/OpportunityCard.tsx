@@ -73,7 +73,7 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
       };
       sessionStorage.setItem("resumeAdvisor:incomingJob", JSON.stringify(payload));
     } catch { /* private-mode storage failure — page still works, just no prefill */ }
-    router.push("/resumeadvisor");
+    router.push("/evaluate/job-fit");
   }
 
   function handleTrack() {

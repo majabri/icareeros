@@ -12,7 +12,7 @@ import { fetchJobFromUrl } from "@/lib/jobs/fetchJobFromUrl";
  *
  * Authenticated. Resolves a job-posting URL to a clean text payload the
  * fit-check / rewrite / cover-letter LLM routes can read. Closes the
- * /resumeadvisor "Job URL" mode that previously sent the URL string to the
+ * /evaluate/job-fit "Job URL" mode that previously sent the URL string to the
  * LLM without actually fetching the content.
  *
  * Fast paths for Greenhouse / Lever / Ashby (public JSON APIs); generic
