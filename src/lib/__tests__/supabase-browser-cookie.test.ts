@@ -72,7 +72,7 @@ describe("createClient (browser) — cookie domain scope", () => {
     setHostname("icareeros.com");
     const { createClient } = await import("../supabase");
     createClient();
-    expect(optionsFromLastCall()).toEqual({
+    expect(optionsFromLastCall()).toMatchObject({
       cookieOptions: { domain: ".icareeros.com" },
     });
   });
@@ -81,7 +81,7 @@ describe("createClient (browser) — cookie domain scope", () => {
     setHostname("jobs.icareeros.com");
     const { createClient } = await import("../supabase");
     createClient();
-    expect(optionsFromLastCall()).toEqual({
+    expect(optionsFromLastCall()).toMatchObject({
       cookieOptions: { domain: ".icareeros.com" },
     });
   });
@@ -90,7 +90,7 @@ describe("createClient (browser) — cookie domain scope", () => {
     setHostname("hire.icareeros.com");
     const { createClient } = await import("../supabase");
     createClient();
-    expect(optionsFromLastCall()).toEqual({
+    expect(optionsFromLastCall()).toMatchObject({
       cookieOptions: { domain: ".icareeros.com" },
     });
   });
@@ -99,19 +99,36 @@ describe("createClient (browser) — cookie domain scope", () => {
     setHostname("localhost");
     const { createClient } = await import("../supabase");
     createClient();
-    expect(optionsFromLastCall()).toBeUndefined();
+    const opts = optionsFromLastCall() as { cookieOptions?: unknown };
+    expect(opts?.cookieOptions).toBeUndefined();
   });
 
   it("does NOT pass cookieOptions on a *.vercel.app preview deploy", async () => {
     setHostname("icareeros-git-feat-x-jabri-solutions.vercel.app");
     const { createClient } = await import("../supabase");
     createClient();
-    expect(optionsFromLastCall()).toBeUndefined();
+    const opts = optionsFromLastCall() as { cookieOptions?: unknown };
+    expect(opts?.cookieOptions).toBeUndefined();
   });
 
   it("returns undefined from resolveBrowserCookieDomain during SSR (no window)", async () => {
     clearWindow();
     const { resolveBrowserCookieDomain } = await import("../supabase");
     expect(resolveBrowserCookieDomain()).toBeUndefined();
+  });
+});
+
+describe("createClient (browser) — cross-tab refresh lock", () => {
+  it("passes auth.lock (navigatorLock) on every host so concurrent tabs serialise refresh", async () => {
+    // Test all three production hosts + localhost — the lock is hostname-independent.
+    for (const host of ["icareeros.com", "jobs.icareeros.com", "hire.icareeros.com", "localhost"]) {
+      vi.resetModules();
+      createBrowserClientMock.mockClear();
+      setHostname(host);
+      const { createClient } = await import("../supabase");
+      createClient();
+      const opts = optionsFromLastCall() as { auth?: { lock?: unknown } };
+      expect(opts?.auth?.lock, `host=${host}`).toBeTypeOf("function");
+    }
   });
 });
