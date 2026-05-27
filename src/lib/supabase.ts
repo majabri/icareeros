@@ -30,10 +30,21 @@
  * incident memo `incident_2026-05-24_auth_lockout_smtp`. We pass a
  * `navigatorLock` (Web Locks API) to `auth.lock` so only one tab
  * refreshes at a time; the others wait for the first one's result.
+ *
+ * Refresh-token-not-found guard (2026-05-27, fix/supabase-clear-stale-refresh-token) —
+ * Even with the lock in place, a SECOND storm-class failure mode
+ * surfaced 2026-05-27: a single tab with a stale refresh_token in
+ * localStorage (rotated out of the DB) calling /token at ~50 req/s
+ * because the SDK has no backoff on the terminal
+ * `refresh_token_not_found` error. We pass a `guardedFetch` to
+ * `global.fetch` that intercepts that exact response and clears
+ * localStorage + sb-* cookies, breaking the loop. See
+ * supabase-refresh-guard.ts for the implementation.
  */
 
 import { createBrowserClient } from "@supabase/ssr";
 import { navigatorLock } from "./supabase-browser-lock";
+import { guardedFetch } from "./supabase-refresh-guard";
 
 /**
  * Resolve the cookie-Domain attribute for the current page. Returns
@@ -57,6 +68,13 @@ export function createClient() {
         // Cross-tab single-flight refresh. See supabase-browser-lock.ts
         // for full rationale (2026-05-24 incident).
         lock: navigatorLock,
+      },
+      global: {
+        // Refresh-token-not-found guard. See supabase-refresh-guard.ts
+        // — clears local session when GoTrue says the refresh_token is
+        // gone, breaking the retry loop that drained the /token rate-
+        // limit bucket on 2026-05-27.
+        fetch: guardedFetch,
       },
     },
   );
