@@ -35,11 +35,8 @@ beforeEach(() => {
 
 afterEach(() => {
   global.fetch = realFetch;
-  // @ts-expect-error -- best-effort cleanup
   delete (globalThis as { localStorage?: unknown }).localStorage;
-  // @ts-expect-error
   delete (globalThis as { document?: unknown }).document;
-  // @ts-expect-error
   delete (globalThis as { window?: unknown }).window;
 });
 
@@ -141,9 +138,7 @@ describe("guardedFetch", () => {
   });
 
   it("does not crash in SSR-like environments where localStorage/document are absent", async () => {
-    // @ts-expect-error -- intentional SSR simulation
     delete (globalThis as { localStorage?: unknown }).localStorage;
-    // @ts-expect-error
     delete (globalThis as { document?: unknown }).document;
     nativeFetchSpy.mockResolvedValueOnce(jsonResponse(400, { error_code: "refresh_token_not_found" }));
 
