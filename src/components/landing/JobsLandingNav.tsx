@@ -40,7 +40,7 @@ export function JobsLandingNav() {
         padding: "1.25rem 1.5rem",
         maxWidth: "1200px", margin: "0 auto",
       }}>
-        <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — jobs home">
+        <a href="https://icareeros.com" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
             <Logo variant="horizontal" width={280} ariaLabel="iCareerOS for Job Seekers" />
           </a>
 
