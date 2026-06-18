@@ -146,3 +146,9 @@ export async function getCoachSession(id: string): Promise<CoachSessionDetail | 
   const body = (await res.json()) as { session?: CoachSessionDetail };
   return body.session ?? null;
 }
+
+/** DELETE /api/career-os/coach-session/[id] — permanently delete a session. Returns true on success. */
+export async function deleteCoachSession(id: string): Promise<boolean> {
+  const res = await fetch(`/api/career-os/coach-session/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return res.status === 204;
+}

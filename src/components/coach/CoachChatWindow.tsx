@@ -16,6 +16,7 @@ import {
   streamCoachMessage,
   listCoachSessions,
   getCoachSession,
+  deleteCoachSession,
   type CoachMessage,
   type CoachSessionListEntry,
 } from "@/services/ai/coachSessionService";
@@ -151,6 +152,19 @@ export function CoachChatWindow({ cycleId }: CoachChatWindowProps) {
         sessions={sessions}
         activeSessionId={activeId}
         onPick={(id) => void pickSession(id)}
+        onDelete={(id) => {
+          // Optimistic removal — drop the row from local state first, then call the
+          // API. If we were viewing the deleted session, reset to the empty composer.
+          setSessions(prev => prev.filter(x => x.id !== id));
+          if (activeId === id) {
+            setActiveId(null);
+            setMessages([]);
+          }
+          void deleteCoachSession(id).then((ok) => {
+            // Resync on failure so the user sees the real state instead of a phantom delete
+            if (!ok) void listCoachSessions().then(setSessions);
+          });
+        }}
       />
 
       {/* Message scroller */}

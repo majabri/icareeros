@@ -87,7 +87,19 @@ export async function startCycle(
     status: "pending" as const,
   }));
 
-  await supabase.from("career_os_stages").insert(stageRows);
+  // Bug 7 fix (2026-06-18): capture stages-insert error. The cycle row was
+  // already committed, so abandoning at this point would leave an orphan.
+  // Log and continue — stage rows are recoverable on the next dashboard
+  // load (the UI tolerates missing rows + buildStageStatus falls back to
+  // 'pending' for any stage without notes).
+  const { error: stagesErr } = await supabase
+    .from("career_os_stages")
+    .insert(stageRows);
+  if (stagesErr) {
+    console.warn(
+      `[startCycle] career_os_stages seed failed for cycle ${cycle.id}: ${stagesErr.message}. Cycle row is intact; stages can be re-seeded.`,
+    );
+  }
 
   await eventLogger.log(userId, cycle.id, "cycle_started", {
     cycleNumber,
@@ -198,6 +210,11 @@ export async function getActiveCycle(
   userId: string,
 ): Promise<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string } | null> {
   const supabase = createClient();
+  // Bug 7 fix (2026-06-18): use .maybeSingle() for the canonical "0 or 1
+  // row" shape. `.single()` returns a PGRST116 error code on the empty case
+  // — harmless here because we coerce `data ?? null`, but the spurious
+  // error noisily logs in Supabase and confuses callers. `.maybeSingle()`
+  // is the documented Supabase pattern for this shape.
   const { data } = await supabase
     .from("career_os_cycles")
     .select("id, cycle_number, goal, status, current_stage")
@@ -205,7 +222,7 @@ export async function getActiveCycle(
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   return data ?? null;
 }

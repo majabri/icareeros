@@ -17,7 +17,7 @@ const HUB_LINKS: Array<{ href: string; label: string; description: string; icon:
 
 const TIER_COLOR: Record<ApplicationTier["roleTier"], string> = {
   Stretch: "bg-purple-100 text-purple-800",
-  Target:  "bg-brand-100  text-brand-800",
+  Target:  "bg-teal-100 text-teal-800",
   Safety:  "bg-emerald-100 text-emerald-800",
 };
 
@@ -97,7 +97,7 @@ function ActOutputPanel({ result }: { result: ActResult }) {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Search queries to run</h3>
           <div className="flex flex-wrap gap-2">
             {jobSearchQueries.map((q) => (
-              <Link key={q} href={`/jobs?q=${encodeURIComponent(q)}`} className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-800 hover:bg-brand-200">
+              <Link key={q} href={`/jobs?q=${encodeURIComponent(q)}`} className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-800 hover:bg-teal-200">
                 {q}
               </Link>
             ))}

@@ -30,8 +30,10 @@ const FIT_COLORS: Record<string, string> = {
   low:    "bg-gray-100 text-gray-500",
 };
 
-function fitLabel(score: number | null | undefined): { label: string; color: string } {
-  if (!score) return { label: "No score", color: FIT_COLORS.low };
+function fitLabel(score: number | null | undefined): { label: string; color: string } | null {
+  // No fit score yet → render nothing instead of the vestigial "No score" badge.
+  // Response/Decision badges (rendered separately below) carry their own state.
+  if (!score) return null;
   if (score >= 75) return { label: `${score}% match`, color: FIT_COLORS.high };
   if (score >= 50) return { label: `${score}% match`, color: FIT_COLORS.medium };
   return { label: `${score}% match`, color: FIT_COLORS.low };
@@ -121,9 +123,11 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fit.color}`}>
-              {fit.label}
-            </span>
+            {fit && (
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fit.color}`}>
+                {fit.label}
+              </span>
+            )}
             {typeof opp.responseProbability === "number" && opp.responseProbability > 0 && (
               <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold">
                 Response {opp.responseProbability}%

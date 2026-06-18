@@ -434,9 +434,9 @@ export default function TargetSkillsPage() {
         {skills.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {skills.map((s, i) => (
-              <span key={`${s}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-700 border border-brand-100">
-                {s}
-                <button type="button" onClick={() => removeSkill(i)} className="ml-1 text-brand-400 hover:text-brand-600" aria-label={`Remove ${s}`}>×</button>
+              <span key={`${s}-${i}`} className="inline-flex max-w-xs items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-700 border border-brand-100">
+                <span className="truncate" title={s}>{s}</span>
+                <button type="button" onClick={() => removeSkill(i)} className="ml-1 shrink-0 text-brand-400 hover:text-brand-600" aria-label={`Remove ${s}`}>×</button>
               </span>
             ))}
           </div>
