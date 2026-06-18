@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }              from "@/components/landing/LandingNav";
@@ -8,22 +9,25 @@ import { RootJobSeekerSection }    from "@/components/landing/RootJobSeekerSecti
 import { RootHiringTeamSection }   from "@/components/landing/RootHiringTeamSection";
 import { RootVisionSection }       from "@/components/landing/RootVisionSection";
 import { RootCTASection }          from "@/components/landing/RootCTASection";
+import { JobsLanding }             from "@/components/landing/JobsLanding";
+import { HireLanding }             from "@/components/landing/HireLanding";
 
 /**
- * Root landing page at icareeros.com.
+ * Top-level landing page — branches on the `x-platform` middleware header.
  *
- * Per Amir 2026-05-20 (Phase 5, PRs #268 + #269) the unauthenticated
- * marketing surface lives ONLY here. The previous jobs.* and hire.*
- * landings were collapsed into this single page; visitors hitting
- * jobs.icareeros.com/ or hire.icareeros.com/ unauthenticated are
- * 308-redirected by middleware to the corresponding section anchor
- * here (#job-seekers / #hiring-teams).
+ * Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27) the
+ * Phase 5 collapse (PRs #268/#269/#270) is reversed: jobs.* and hire.*
+ * unauthenticated `/` no longer 308-redirect to root anchors but render
+ * their own standalone landings.
  *
- * As a result the page no longer needs platform branching — every
- * unauthenticated `/` resolves to <RootLanding/>. The earlier Option-A
- * header-driven branch on the `x-platform` middleware header (from
- * PRs #263/#264) is retired alongside the orphan Jobs* / Hire*
- * landing components that backed it.
+ * x-platform values come from `platformFromHost` in middleware.ts:
+ *   - "jobs"  → JobsLanding (For Job Seekers, full page)
+ *   - "hire"  → HireLanding (For Hiring Teams, full page)
+ *   - "root"  → RootLanding (the dual-audience marketing page)
+ *
+ * Authenticated subdomain visitors never reach this page — middleware
+ * redirects them to /dashboard (jobs) or rewrites to /hire/dashboard
+ * (hire) before getting here.
  */
 
 const ROOT_TITLE = "iCareerOS — The career OS that runs on outcomes, not advice.";
@@ -44,7 +48,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const platform = (await headers()).get("x-platform");
+
+  if (platform === "jobs") {
+    return <JobsLanding />;
+  }
+  if (platform === "hire") {
+    return <HireLanding />;
+  }
+
+  // Root marketing surface — the dual-audience page at icareeros.com
   return (
     <>
       <ConstellationBackground />

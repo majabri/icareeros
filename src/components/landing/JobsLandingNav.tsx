@@ -2,21 +2,17 @@
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
- * LandingNav — icareeros.com root nav (dual-audience).
+ * JobsLandingNav — jobs.icareeros.com nav.
  *
- * Per COWORK-BRIEF-platform-landing-copy-v1.md Surface 3 nav:
- *   Logo | The Platform | For Job Seekers | For Hiring Teams | Sign In | Get Started — free →
- *
- * Rev 2026-05-27 per COWORK-BRIEF-platform-subdomain-landings-v1: the
- * audience-switcher links no longer scroll within the page — they
- * navigate out to the standalone subdomain landings at
- * jobs.icareeros.com and hire.icareeros.com (Phase 5 collapse reversed).
- * The "The Platform" link still scrolls within the root page.
- * All auth links absolute icareeros.com URLs.
+ * Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27): jobs.* gets
+ * a standalone landing with a "← iCareerOS" back-nav to the root marketing
+ * surface. Otherwise mirrors LandingNav's structure (auth links absolute
+ * icareeros.com URLs).
  */
-export function LandingNav() {
+export function JobsLandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -32,12 +28,6 @@ export function LandingNav() {
     return () => window.removeEventListener("resize", fn);
   }, []);
 
-  const NAV_LINKS: Array<[string, string]> = [
-    ["#platform",                       "The Platform"],
-    ["https://jobs.icareeros.com",      "For Job Seekers"],
-    ["https://hire.icareeros.com",      "For Hiring Teams"],
-  ];
-
   return (
     <nav style={{
       background: "var(--surface-page)",
@@ -51,22 +41,28 @@ export function LandingNav() {
         padding: "1.25rem 1.5rem",
         maxWidth: "1200px", margin: "0 auto",
       }}>
-        <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — home">
-          <Logo variant="horizontal" width={280} ariaLabel="iCareerOS" />
-        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+          <a
+            href="https://icareeros.com"
+            style={{
+              fontSize: "0.8rem",
+              color: BRAND_COLORS.slateBlue,
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+            aria-label="Back to iCareerOS root"
+          >
+            ← iCareerOS
+          </a>
+          <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — jobs home">
+            <Logo variant="horizontal" width={280} ariaLabel="iCareerOS for Job Seekers" />
+          </a>
+        </div>
 
         <ul className="hidden lg:flex list-none m-0 p-0 items-center gap-8">
-          {NAV_LINKS.map(([href, label]) => (
-            <li key={href}>
-              <a
-                href={href}
-                className="text-sm font-normal whitespace-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors no-underline"
-              >
-                {label}
-              </a>
-            </li>
-          ))}
-
           <li>
             <a
               href="https://icareeros.com/auth/login"
@@ -91,10 +87,9 @@ export function LandingNav() {
               Sign In
             </a>
           </li>
-
           <li>
             <a
-              href="https://icareeros.com/auth/signup"
+              href="https://icareeros.com/auth/signup?role=job_seeker"
               className="inline-block text-sm font-medium no-underline rounded-full whitespace-nowrap"
               style={{
                 background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
@@ -102,17 +97,10 @@ export function LandingNav() {
                 padding: "0.55rem 1.3rem",
                 boxShadow: "0 4px 15px rgba(0,184,169,0.20)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,184,169,0.30)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(0,184,169,0.20)";
-              }}
             >
               Get Started — free →
             </a>
           </li>
-
           <li><ThemeToggle compact /></li>
         </ul>
 
@@ -157,26 +145,32 @@ export function LandingNav() {
           padding: "1rem 1.5rem 1.5rem",
         }} className="nav-mobile-menu">
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0" }}>
-            {NAV_LINKS.map(([href, label]) => (
-              <li key={href}>
-                <a href={href} onClick={() => setMenuOpen(false)} style={{
+            <li>
+              <a
+                href="https://icareeros.com"
+                onClick={() => setMenuOpen(false)}
+                style={{
                   display: "block", padding: "0.85rem 0",
                   borderBottom: "1px solid var(--surface-border)",
                   textDecoration: "none", color: "var(--text-secondary)",
                   fontWeight: 500, fontSize: "1rem",
-                }}>{label}</a>
-              </li>
-            ))}
+                }}
+              >← iCareerOS</a>
+            </li>
             <li style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
               <ThemeToggle />
             </li>
             <li style={{ marginTop: "1rem" }}>
-              <a href="https://icareeros.com/auth/signup" onClick={() => setMenuOpen(false)} style={{
-                display: "block", textAlign: "center",
-                background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
-                color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
-                fontWeight: 600, textDecoration: "none",
-              }}>Get Started — free →</a>
+              <a
+                href="https://icareeros.com/auth/signup?role=job_seeker"
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  display: "block", textAlign: "center",
+                  background: "linear-gradient(135deg, #00B8A9 0%, #40C9C0 100%)",
+                  color: "var(--neutral-100)", padding: "0.85rem", borderRadius: "50px",
+                  fontWeight: 600, textDecoration: "none",
+                }}
+              >Get Started — free →</a>
             </li>
           </ul>
         </div>

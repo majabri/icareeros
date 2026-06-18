@@ -228,41 +228,31 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // Phase 5 (2026-05-20) — Subdomain landings collapsed into the root.
-  // The unauthenticated marketing surface used to live at jobs.* and
-  // hire.* directly; per Amir 2026-05-20, those landings now redirect
-  // to the corresponding anchor on icareeros.com/ which holds the full
-  // pitch. Authenticated `/` visits still resolve to the app dashboard
-  // on each subdomain so logged-in users don't bounce to marketing.
+  // Phase 5 (rev 2026-05-27) — Subdomain landings RESTORED.
+  // Previously (2026-05-20) unauthenticated jobs.* / and hire.* / were
+  // 308-redirected to anchor sections on icareeros.com. That collapse
+  // is reversed: jobs.icareeros.com and hire.icareeros.com now serve
+  // their own full standalone landing pages, with the root landing's
+  // nav linking out to them.
   //
   // jobs.* `/` :
-  //   unauthed  → 308 to https://icareeros.com/#job-seekers
-  //   authed    → /dashboard on jobs.* (no rewrite needed; matches the
-  //               existing app routing already in place for jobs.*)
+  //   unauthed  → falls through to src/app/page.tsx (renders JobsLanding
+  //               via x-platform header branching)
+  //   authed    → /dashboard on jobs.* (unchanged)
   // hire.* `/` :
-  //   unauthed  → 308 to https://icareeros.com/#hiring-teams
-  //   authed    → rewrite to /hire/dashboard (unchanged from Phase 4)
-  if (isJobsHost && pathname === "/") {
-    if (user) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-    return NextResponse.redirect(
-      "https://icareeros.com/#job-seekers",
-      308,
-    );
+  //   unauthed  → falls through to src/app/page.tsx (renders HireLanding
+  //               via x-platform header branching)
+  //   authed    → rewrite to /hire/dashboard (Phase 4 behaviour, only
+  //               for authed users at root)
+  if (isJobsHost && pathname === "/" && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  if (isHireHost && pathname === "/") {
-    if (user) {
-      const rewriteUrl = request.nextUrl.clone();
-      rewriteUrl.pathname = "/hire/dashboard";
-      return NextResponse.rewrite(rewriteUrl, {
-        request: { headers: requestHeaders },
-      });
-    }
-    return NextResponse.redirect(
-      "https://icareeros.com/#hiring-teams",
-      308,
-    );
+  if (isHireHost && pathname === "/" && user) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = "/hire/dashboard";
+    return NextResponse.rewrite(rewriteUrl, {
+      request: { headers: requestHeaders },
+    });
   }
 
   // ── Auth guards ────────────────────────────────────────────────────────────
