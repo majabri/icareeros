@@ -75,12 +75,12 @@ type StageSection = {
 
 const STAGES: StageSection[] = [
   {
-    // 2026-06-18 (5-stage refactor) — Evaluate keeps Career Profile as the
-    // data-entry surface; the URL renamed from /mycareer to /careerprofile.
+    // 2026-06-18 — Evaluate. Career Profile lives on the user menu
+    // (top-right avatar dropdown, PR #311) so it's no longer a sidebar
+    // item. /careerprofile is still reachable directly + via the avatar.
     stage: "evaluate", num: 1, label: "Evaluate", icon: "profile",
     items: [
       { href: "/evaluate",          label: "Evaluate",             icon: "profile" },
-      { href: "/careerprofile",     label: "Career Profile",       icon: "profile" },
       { href: "/evaluate/goal",     label: "Career Goal Fit",      icon: "target"  },
       { href: "/evaluate/job-fit",  label: "Job Application Fit",  icon: "resume"  },
     ],
