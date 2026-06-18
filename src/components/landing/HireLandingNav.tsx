@@ -41,26 +41,9 @@ export function HireLandingNav() {
         padding: "1.25rem 1.5rem",
         maxWidth: "1200px", margin: "0 auto",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-          <a
-            href="https://icareeros.com"
-            style={{
-              fontSize: "0.8rem",
-              color: BRAND_COLORS.slateBlue,
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
-            aria-label="Back to iCareerOS root"
-          >
-            ← iCareerOS
-          </a>
-          <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — hire home">
+        <a href="/" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-label="iCareerOS — hire home">
             <Logo variant="horizontal" width={280} ariaLabel="iCareerOS for Hiring Teams" />
           </a>
-        </div>
 
         <ul className="hidden lg:flex list-none m-0 p-0 items-center gap-8">
           <li>
@@ -136,6 +119,30 @@ export function HireLandingNav() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Thin secondary row — back-link to root, below the main header line */}
+      <div style={{
+        borderTop: "1px solid var(--surface-border)",
+        padding: "0.45rem 1.5rem",
+        maxWidth: "1200px",
+        margin: "0 auto",
+      }}>
+        <a
+          href="https://icareeros.com"
+          style={{
+            fontSize: "0.8rem",
+            color: BRAND_COLORS.slateBlue,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+          }}
+          aria-label="Back to iCareerOS root"
+        >
+          ← iCareerOS
+        </a>
       </div>
 
       {menuOpen && (
