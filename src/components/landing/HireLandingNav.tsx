@@ -31,7 +31,6 @@ export function HireLandingNav() {
   return (
     <nav style={{
       background: "var(--surface-page)",
-      borderBottom: "1px solid var(--surface-border)",
       position: "sticky", top: 0, zIndex: 100,
       boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
       transition: "box-shadow 0.3s",
