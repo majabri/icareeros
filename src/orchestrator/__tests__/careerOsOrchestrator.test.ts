@@ -28,7 +28,7 @@ vi.mock("@/orchestrator/eventLogger", () => ({
 }));
 
 // Lazy import after mocks are established
-const { startCycle, advanceStage, completeCycle, getActiveCycle } = await import(
+const { startCycle, advanceStage, completeCycle, getActiveCycle, deleteCycle, MAX_ACTIVE_CYCLES } = await import(
   "../careerOsOrchestrator"
 );
 
@@ -37,7 +37,7 @@ const { startCycle, advanceStage, completeCycle, getActiveCycle } = await import
 function makeChain(returnData: unknown = null, returnError: unknown = null) {
   const chain: Record<string, unknown> = {};
   const methods = [
-    "select", "insert", "update",
+    "select", "insert", "update", "delete",
     "eq", "neq", "is", "order", "limit",
   ];
   methods.forEach((m) => {
@@ -49,6 +49,25 @@ function makeChain(returnData: unknown = null, returnError: unknown = null) {
   // Make chain awaitable
   (chain as any).then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: returnData, error: returnError }).then(resolve);
+  return chain;
+}
+
+/** Count-aware chain — supabase `head:true` count selects resolve with
+ *  { data: null, error: null, count }. The base helper above never surfaces
+ *  `count`, so this variant is used for the active-cycle cap test. */
+function makeCountChain(count: number) {
+  const chain: Record<string, unknown> = {};
+  const methods = [
+    "select", "insert", "update", "delete",
+    "eq", "neq", "is", "order", "limit",
+  ];
+  methods.forEach((m) => {
+    chain[m] = vi.fn(() => chain);
+  });
+  (chain.single      as MockInstance) = vi.fn().mockResolvedValue({ data: null, error: null, count });
+  (chain.maybeSingle as MockInstance) = vi.fn().mockResolvedValue({ data: null, error: null, count });
+  (chain as any).then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: null, count }).then(resolve);
   return chain;
 }
 
@@ -355,6 +374,37 @@ describe("careerOsOrchestrator", () => {
 
       const result = await completeCycle("user-1", "cycle-1");
       expect(result).toBeDefined();
+    });
+  });
+
+  describe("startCycle — 3-active-cycle cap (PR feat/jobs-cycle-management)", () => {
+    it("returns abandoned with explanatory error when user already has MAX_ACTIVE_CYCLES active", async () => {
+      // First .from() call is the cap check — it should report count == 3.
+      // No further DB calls should fire on the abandon path.
+      const capChain = makeCountChain(MAX_ACTIVE_CYCLES);
+      mockFrom.mockReturnValueOnce(capChain);
+
+      const result = await startCycle("user-1", "A fourth goal");
+      expect(result.status).toBe("abandoned");
+      expect(result.error).toMatch(/up to 3 active cycles/i);
+      // Sanity: only the count query fired — no insert was attempted.
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("deleteCycle (PR feat/jobs-cycle-management)", () => {
+    it("rejects when the cycle is not owned by the user", async () => {
+      // Ownership check returns null (the cycle either doesn't exist or
+      // belongs to someone else — the orchestrator can't tell which from
+      // an RLS-scoped query, and both surface as the same error).
+      const ownershipChain = makeChain(null, null);
+      mockFrom.mockReturnValueOnce(ownershipChain);
+
+      await expect(deleteCycle("user-1", "cycle-belonging-to-other")).rejects.toThrow(
+        /not found or not owned/i,
+      );
+      // Sanity: only the ownership-check query fired — no delete was attempted.
+      expect(mockFrom).toHaveBeenCalledTimes(1);
     });
   });
 });

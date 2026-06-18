@@ -22,7 +22,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listActiveCycles, type CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
+import { listActiveCycles, listCompletedCycles, type CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 
 // Shared route map — mirrors STAGE_HREF in CareerOsDashboard.tsx. Kept
 // duplicated rather than imported because the dashboard module is heavy
@@ -68,17 +68,26 @@ function truncate(text: string, max = 40): string {
 
 export function CycleSwitcher({ cycleId, userId }: CycleSwitcherProps) {
   const router = useRouter();
-  const [cycles, setCycles] = useState<ActiveCycle[]>([]);
-  const [open,   setOpen]   = useState(false);
-  const containerRef        = useRef<HTMLDivElement | null>(null);
+  const [cycles, setCycles]                 = useState<ActiveCycle[]>([]);
+  const [completedCycles, setCompletedCycles] = useState<ActiveCycle[]>([]);
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [open,   setOpen]                   = useState(false);
+  const containerRef                        = useRef<HTMLDivElement | null>(null);
 
-  // Load active cycles once we have a user id.
+  // Load active + completed cycles once we have a user id.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     void (async () => {
-      const list = await listActiveCycles(userId);
-      if (!cancelled) setCycles(list);
+      const [active, completed] = await Promise.all([
+        listActiveCycles(userId),
+        listCompletedCycles(userId),
+      ]);
+      if (cancelled) return;
+      setCycles(active);
+      setCompletedCycles(completed);
+      // Default-expanded when 3 or fewer; collapsed otherwise.
+      setCompletedExpanded(completed.length <= 3);
     })();
     return () => { cancelled = true; };
   }, [userId]);
@@ -96,9 +105,11 @@ export function CycleSwitcher({ cycleId, userId }: CycleSwitcherProps) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  // Hidden until we have data + the user has multiple cycles to switch
-  // between. Single-cycle pages are unchanged.
-  if (cycles.length < 2) return null;
+  // Hidden when the user has only a single active cycle AND no completed
+  // history — that's the original "single-cycle pages stay clean" case. As
+  // soon as there's something interesting to switch into OR look back on,
+  // render the pill.
+  if (cycles.length < 2 && completedCycles.length === 0) return null;
 
   const active = cycles.find((c) => c.id === cycleId) ?? cycles[0];
 
@@ -164,6 +175,45 @@ export function CycleSwitcher({ cycleId, userId }: CycleSwitcherProps) {
               );
             })}
           </ul>
+          {completedCycles.length > 0 && (
+            <div className="border-t border-gray-100 bg-gray-50">
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  Completed cycles ({completedCycles.length})
+                </span>
+                {completedCycles.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setCompletedExpanded((v) => !v)}
+                    aria-expanded={completedExpanded}
+                    className="text-[10px] font-medium text-gray-500 hover:text-gray-700"
+                  >
+                    {completedExpanded ? "Collapse" : `Show all ${completedCycles.length}`}
+                  </button>
+                )}
+              </div>
+              <ul className="max-h-56 divide-y divide-gray-100 overflow-y-auto">
+                {(completedExpanded ? completedCycles : completedCycles.slice(0, 3)).map((c) => (
+                  <li
+                    key={c.id}
+                    aria-disabled="true"
+                    className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-gray-500 cursor-default"
+                  >
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-gray-600">
+                      #{c.cycle_number}
+                    </span>
+                    <span className="flex-1 truncate" title={c.goal ?? "(no goal)"}>
+                      {c.goal ? truncate(c.goal) : "(no goal)"}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[9px] font-medium text-gray-500">
+                      Completed
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="border-t border-gray-100 px-3 py-2 text-right">
             <Link href="/dashboard" className="text-[11px] text-brand-700 underline">
               Manage cycles →
