@@ -108,7 +108,7 @@ export default function CareerGoalFitPage() {
           </p>
         </div>
         <Link
-          href="/mycareer/preferences"
+          href="/careerprofile/preferences"
           className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
           Edit target roles →
@@ -135,7 +135,7 @@ export default function CareerGoalFitPage() {
           <h2 className="text-base font-semibold text-amber-900">No target role set</h2>
           <p className="mt-1 text-sm text-amber-800">{result.overall_summary}</p>
           <Link
-            href="/mycareer/preferences"
+            href="/careerprofile/preferences"
             className="mt-3 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
           >
             Set a target role

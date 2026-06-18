@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LearnPageInner } from "./LearnPageInner";
+import { TargetSkillsPanel } from "@/components/learn/TargetSkillsPanel";
 
 export const metadata: Metadata = { title: "Learning Plan — iCareerOS" };
 
@@ -13,6 +14,13 @@ export default function LearnPage() {
           Stage 3 of Career OS. Personalised courses, certifications, and resources to close your skill gaps.
         </p>
       </header>
+
+      {/* 2026-06-18 (5-stage refactor) — Target Skills folded from the
+          retired /targetskills route into a collapsible section here. */}
+      <div className="mb-6">
+        <TargetSkillsPanel />
+      </div>
+
       <Suspense fallback={null}><LearnPageInner /></Suspense>
     </div>
   );

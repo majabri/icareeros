@@ -10,7 +10,7 @@ export default function AchievePage() {
       <header className="mb-6">
         <h2 className="text-2xl font-semibold text-gray-900">Achieve</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Stage 6 of Career OS. Record this cycle's milestone, capture accomplishments, plan the next cycle.
+          Stage 5 of Career OS. Record this cycle's milestone, capture accomplishments, plan the next cycle.
         </p>
       </header>
       <Suspense fallback={null}><AchievePageInner /></Suspense>

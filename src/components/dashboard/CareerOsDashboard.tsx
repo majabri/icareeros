@@ -50,7 +50,6 @@ const STAGE_HREF: Record<CareerOsStage, string> = {
   advise:   "/advise",
   learn:    "/learn",
   act:      "/act",
-  coach:    "/coach",
   achieve:  "/achieve",
 };
 
@@ -739,7 +738,7 @@ export function CareerOsDashboard() {
             </p>
           </div>
           <button
-            onClick={() => router.push("/mycareer")}
+            onClick={() => router.push("/careerprofile")}
             className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold
                        text-white hover:bg-brand-700 transition-colors"
           >
@@ -797,8 +796,8 @@ export function CareerOsDashboard() {
               </button>
               <p className="mt-3 text-xs text-gray-400">
                 Not ready? You can also{" "}
-                <a href="/mycareer/profile" className="underline hover:text-gray-600">build your profile</a>,{" "}
-                <a href="/jobs" className="underline hover:text-gray-600">browse opportunities</a>, or{" "}
+                <a href="/careerprofile/profile" className="underline hover:text-gray-600">build your profile</a>,{" "}
+                <a href="/opportunities" className="underline hover:text-gray-600">browse opportunities</a>, or{" "}
                 <a href="/evaluate/job-fit" className="underline hover:text-gray-600">open Job Application Fit</a>.
               </p>
             </>
@@ -818,8 +817,12 @@ export function CareerOsDashboard() {
             }))}
             currentStage={cycle.current_stage as CareerOsStage}
             onStageClick={(stage) => {
-              // Phase 3 Item 4 — route the Coach stage node to the new /coach page.
-              if (stage === "coach") router.push("/coach");
+              // 5-stage refactor (2026-06-18) — Coach is no longer a stage
+              // node on the ring; the click handler simply routes via the
+              // shared STAGE_HREF map. The /coach surface still exists and
+              // is reachable as a sub-item under Advise in the sidebar.
+              const href = STAGE_HREF[stage];
+              if (href) router.push(href);
             }}
           />
 
@@ -971,16 +974,7 @@ export function CareerOsDashboard() {
             cycleId={cycle.id}
             plan={plan}
             profileReady={profileReady}
-            initial={
-              stageNotes.coach && typeof stageNotes.coach === "object"
-                && (stageNotes.coach as Record<string, unknown>).brief
-                && typeof (stageNotes.coach as Record<string, unknown>).brief === "object"
-                ? {
-                    content:     ((stageNotes.coach as Record<string, unknown>).brief as { content?: unknown }).content as string ?? "",
-                    generatedAt: ((stageNotes.coach as Record<string, unknown>).brief as { generatedAt?: unknown }).generatedAt as string ?? "",
-                  }
-                : null
-            }
+            initial={null}
           />
 
           {/* Phase 4 Item 2b — Skills assessment modal */}

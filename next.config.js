@@ -68,11 +68,21 @@ const nextConfig = {
     ];
   },
 
-  // Redirects — convenience for common bare-route URLs
+  // Redirects — convenience for common bare-route URLs + URL renames
+  // preserved for bookmarks/emails after route restructures.
   async redirects() {
     return [
       // UAT-fix 2026-05-13: `/billing` is a frequent typo for the real route.
       { source: "/billing", destination: "/settings/billing", permanent: false },
+
+      // 2026-06-18 (5-stage refactor) — URL renames. Permanent 308 so
+      // bookmarks, emails, and search-engine indexes follow without
+      // breaking the existing surfaces.
+      { source: "/mycareer",        destination: "/careerprofile",        permanent: true },
+      { source: "/mycareer/:path*", destination: "/careerprofile/:path*", permanent: true },
+      { source: "/jobs",            destination: "/opportunities",        permanent: true },
+      { source: "/applications",    destination: "/pipeline",             permanent: true },
+      { source: "/targetskills",    destination: "/learn",                permanent: true },
     ];
   },
 

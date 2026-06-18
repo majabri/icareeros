@@ -32,7 +32,6 @@ const STAGE_HREF: Record<CareerOsStage, string> = {
   advise:   "/advise",
   learn:    "/learn",
   act:      "/act",
-  coach:    "/coach",
   achieve:  "/achieve",
 };
 
@@ -57,7 +56,6 @@ const STAGE_LABEL: Record<CareerOsStage, string> = {
   advise:   "Advise",
   learn:    "Learn",
   act:      "Act",
-  coach:    "Coach",
   achieve:  "Achieve",
 };
 

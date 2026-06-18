@@ -21,7 +21,7 @@ import { STAGE_COLORS } from "@/lib/career-os/stage-colors";
 export type StageStatus = "pending" | "in_progress" | "completed" | "skipped";
 
 const STAGE_ORDER: CareerOsStage[] = [
-  "evaluate", "advise", "learn", "act", "coach", "achieve",
+  "evaluate", "advise", "learn", "act", "achieve",
 ];
 
 const STAGE_LABELS: Record<CareerOsStage, string> = {
@@ -29,7 +29,6 @@ const STAGE_LABELS: Record<CareerOsStage, string> = {
   advise:   "Advise",
   learn:    "Learn",
   act:      "Act",
-  coach:    "Coach",
   achieve:  "Achieve",
 };
 

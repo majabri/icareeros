@@ -209,7 +209,7 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
       {props.profileIncomplete && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Your career profile isn't fully filled in yet. You can still run {props.stageLabel}, but{" "}
-          <Link href="/mycareer/profile" className="underline font-medium">complete your profile</Link>{" "}
+          <Link href="/careerprofile/profile" className="underline font-medium">complete your profile</Link>{" "}
           first to get a more accurate result.
         </div>
       )}

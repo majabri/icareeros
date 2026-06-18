@@ -2,13 +2,13 @@
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/mycareer/profile",     label: "Profile"            },
-  { href: "/mycareer/preferences", label: "Search Preferences" },
+  { href: "/careerprofile/profile",     label: "Profile"            },
+  { href: "/careerprofile/preferences", label: "Search Preferences" },
 ];
 
 const TITLE_BY_PATH: Record<string, string> = {
-  "/mycareer/profile":     "Career Profile",
-  "/mycareer/preferences": "Search Preferences",
+  "/careerprofile/profile":     "Career Profile",
+  "/careerprofile/preferences": "Search Preferences",
 };
 
 export function MyCareerTabs() {

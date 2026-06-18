@@ -78,9 +78,9 @@ describe("platform configs", () => {
   });
 
   it("isNavItemActive resolves single-prefix and multi-prefix items correctly", () => {
-    const single: NavItem = { href: "/jobs", label: "X", icon: "M0 0" };
-    expect(isNavItemActive("/jobs",           single)).toBe(true);
-    expect(isNavItemActive("/jobs/123",       single)).toBe(true);
+    const single: NavItem = { href: "/opportunities", label: "X", icon: "M0 0" };
+    expect(isNavItemActive("/opportunities",           single)).toBe(true);
+    expect(isNavItemActive("/opportunities/123",       single)).toBe(true);
     expect(isNavItemActive("/jobsearch",      single)).toBe(false); // prefix must be /-bounded
     expect(isNavItemActive("/dashboard",      single)).toBe(false);
 

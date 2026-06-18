@@ -12,7 +12,6 @@ import {
   generateAdvice,
   generateLearningPlan,
   triggerAction,
-  runCoachingSession,
   recordAchievement,
 } from "@/services/ai";
 
@@ -125,21 +124,6 @@ async function routeAct(userId: string, cycleId: string): Promise<RouteResult> {
   };
 }
 
-async function routeCoach(userId: string, cycleId: string): Promise<RouteResult> {
-  // Evaluate + Advise notes are fetched server-side inside /api/career-os/coach.
-  // If either stage hasn't completed the route returns 422 and this throws.
-  const result = await runCoachingSession(userId, cycleId);
-  await saveStageNotes(userId, cycleId, "coach", result as unknown as Record<string, unknown>);
-  return {
-    success: true,
-    meta: {
-      interviewReadiness: result.interviewPrep.estimatedReadinessScore,
-      resumeScore: result.resumeInsights.score,
-      actionItemCount: result.actionItems.length,
-    },
-  };
-}
-
 async function routeAchieve(userId: string, cycleId: string): Promise<RouteResult> {
   // All prior stage notes are loaded server-side inside /api/career-os/achieve.
   // Returns 422 if Evaluate or Advise are not yet completed.
@@ -163,7 +147,6 @@ const handlers: Record<CareerOsStage, (u: string, c: string) => Promise<RouteRes
   advise:   routeAdvise,
   learn:    routeLearn,
   act:      routeAct,
-  coach:    routeCoach,
   achieve:  routeAchieve,
 };
 

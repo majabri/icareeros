@@ -14,14 +14,14 @@
  *     applications table — the brief's strict definition. Notes alone
  *     do not satisfy Act anymore.
  *
- *   - Other stages (evaluate / learn / coach / achieve): unchanged from
+ *   - Other stages (evaluate / learn / achieve): unchanged from
  *     the Phase 1 strict rule — completion requires non-empty notes.
  */
 
 import type { CareerOsStage } from "@/orchestrator/careerOsOrchestrator";
 
 export const STAGE_ORDER: CareerOsStage[] = [
-  "evaluate", "advise", "learn", "act", "coach", "achieve",
+  "evaluate", "advise", "learn", "act", "achieve",
 ];
 
 export type StageStatus = "pending" | "in_progress" | "completed" | "skipped";
@@ -49,7 +49,7 @@ export const NO_SIGNALS: CompletionSignals = {
 export function emptyNotesMap(): StageNotesMap {
   return {
     evaluate: null, advise: null, learn: null,
-    act:      null, coach:  null, achieve: null,
+    act:      null, achieve: null,
   };
 }
 
@@ -95,7 +95,7 @@ export function buildStageStatus(
 ): StageStatusMap {
   const result: StageStatusMap = {
     evaluate: "pending", advise: "pending", learn: "pending",
-    act:      "pending", coach:  "pending", achieve: "pending",
+    act:      "pending", achieve: "pending",
   };
   if (!cycle) return result;
 

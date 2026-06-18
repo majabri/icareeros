@@ -59,11 +59,11 @@ test.beforeAll(async ({ browser, request: unauthRequest }) => {
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
-    const jobsRes = await page.request.get("/jobs", { failOnStatusCode: false });
+    const jobsRes = await page.request.get("/opportunities", { failOnStatusCode: false });
     jobsPageDeployed = jobsRes.status() < 400;
 
     if (jobsPageDeployed && outreachRouteDeployed) {
-      await page.goto("/jobs");
+      await page.goto("/opportunities");
       // Wait for either: an Outreach button (data + code deployed) OR
       // the empty-state heading (no data). Timeout = no result either way.
       await page.waitForSelector(
@@ -134,7 +134,7 @@ test("/jobs page shows Outreach button on opportunity cards", async ({ browser }
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
-    await page.goto("/jobs");
+    await page.goto("/opportunities");
     await page.waitForSelector('button:has-text("Outreach")', { timeout: 15_000 });
 
     const outreachBtn = page.locator('button:has-text("Outreach")').first();

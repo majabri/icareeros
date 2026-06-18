@@ -518,34 +518,6 @@ describe("stageRouter — unit", () => {
     expect(result.meta?.weeklyApplicationTarget).toBe(5);
   });
 
-    it("coach: propagates 422 error when advise stage not completed", async () => {
-    mockCoachFetch({}, 422);
-
-    const chain = makeChain(null, null);
-    mockFrom.mockReturnValue(chain);
-
-    const { stageRouter } = await import("../stageRouter");
-    const result = await stageRouter.route("user-1", "cycle-1", "coach");
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Advise");
-  });
-
-  it("coach: calls /api/career-os/coach and saves notes on success", async () => {
-    mockCoachFetch();
-
-    const chain = makeChain(null, null);
-    mockFrom.mockReturnValue(chain);
-
-    const { stageRouter } = await import("../stageRouter");
-    const result = await stageRouter.route("user-1", "cycle-1", "coach");
-
-    expect(result.success).toBe(true);
-    expect(result.meta?.interviewReadiness).toBe(65);
-    expect(result.meta?.resumeScore).toBe(72);
-    expect(result.meta?.actionItemCount).toBe(2);
-  });
-
     it("achieve: propagates 422 error when advise stage not completed", async () => {
     mockAchieveFetch({}, 422);
 
