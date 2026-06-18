@@ -1,8 +1,10 @@
 /**
  * GET /api/career-os/coach-session/[id]
+ *   Returns a single session including the full messages array.
  *
- * Returns a single session including the full messages array. RLS enforces
- * that callers can only read their own sessions.
+ * DELETE /api/career-os/coach-session/[id]
+ *   Permanently deletes a session. RLS enforces that callers can only
+ *   delete their own sessions.
  */
 
 import { NextResponse } from "next/server";
@@ -43,4 +45,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data)  return NextResponse.json({ error: "Session not found" }, { status: 404 });
   return NextResponse.json({ session: data });
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await makeSupabaseServer();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { error } = await supabase
+    .from("coach_sessions")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return new NextResponse(null, { status: 204 });
 }

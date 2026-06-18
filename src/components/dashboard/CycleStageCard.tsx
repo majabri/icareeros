@@ -355,7 +355,7 @@ export function CycleStageCard({
             </div>
           )}
 
-          {adviceResult.nextActions[0] && (
+          {adviceResult.nextActions?.[0] && (
             <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
               <p className="text-xs font-medium text-gray-500 mb-0.5">Next action</p>
               <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
@@ -457,7 +457,7 @@ export function CycleStageCard({
           </div>
 
           {/* Top job search query */}
-          {actResult.jobSearchQueries[0] && (
+          {actResult.jobSearchQueries?.[0] && (
             <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
               <p className="text-xs font-medium text-gray-500 mb-0.5">Top search query</p>
               <p className="text-xs font-mono text-gray-700 leading-relaxed line-clamp-2">
@@ -483,7 +483,7 @@ export function CycleStageCard({
           )}
 
           {/* Top networking target */}
-          {actResult.networkingTargets[0] && (
+          {actResult.networkingTargets?.[0] && (
             <div>
               <p className="text-xs text-gray-500 mb-1">Network first</p>
               <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2 space-y-0.5">
@@ -526,7 +526,7 @@ export function CycleStageCard({
           </div>
 
           {/* Top practice question */}
-          {coachResult.interviewPrep?.practiceQuestions[0] && (
+          {coachResult.interviewPrep?.practiceQuestions?.[0] && (
             <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
               <p className="text-xs font-medium text-gray-500 mb-0.5">Practice question</p>
               <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 italic">
@@ -536,7 +536,7 @@ export function CycleStageCard({
           )}
 
           {/* Top resume suggestion */}
-          {coachResult.resumeInsights?.suggestions[0] && (
+          {coachResult.resumeInsights?.suggestions?.[0] && (
             <div className="rounded-lg bg-white/60 border border-gray-200 px-3 py-2">
               <p className="text-xs font-medium text-gray-500 mb-0.5">Resume: top fix</p>
               <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
