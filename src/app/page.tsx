@@ -5,8 +5,6 @@ import { ConstellationBackground } from "@/components/ConstellationBackground";
 import { LandingNav }              from "@/components/landing/LandingNav";
 import { RootHeroSection }         from "@/components/landing/RootHeroSection";
 import { RootPlatformInnovation }  from "@/components/landing/RootPlatformInnovation";
-import { RootJobSeekerSection }    from "@/components/landing/RootJobSeekerSection";
-import { RootHiringTeamSection }   from "@/components/landing/RootHiringTeamSection";
 import { RootVisionSection }       from "@/components/landing/RootVisionSection";
 import { RootCTASection }          from "@/components/landing/RootCTASection";
 import { JobsLanding }             from "@/components/landing/JobsLanding";
@@ -15,10 +13,16 @@ import { HireLanding }             from "@/components/landing/HireLanding";
 /**
  * Top-level landing page — branches on the `x-platform` middleware header.
  *
- * Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27) the
- * Phase 5 collapse (PRs #268/#269/#270) is reversed: jobs.* and hire.*
- * unauthenticated `/` no longer 308-redirect to root anchors but render
- * their own standalone landings.
+ * Per COWORK-BRIEF-platform-subdomain-landings-v2 (2026-06-17):
+ * the two audience deep-dive sections (RootJobSeekerSection,
+ * RootHiringTeamSection) now live ONLY inside JobsLanding and
+ * HireLanding — root becomes a thin platform front door (hero,
+ * 2-column outbound overview, vision, CTA).
+ *
+ * Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27, PR #300)
+ * the Phase 5 collapse was reversed: jobs.* and hire.* unauthenticated
+ * `/` no longer 308-redirect to root anchors but render their own
+ * standalone landings.
  *
  * x-platform values come from `platformFromHost` in middleware.ts:
  *   - "jobs"  → JobsLanding (For Job Seekers, full page)
@@ -67,8 +71,6 @@ export default async function LandingPage() {
         <main>
           <RootHeroSection />
           <RootPlatformInnovation />
-          <RootJobSeekerSection />
-          <RootHiringTeamSection />
           <RootVisionSection />
           <RootCTASection />
         </main>

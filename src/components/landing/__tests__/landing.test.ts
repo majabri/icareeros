@@ -15,15 +15,25 @@ function src(file: string) {
   return readFileSync(resolve(LANDING_DIR, file), "utf-8");
 }
 
-// Components shared across all landing surfaces (root + subdomain wrappers)
+// Components imported by root page.tsx.
+// Per COWORK-BRIEF-platform-subdomain-landings-v2 (2026-06-17): the two
+// audience deep-dive sections (RootJobSeekerSection, RootHiringTeamSection)
+// are no longer imported by root — they live only inside JobsLanding /
+// HireLanding now. Their files still exist (SECTION_COMPONENTS below).
 const ROOT_COMPONENTS = [
-  { file: "LandingNav.tsx",            export: "LandingNav" },
-  { file: "RootHeroSection.tsx",       export: "RootHeroSection" },
+  { file: "LandingNav.tsx",             export: "LandingNav" },
+  { file: "RootHeroSection.tsx",        export: "RootHeroSection" },
   { file: "RootPlatformInnovation.tsx", export: "RootPlatformInnovation" },
+  { file: "RootVisionSection.tsx",      export: "RootVisionSection" },
+  { file: "RootCTASection.tsx",         export: "RootCTASection" },
+] as const;
+
+// Audience deep-dive sections — files must still exist and export their
+// component (embedded inside JobsLanding / HireLanding), but root no
+// longer imports them.
+const SECTION_COMPONENTS = [
   { file: "RootJobSeekerSection.tsx",  export: "RootJobSeekerSection" },
   { file: "RootHiringTeamSection.tsx", export: "RootHiringTeamSection" },
-  { file: "RootVisionSection.tsx",     export: "RootVisionSection" },
-  { file: "RootCTASection.tsx",        export: "RootCTASection" },
 ] as const;
 
 // Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27): the
@@ -38,7 +48,7 @@ const SUBDOMAIN_COMPONENTS = [
 ] as const;
 
 describe("Landing page component files", () => {
-  for (const { file, export: name } of [...ROOT_COMPONENTS, ...SUBDOMAIN_COMPONENTS]) {
+  for (const { file, export: name } of [...ROOT_COMPONENTS, ...SECTION_COMPONENTS, ...SUBDOMAIN_COMPONENTS]) {
     it(`${file} exists and exports ${name}`, () => {
       expect(existsSync(resolve(LANDING_DIR, file))).toBe(true);
       const code = src(file);
@@ -53,6 +63,20 @@ describe("Landing page component files", () => {
     );
     for (const { export: name } of ROOT_COMPONENTS) {
       expect(pageSrc).toContain(name);
+    }
+  });
+
+  it("root page.tsx no longer imports the two audience deep-dive sections (v2 2026-06-17)", () => {
+    // Per COWORK-BRIEF-platform-subdomain-landings-v2: RootJobSeekerSection
+    // and RootHiringTeamSection live ONLY inside JobsLanding / HireLanding.
+    // Root surface is now a thin front door (hero + platform overview +
+    // vision + CTA).
+    const pageSrc = readFileSync(
+      resolve(LANDING_DIR, "../../app/page.tsx"),
+      "utf-8"
+    );
+    for (const { export: name } of SECTION_COMPONENTS) {
+      expect(pageSrc).not.toContain(name);
     }
   });
 
