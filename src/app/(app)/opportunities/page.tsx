@@ -303,7 +303,7 @@ export default function JobsPage() {
             ↻ Refresh
           </button>
           {scoringFit && <span className="text-xs text-gray-500">Ranking results…</span>}
-          <a href="/mycareer/preferences" className="ml-auto text-xs text-gray-400 hover:text-gray-600">Tune your preferences</a>
+          <a href="/careerprofile/preferences" className="ml-auto text-xs text-gray-400 hover:text-gray-600">Tune your preferences</a>
         </div>
       )}
 

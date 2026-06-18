@@ -14,7 +14,6 @@ const ALL_PENDING: StageStatusMap = {
   advise:   "pending",
   learn:    "pending",
   act:      "pending",
-  coach:    "pending",
   achieve:  "pending",
 };
 
@@ -55,7 +54,7 @@ describe("emptyStateCta — Evaluate", () => {
     });
     expect(cta).toMatchObject({
       label: "Complete your Career Profile →",
-      href:  "/mycareer/profile",
+      href:  "/careerprofile/profile",
     });
     expect(cta?.disabled).toBeFalsy();
     expect(cta?.helper).toMatch(/headline/);
@@ -130,7 +129,7 @@ describe("emptyStateCta — Advise / Learn / Achieve now soft-link to their stag
 });
 
 describe("emptyStateCta — Act always links to /jobs", () => {
-  it("Act → 'Browse matching opportunities' /jobs", () => {
+  it("Act → 'Browse matching opportunities' /opportunities", () => {
     const cta = emptyStateCta({
       stage: "act",
       stageStatus: ALL_PENDING,
@@ -140,40 +139,8 @@ describe("emptyStateCta — Act always links to /jobs", () => {
     });
     expect(cta).toEqual({
       label: "Browse matching opportunities →",
-      href:  "/jobs",
+      href:  "/opportunities",
     });
-  });
-});
-
-describe("emptyStateCta — Coach branches on plan", () => {
-  it("free plan → 'Upgrade to chat...' /settings/billing", () => {
-    const cta = emptyStateCta({
-      stage: "coach",
-      stageStatus: ALL_PENDING,
-      currentStage: "evaluate",
-      profileReady: true,
-      plan: "free",
-    });
-    expect(cta).toEqual({
-      label: "Upgrade to chat with your coach →",
-      href:  "/settings/billing",
-    });
-  });
-
-  it("starter / standard / pro → 'Chat with your coach' /coach", () => {
-    for (const plan of ["starter", "standard", "pro"] as const) {
-      const cta = emptyStateCta({
-        stage: "coach",
-        stageStatus: ALL_PENDING,
-        currentStage: "evaluate",
-        profileReady: true,
-        plan,
-      });
-      expect(cta).toEqual({
-        label: "Chat with your coach →",
-        href:  "/coach",
-      });
-    }
   });
 });
 
@@ -193,13 +160,13 @@ describe("emptyStateCta — pending vs in_progress vs skipped", () => {
     const cta = emptyStateCta({
       stage: "act",
       stageStatus: { ...ALL_PENDING, act: "skipped" },
-      currentStage: "coach",
+      currentStage: "achieve",
       profileReady: true,
       plan: "starter",
     });
     expect(cta).toEqual({
       label: "Browse matching opportunities →",
-      href:  "/jobs",
+      href:  "/opportunities",
     });
   });
 });

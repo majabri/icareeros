@@ -16,7 +16,6 @@ export type CareerOsStage =
   | "advise"
   | "learn"
   | "act"
-  | "coach"
   | "achieve";
 
 export type CycleStatus = "active" | "completed" | "abandoned";
@@ -48,7 +47,6 @@ const STAGE_ORDER: CareerOsStage[] = [
   "advise",
   "learn",
   "act",
-  "coach",
   "achieve",
 ];
 

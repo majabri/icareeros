@@ -88,7 +88,7 @@ export function ApplicationsPipeline() {
       setShowForm(true);
       clearIncomingTrack();
       // Strip the param so a refresh doesn't re-open the form.
-      router.replace("/applications", { scroll: false });
+      router.replace("/pipeline", { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -214,7 +214,7 @@ export function ApplicationsPipeline() {
               + Track manually
             </button>
             <a
-              href="/jobs"
+              href="/opportunities"
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Browse jobs →

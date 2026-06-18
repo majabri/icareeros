@@ -55,7 +55,7 @@ export function emptyStateCta(input: EmptyStateCtaInput): EmptyStateCta | null {
       if (!profileReady) {
         return {
           label:  "Complete your Career Profile →",
-          href:   "/mycareer/profile",
+          href:   "/careerprofile/profile",
           helper: "Add a headline and at least 3 skills so Evaluate has material to score.",
         };
       }
@@ -84,19 +84,7 @@ export function emptyStateCta(input: EmptyStateCtaInput): EmptyStateCta | null {
     case "act":
       return {
         label: "Browse matching opportunities →",
-        href:  "/jobs",
-      };
-
-    case "coach":
-      if (plan === "free") {
-        return {
-          label: "Upgrade to chat with your coach →",
-          href:  "/settings/billing",
-        };
-      }
-      return {
-        label: "Chat with your coach →",
-        href:  "/coach",
+        href:  "/opportunities",
       };
 
     case "achieve":

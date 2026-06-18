@@ -105,7 +105,7 @@ test("/jobs page loads without salary enrichment errors", async ({ browser }) =>
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
-    await page.goto("/jobs");
+    await page.goto("/opportunities");
     await page.waitForLoadState("networkidle");
 
     // Page should load without crashing

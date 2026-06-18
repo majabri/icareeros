@@ -59,7 +59,7 @@ type IconKey = keyof typeof ICONS;
 
 // ── Stage order + data ────────────────────────────────────────────────────────
 const STAGE_ORDER: CareerOsStage[] = [
-  "evaluate", "advise", "learn", "act", "coach", "achieve",
+  "evaluate", "advise", "learn", "act", "achieve",
 ];
 
 type SubItem = { href: string; label: string };
@@ -75,48 +75,51 @@ type StageSection = {
 
 const STAGES: StageSection[] = [
   {
-    // Sprint 5 Phase 1 — Evaluate now has its own AI-output page; the
-    // Career Profile entry remains as the data-entry surface beneath it.
+    // 2026-06-18 (5-stage refactor) — Evaluate keeps Career Profile as the
+    // data-entry surface; the URL renamed from /mycareer to /careerprofile.
     stage: "evaluate", num: 1, label: "Evaluate", icon: "profile",
     items: [
       { href: "/evaluate",          label: "Evaluate",             icon: "profile" },
-      { href: "/mycareer",          label: "Career Profile",       icon: "profile" },
+      { href: "/careerprofile",     label: "Career Profile",       icon: "profile" },
       { href: "/evaluate/goal",     label: "Career Goal Fit",      icon: "target"  },
       { href: "/evaluate/job-fit",  label: "Job Application Fit",  icon: "resume"  },
     ],
   },
   {
+    // 2026-06-18 (5-stage refactor) — Coach moved from standalone Stage 5
+    // to a sub-item under Advise. The /coach URL is unchanged; only the
+    // sidebar placement changed.
     stage: "advise", num: 2, label: "Advise", icon: "resume",
     items: [
-      { href: "/advise", label: "Career Advice", icon: "resume" },
+      { href: "/advise", label: "Career Paths", icon: "resume" },
+      { href: "/coach",  label: "AI Coach",     icon: "coach"  },
     ],
   },
   {
+    // 2026-06-18 (5-stage refactor) — Target Skills folded into the
+    // Learning Plan page as a collapsible top section. The /targetskills
+    // URL is retired (308 redirect to /learn in next.config.js).
     stage: "learn", num: 3, label: "Learn", icon: "store",
     items: [
-      { href: "/learn",        label: "Learning Plan",  icon: "store"  },
-      { href: "/targetskills", label: "Target Skills",  icon: "target" },
+      { href: "/learn", label: "Learning Plan", icon: "store" },
     ],
   },
   {
+    // 2026-06-18 (5-stage refactor) — URL renames: /jobs → /opportunities,
+    // /applications → /pipeline. Labels are unchanged.
     stage: "act", num: 4, label: "Act", icon: "jobs",
     items: [
-      { href: "/act",          label: "Action Plan",   icon: "target"    },
-      { href: "/jobs",         label: "Opportunities", icon: "jobs"      },
-      { href: "/applications", label: "Pipeline",      icon: "pipeline"  },
-      { href: "/interview",    label: "Interview",     icon: "interview" },
-      { href: "/offers",       label: "Offer Desk",    icon: "offers"    },
-      { href: "/auto-apply",   label: "Autopilot",     icon: "autopilot", comingSoon: true },
+      { href: "/act",           label: "Action Plan",   icon: "target"    },
+      { href: "/opportunities", label: "Opportunities", icon: "jobs"      },
+      { href: "/pipeline",      label: "Pipeline",      icon: "pipeline"  },
+      { href: "/interview",     label: "Interview",     icon: "interview" },
+      { href: "/offers",        label: "Offer Desk",    icon: "offers"    },
+      { href: "/auto-apply",    label: "Autopilot",     icon: "autopilot", comingSoon: true },
     ],
   },
   {
-    // Sprint 5 — Coach was already live at /coach; the comingSoon flag
-    // was stale and is removed here.
-    stage: "coach", num: 5, label: "Coach", icon: "coach",
-    items: [{ href: "/coach", label: "Coach", icon: "coach" }],
-  },
-  {
-    stage: "achieve", num: 6, label: "Achieve", icon: "achieve",
+    // 2026-06-18 (5-stage refactor) — Achieve was Stage 6, now Stage 5.
+    stage: "achieve", num: 5, label: "Achieve", icon: "achieve",
     items: [
       { href: "/achieve", label: "Achieve",     icon: "achieve" },
       { href: "/career",  label: "Flight Plan", icon: "achieve", comingSoon: true },
@@ -201,8 +204,8 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
   // Auto-expand Learn subsection when on a Learn-stage path
   useEffect(() => {
     if (
-      pathname.startsWith("/mycareer/profile") ||
-      pathname.startsWith("/mycareer/preferences") ||
+      pathname.startsWith("/careerprofile/profile") ||
+      pathname.startsWith("/careerprofile/preferences") ||
       pathname.startsWith("/services")
     ) setLearnExpanded(true);
   }, [pathname]);
@@ -441,7 +444,7 @@ export function AppSidebar({ mobileOpen, setMobileOpen }: Props) {
                     const active      = !isFuture && isActive(item.href);
 
                     if (hasChildren) {
-                      const parentActive = !isFuture && pathname.startsWith("/mycareer");
+                      const parentActive = !isFuture && pathname.startsWith("/careerprofile");
                       return (
                         <div key={item.href}>
                           <button

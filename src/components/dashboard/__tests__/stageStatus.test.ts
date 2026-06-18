@@ -36,7 +36,7 @@ describe("buildStageStatus — null cycle", () => {
   });
 });
 
-describe("buildStageStatus — Phase 1 strict notes rule (unchanged for evaluate/learn/coach/achieve)", () => {
+describe("buildStageStatus — Phase 1 strict notes rule (unchanged for evaluate/learn/achieve)", () => {
   it("past stage with notes → completed; without notes → in_progress", () => {
     const cycle = activeCycle("learn"); // currentIdx = 2 (past = evaluate, advise)
     const notes = notesWith({
@@ -55,7 +55,7 @@ describe("buildStageStatus — Phase 1 strict notes rule (unchanged for evaluate
     const cycle = activeCycle("achieve", "completed");
     const notes = notesWith({
       evaluate: { x: 1 }, advise: { x: 1 }, learn: { x: 1 },
-      act:      { x: 1 }, coach:  { x: 1 }, achieve: { x: 1 },
+      act:      { x: 1 }, achieve: { x: 1 },
     });
     const sig = { applicationsCount: 5, opportunitiesCount: 5 };
     const status = buildStageStatus(cycle, notes, sig);
@@ -87,13 +87,13 @@ describe("buildStageStatus — Advise: notes AND opportunitiesCount >= 1", () =>
 
 describe("buildStageStatus — Act: applications >= 1 is the strict signal", () => {
   it("apps >= 1 → completed regardless of notes", () => {
-    const cycle = activeCycle("coach"); // act is past
+    const cycle = activeCycle("achieve"); // act is past
     const sig = { applicationsCount: 1, opportunitiesCount: 0 };
     expect(buildStageStatus(cycle, NO_NOTES, sig).act).toBe("completed");
   });
 
   it("apps = 0 + notes present → in_progress (notes alone do NOT satisfy Act)", () => {
-    const cycle = activeCycle("coach");
+    const cycle = activeCycle("achieve");
     const notes = notesWith({ act: { strategy: "applied to 5 jobs" } });
     const sig = { applicationsCount: 0, opportunitiesCount: 0 };
     expect(buildStageStatus(cycle, notes, sig).act).toBe("in_progress");

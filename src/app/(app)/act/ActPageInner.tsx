@@ -9,8 +9,8 @@ import { triggerAction, type ActResult, type ApplicationTier, type NetworkingTar
 import { arr, str, num } from "@/lib/career-os/normalize";
 
 const HUB_LINKS: Array<{ href: string; label: string; description: string; icon: string }> = [
-  { href: "/jobs",         label: "Opportunities", description: "Search + score open jobs.",          icon: "💼" },
-  { href: "/applications", label: "Pipeline",      description: "Track your active applications.",   icon: "📋" },
+  { href: "/opportunities",         label: "Opportunities", description: "Search + score open jobs.",          icon: "💼" },
+  { href: "/pipeline", label: "Pipeline",      description: "Track your active applications.",   icon: "📋" },
   { href: "/interview",    label: "Interview",     description: "Mock interviews + question bank.",  icon: "🎤" },
   { href: "/offers",       label: "Offer Desk",    description: "Compare and negotiate offers.",     icon: "🤝" },
 ];

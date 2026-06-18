@@ -179,7 +179,7 @@ export const HIRE_CONFIG: PlatformConfig = {
       label:       "Develop",
       icon:        ICON.trendingUp,
       stageNumber: "05",
-      color:       STAGE_COLORS_MAP.coach,    // #7B9AC0
+      color:       BRAND_COLORS.slateBlue,   // #7B9AC0 — hire/Develop. Routed via BRAND_COLORS after the jobs-side 5-stage refactor retired STAGE_COLORS_MAP.coach.
       // Starter+
       locked:      true,
     },

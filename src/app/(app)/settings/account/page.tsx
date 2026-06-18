@@ -206,7 +206,7 @@ export default function AccountPage() {
             <h2 className="text-base font-semibold text-gray-900">Display Identity</h2>
             <p className="mt-1 text-sm text-gray-500">
               Your name, phone, and photo. These are shown next to <span className="font-medium">Settings</span> in the top bar
-              and on your <Link href="/mycareer/profile" className="text-brand-600 hover:text-brand-700 font-medium underline-offset-2 hover:underline">Career Profile</Link>.
+              and on your <Link href="/careerprofile/profile" className="text-brand-600 hover:text-brand-700 font-medium underline-offset-2 hover:underline">Career Profile</Link>.
               They are preserved when you delete your career profile.
             </p>
           </div>
@@ -377,7 +377,7 @@ export default function AccountPage() {
         <p className="mt-1 text-xs text-gray-500">Each area owns its own settings.</p>
         <ul className="mt-4 space-y-2 text-sm">
           <li>
-            <Link href="/mycareer/profile" className="text-brand-600 hover:text-brand-700 font-medium">Career Profile</Link>
+            <Link href="/careerprofile/profile" className="text-brand-600 hover:text-brand-700 font-medium">Career Profile</Link>
             <span className="text-gray-500"> — email, LinkedIn, Current Location, headline, summary, work, education, certifications, skills, portfolio, resume export. (Name, phone, photo are read-only there.)</span>
           </li>
           <li>

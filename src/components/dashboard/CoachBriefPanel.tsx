@@ -113,7 +113,7 @@ export function CoachBriefPanel({ cycleId, initial, className, plan, profileRead
           </button>
         ) : (
           <Link
-            href="/mycareer/profile"
+            href="/careerprofile/profile"
             className="shrink-0 rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700
                        hover:bg-gray-300"
             data-testid="coach-brief-profile-cta"

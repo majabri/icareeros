@@ -1,26 +1,11 @@
 "use client";
 
 /**
- * /targetskills
+ * TargetSkillsPanel — collapsible section rendered at the top of /learn.
  *
- * Aspirational targets — what the user wants to acquire next.
- * Three sections:
- *   - Skills        (tag-style chips)
- *   - Education     (rows: degree, institution, target_date)
- *   - Certifications (rows: name, issuer, target_date)
- *
- * On mount the page calls /api/career-os/target-suggestions which
- * RESEARCHES the user's target job titles (from /mycareer/preferences)
- * and returns standard skills/education/certs for those roles. Each
- * suggestion carries a source_role tag so the user can see which target
- * job title drove the recommendation.
- *
- * Persists confirmed targets to:
- *   career_profiles.target_skills
- *   career_profiles.target_education
- *   career_profiles.target_certifications
- *
- * Distinct from /mycareer/profile which holds CURRENT skills/education/certs.
+ * 2026-06-18 (5-stage refactor) — moved here from `/targetskills` (page
+ * retired; URL redirects to `/learn` via next.config.js). Logic identical
+ * to the prior page; only the wrapping changed (page → collapsible card).
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -123,8 +108,10 @@ function formatAgo(ms: number): string {
   return `${day}d ago`;
 }
 
-export default function TargetSkillsPage() {
+export function TargetSkillsPanel() {
   const supabase = createClient();
+  // 2026-06-18 (5-stage refactor) — collapsible wrapper.
+  const [expanded, setExpanded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Confirmed targets
@@ -368,9 +355,19 @@ export default function TargetSkillsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-6">
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50"
+      >
+        <span className="text-sm font-semibold text-gray-900">Your Target Skills</span>
+        <span className="text-xs text-gray-400" aria-hidden>{expanded ? "▾" : "▸"}</span>
+      </button>
+      {expanded && (
+    <div className="space-y-6 border-t border-gray-100 p-4 sm:p-6">
       <header>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Target Skills</h1>
         <p className="text-sm text-gray-500">
           What you want to acquire next — researched against your target job titles. Suggestions below are AI-generated; click <strong>Confirm</strong> on any you want to add. You can also add your own.
         </p>
@@ -384,7 +381,7 @@ export default function TargetSkillsPage() {
             <strong>{rolesUsed.join(" · ")}</strong>
             {meta?.inferred && (
               <span className="ml-2 text-xs text-blue-600">
-                (inferred from your profile — set explicit target roles in <a href="/mycareer/preferences" className="underline hover:no-underline">Search Preferences</a>)
+                (inferred from your profile — set explicit target roles in <a href="/careerprofile/preferences" className="underline hover:no-underline">Search Preferences</a>)
               </span>
             )}
           </span>
@@ -407,7 +404,7 @@ export default function TargetSkillsPage() {
       {/* No target roles set at all */}
       {!sugsLoading && !sugsErr && rolesUsed.length === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No target job titles set. Add them in <a href="/mycareer/preferences" className="underline font-medium hover:no-underline">Search Preferences</a> for tailored suggestions, then come back here.
+          No target job titles set. Add them in <a href="/careerprofile/preferences" className="underline font-medium hover:no-underline">Search Preferences</a> for tailored suggestions, then come back here.
         </div>
       )}
 
@@ -610,5 +607,7 @@ export default function TargetSkillsPage() {
         </button>
       </div>
     </div>
+      )}
+    </section>
   );
 }

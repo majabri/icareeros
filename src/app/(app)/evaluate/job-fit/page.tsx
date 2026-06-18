@@ -1003,7 +1003,7 @@ export default function ResumeAdvisorPage() {
                   <div role="status" className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                     <span>✓</span>
                     <span className="flex-1">
-                      Saved. <a href="/jobs" className="font-semibold underline">View saved jobs</a>.
+                      Saved. <a href="/opportunities" className="font-semibold underline">View saved jobs</a>.
                     </span>
                     <button onClick={() => setSaveJobStatus(null)} className="text-emerald-600 hover:text-emerald-800">Dismiss</button>
                   </div>

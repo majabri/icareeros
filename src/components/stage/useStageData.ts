@@ -57,7 +57,6 @@ const STAGE_REQUIRED_FIELDS: Record<CareerOsStage, readonly [string, "array" | "
   advise:   [["recommendedPaths", "array"], ["nextActions", "array"], ["summary", "string"]],
   learn:    [["resources", "array"], ["topSkillGaps", "array"], ["summary", "string"]],
   act:      [["jobSearchQueries", "array"], ["applicationPriority", "array"], ["summary", "string"]],
-  coach:    [],   // coach has its own page + special {brief, briefHistory} shape
   achieve:  [["accomplishments", "array"], ["celebrationMessage", "string"], ["milestoneType", "string"]],
 } as const;
 

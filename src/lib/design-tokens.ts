@@ -18,7 +18,7 @@ export const BRAND_COLORS = {
   coral:      "#FF6B6B", // accent / error / pain points
   gold:       "#F5A623", // highlight / learn stage
   green:      "#10B981", // success / act stage
-  slateBlue:  "#7B9AC0", // muted / coach stage
+  slateBlue:  "#7B9AC0", // muted (retired 2026-06-18; was coach stage before 5-stage refactor)
 
   // Base
   navy:       "#0F1B2D", // dark background
@@ -48,8 +48,7 @@ export const STAGE_COLORS_ORDERED = [
   "#FF6B6B", // 2 — Advise   (coral)
   "#F5A623", // 3 — Learn    (gold)
   "#10B981", // 4 — Act      (green)
-  "#7B9AC0", // 5 — Coach    (slate blue)
-  "#40C9C0", // 6 — Achieve  (light teal)
+  "#40C9C0", // 5 — Achieve  (light teal)
 ] as const;
 
 export const STAGE_COLORS_MAP = {
@@ -57,7 +56,6 @@ export const STAGE_COLORS_MAP = {
   advise:   "#FF6B6B",
   learn:    "#F5A623",
   act:      "#10B981",
-  coach:    "#7B9AC0",
   achieve:  "#40C9C0",
 } as const;
 

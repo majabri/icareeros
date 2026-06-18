@@ -61,7 +61,7 @@ describe("AI route detection", () => {
 });
 
 describe("Protected routes", () => {
-  const PROTECTED = ["/dashboard", "/settings", "/jobs", "/profile", "/mycareer", "/targetskills", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
+  const PROTECTED = ["/dashboard", "/settings", "/opportunities", "/profile", "/careerprofile", "/targetskills", "/interview", "/resumeadvisor", "/offers", "/support", "/recruiter"];
   const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 
   const isProtected = (p: string) => PROTECTED.some((r) => p.startsWith(r));
@@ -69,7 +69,7 @@ describe("Protected routes", () => {
 
   it("marks app routes as protected", () => {
     expect(isProtected("/dashboard")).toBe(true);
-    expect(isProtected("/jobs")).toBe(true);
+    expect(isProtected("/opportunities")).toBe(true);
     expect(isProtected("/recruiter/analysis")).toBe(true);
     expect(isProtected("/resumeadvisor")).toBe(true);
   });
