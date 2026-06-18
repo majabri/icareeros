@@ -8,10 +8,12 @@ import { CycleSummaryPanel } from "./CycleSummaryPanel";
 import {
   startCycle,
   listActiveCycles,
+  listCompletedCycles,
   abandonCycle,
   getActiveCycle,
   advanceStage,
   completeCycle,
+  MAX_ACTIVE_CYCLES,
   type CareerOsStage,
 } from "@/orchestrator/careerOsOrchestrator";
 import { PlanBadge } from "@/components/billing/PlanBadge";
@@ -173,13 +175,15 @@ async function loadProfileReady(userId: string): Promise<boolean> {
 }
 
 function CycleManagementPanel({
-  cycles, selectedId, onSwitch, onAbandon,
+  cycles, completedCycles = [], selectedId, onSwitch, onDelete,
 }: {
-  cycles:     Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
-  selectedId: string;
+  cycles:           Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
+  completedCycles?: Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
+  selectedId:       string;
   /** Called with the cycle being switched to so the parent can route to its current stage. */
-  onSwitch:   (cycle: { id: string; current_stage: string }) => void;
-  onAbandon:  (id: string) => Promise<void>;
+  onSwitch:         (cycle: { id: string; current_stage: string }) => void;
+  /** HARD delete (DELETE /api/career-os/cycles/[id]). Caller refreshes after. */
+  onDelete:         (id: string) => Promise<void>;
 }) {
   const [open, setOpen]           = useState(false);
   const [confirming, setConfirm]  = useState<string | null>(null);
@@ -199,7 +203,8 @@ function CycleManagementPanel({
         <span className="text-sm text-gray-400" aria-hidden>{open ? "▾" : "▸"}</span>
       </button>
       {open && (
-        <div className="border-t border-gray-100 divide-y divide-gray-100">
+        <div className="border-t border-gray-100">
+          <div className="divide-y divide-gray-100">
           {cycles.map((c) => {
             const selected = c.id === selectedId;
             const isConfirming = confirming === c.id;
@@ -247,12 +252,12 @@ function CycleManagementPanel({
                     </button>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-gray-600">Abandon this cycle?</span>
+                      <span className="text-[11px] text-gray-600">Delete this cycle? This cannot be undone.</span>
                       <button
                         type="button"
                         onClick={async () => {
                           setBusy(c.id);
-                          try { await onAbandon(c.id); }
+                          try { await onDelete(c.id); }
                           finally { setBusy(null); setConfirm(null); }
                         }}
                         disabled={isBusy}
@@ -274,8 +279,65 @@ function CycleManagementPanel({
               </div>
             );
           })}
+          </div>
+
+          {completedCycles.length > 0 && (
+            <CompletedCyclesSection completedCycles={completedCycles} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Read-only "Completed cycles" section. Renders as smaller, muted cards
+ * below the active-cycle list. Collapsed by default when more than 3
+ * entries exist; expandable via a toggle button.
+ */
+function CompletedCyclesSection({
+  completedCycles,
+}: {
+  completedCycles: Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
+}) {
+  const collapsedByDefault = completedCycles.length > 3;
+  const [expanded, setExpanded] = useState(!collapsedByDefault);
+  const visible = expanded ? completedCycles : completedCycles.slice(0, 3);
+
+  return (
+    <div className="border-t border-gray-100 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          Completed cycles ({completedCycles.length})
+        </span>
+        {collapsedByDefault && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[11px] font-medium text-gray-500 hover:text-gray-700"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Collapse" : `Show all ${completedCycles.length}`}
+          </button>
+        )}
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {visible.map((c) => (
+          <li key={c.id} className="px-4 py-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                Cycle #{c.cycle_number}
+              </span>
+              <span className="flex-1 truncate text-gray-600" title={c.goal ?? "(no goal)"}>
+                {c.goal ?? "(no goal)"}
+              </span>
+              <span className="shrink-0 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                Completed
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -289,6 +351,7 @@ export function CareerOsDashboard() {
   useEffect(() => { userIdRef.current = userId; }, [userId]);
   const [cycle, setCycle]             = useState<ActiveCycle | null>(null);
   const [activeCycles, setActiveCycles] = useState<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>>([]);
+  const [completedCycles, setCompletedCycles] = useState<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>>([]);
   const [stageStatus, setStageStatus] = useState<StageStatusMap>(buildStageStatus(null));
   const [stageNotes, setStageNotes]   = useState<StageNotesMap>(emptyNotesMap());
   const [signals, setSignals]         = useState<CompletionSignals>({ applicationsCount: 0, opportunitiesCount: 0 });
@@ -367,13 +430,15 @@ export function CareerOsDashboard() {
   }, []);
 
     const refreshCycle = useCallback(async (uid: string, preferCycleId?: string) => {
-    const [list, fresh, ready] = await Promise.all([
+    const [list, fresh, ready, completed] = await Promise.all([
       listActiveCycles(uid),
       getActiveCycle(uid),
       loadProfileReady(uid),
+      listCompletedCycles(uid),
     ]);
     setProfileReady(ready);
     setActiveCycles(list);
+    setCompletedCycles(completed);
     // If caller asked for a specific cycle (e.g. just-created), pick it.
     // Otherwise default to the freshest active cycle.
     const target = preferCycleId
@@ -592,16 +657,22 @@ export function CareerOsDashboard() {
               the top of the dashboard. Only shown when an active cycle
               exists; the empty-state below has its own "+ Start a cycle"
               CTA. */}
-          {cycle && (
-            <button
-              onClick={() => setShowGoalInput(true)}
-              disabled={running}
-              title="Add a new cycle for a different goal — keeps your current cycle open"
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              + New Cycle
-            </button>
-          )}
+          {cycle && (() => {
+            const atCap = activeCycles.length >= MAX_ACTIVE_CYCLES;
+            return (
+              <button
+                onClick={() => setShowGoalInput(true)}
+                disabled={running || atCap}
+                title={atCap
+                  ? `Maximum ${MAX_ACTIVE_CYCLES} active cycles reached`
+                  : "Add a new cycle for a different goal — keeps your current cycle open"}
+                aria-disabled={atCap}
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                + New Cycle
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -853,12 +924,14 @@ export function CareerOsDashboard() {
               </p>
             </div>
 
-            {/* Multi-cycle switcher — only renders when user has 2+ active
-                cycles. The dropdown rows DO show the "Cycle #N" badge for
-                disambiguation, per the Fix 1 carve-out. */}
-            {activeCycles.length > 1 && (
+            {/* Multi-cycle switcher — renders when user has 2+ active
+                cycles OR any completed cycle to surface. The dropdown rows
+                show the "Cycle #N" badge for disambiguation, per the Fix 1
+                carve-out. */}
+            {(activeCycles.length > 1 || completedCycles.length > 0) && (
               <CycleManagementPanel
                 cycles={activeCycles}
+                completedCycles={completedCycles}
                 selectedId={cycle.id}
                 onSwitch={(c) => {
                   if (!userId) return;
@@ -869,14 +942,22 @@ export function CareerOsDashboard() {
                     if (href) router.push(href);
                   })();
                 }}
-                onAbandon={async (id) => {
+                onDelete={async (id) => {
                   if (!userId) return;
-                  const sb = createClient();
-                  await sb
-                    .from("career_os_cycles")
-                    .update({ status: "abandoned" })
-                    .eq("id", id)
-                    .eq("user_id", userId);
+                  // 2026-06-18 — HARD delete via the new
+                  // /api/career-os/cycles/[id] endpoint. Previously this
+                  // soft-abandoned in place (status='abandoned') despite
+                  // the button being labeled "Delete" — confusing UX.
+                  const res = await fetch(`/api/career-os/cycles/${id}`, {
+                    method: "DELETE",
+                  });
+                  if (!res.ok && res.status !== 204) {
+                    const body = await res.json().catch(() => ({} as { error?: string }));
+                    throw new Error(body.error ?? `Delete failed (${res.status})`);
+                  }
+                  // If the deleted cycle was the active view, the next
+                  // refresh will fall back to whichever active cycle is
+                  // freshest. If none remain, the empty state shows.
                   await refreshCycle(userId);
                 }}
               />

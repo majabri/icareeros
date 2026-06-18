@@ -35,6 +35,14 @@ export interface StageResult {
   error?: string;
 }
 
+/**
+ * Maximum concurrent active cycles a user may have. Soft cap enforced in
+ * startCycle (returns { status: "abandoned" } with an explanatory error
+ * when exceeded). The dashboard UI uses the same constant to disable the
+ * "+ New Cycle" button.
+ */
+export const MAX_ACTIVE_CYCLES = 3;
+
 const STAGE_ORDER: CareerOsStage[] = [
   "evaluate",
   "advise",
@@ -50,6 +58,25 @@ export async function startCycle(
   goal?: string,
 ): Promise<CycleResult> {
   const supabase = createClient();
+
+  // 2026-06-18 — Cap at MAX_ACTIVE_CYCLES concurrent active cycles per user.
+  // Prevents runaway-cycle-creation that has no DB-level backstop today
+  // (no unique index, no CHECK constraint, no trigger — RLS only enforces
+  // ownership). UI mirrors this by disabling the "+ New Cycle" button.
+  const { count } = await supabase
+    .from("career_os_cycles")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if ((count ?? 0) >= MAX_ACTIVE_CYCLES) {
+    return {
+      cycleId:     "",
+      cycleNumber: 0,
+      status:      "abandoned",
+      error:       `You can have up to ${MAX_ACTIVE_CYCLES} active cycles at a time. Complete or delete one before starting a new one.`,
+    };
+  }
 
   // Find the highest existing cycle number for this user
   const { data: existing } = await supabase
@@ -247,3 +274,62 @@ export async function listActiveCycles(
   if (error || !data) return [];
   return data;
 }
+
+/**
+ * Hard delete a cycle (and via FK ON DELETE CASCADE: its career_os_stages
+ * rows). Verifies ownership before deleting — throws if the cycle doesn't
+ * exist or belongs to a different user. RLS provides defence in depth; the
+ * explicit ownership check produces a clean 404 / 403 surface for the API
+ * layer.
+ *
+ * Use this for cycles the user wants permanently removed. For soft archival
+ * semantics use abandonCycle (status -> "abandoned") instead.
+ */
+export async function deleteCycle(
+  userId: string,
+  cycleId: string,
+): Promise<void> {
+  const supabase = createClient();
+
+  const { data: cycle } = await supabase
+    .from("career_os_cycles")
+    .select("id, user_id")
+    .eq("id", cycleId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!cycle) {
+    throw new Error("Cycle not found or not owned by user");
+  }
+
+  const { error } = await supabase
+    .from("career_os_cycles")
+    .delete()
+    .eq("id", cycleId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * List all COMPLETED cycles for a user (status='completed'). Same row
+ * shape as listActiveCycles. Used by the dashboard + CycleSwitcher to
+ * render the read-only "Completed cycles" history section.
+ */
+export async function listCompletedCycles(
+  userId: string,
+): Promise<Array<{ id: string; cycle_number: number; goal: string | null; status: string; current_stage: string; created_at: string }>> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("career_os_cycles")
+    .select("id, cycle_number, goal, status, current_stage, created_at")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data;
+}
+
