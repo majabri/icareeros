@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { Logo } from "@/components/brand/Logo";
 
@@ -12,7 +12,12 @@ interface Props {
 
 /**
  * Persistent top bar.
- * Right side: [avatar] [Full Name]  ·  Settings  [Sign out]
+ *
+ * 2026-06-18 (feat/jobs-user-avatar-menu): the previous right-side cluster
+ * (avatar + name + Settings link + Sign out button as separate controls)
+ * was collapsed into a single clickable avatar/name button that opens a
+ * dropdown with Career Profile / Settings / Sign out. Closes on outside
+ * click or Escape; teal ring on the avatar when open.
  *
  * Name priority: user_profiles.full_name → user_metadata.full_name → email prefix
  * Avatar priority: user_metadata.avatar_url (OAuth) → initials circle (fallback)
@@ -20,8 +25,13 @@ interface Props {
 export function AppTopBar({ onMenuClick, tagline }: Props) {
   const [scrolled,     setScrolled]     = useState(false);
   const [displayName,  setDisplayName]  = useState("");
+  const [email,        setEmail]        = useState("");
   const [avatarUrl,    setAvatarUrl]    = useState<string | null>(null);
   const [initials,     setInitials]     = useState("");
+  const [menuOpen,     setMenuOpen]     = useState(false);
+  const [hovered,      setHovered]      = useState<string | null>(null);
+
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -57,6 +67,7 @@ export function AppTopBar({ onMenuClick, tagline }: Props) {
         null;
 
       setDisplayName(name);
+      setEmail(user.email ?? "");
       setAvatarUrl(avatar);
 
       // Initials for fallback circle
@@ -79,10 +90,65 @@ export function AppTopBar({ onMenuClick, tagline }: Props) {
     return () => window.removeEventListener("icareeros:avatar-updated", onAvatarUpdated);
   }, []);
 
+  // ── Dropdown: outside-click + Escape ───────────────────────────────────────
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocMouseDown(e: MouseEvent) {
+      const root = menuRef.current;
+      if (root && !root.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   async function signOut() {
+    setMenuOpen(false);
     await createClient().auth.signOut();
     window.location.href = "https://icareeros.com/";
   }
+
+  // ── Avatar element (used in trigger + dropdown header) ─────────────────────
+  const renderAvatar = (size: number) =>
+    avatarUrl ? (
+      <img
+        src={avatarUrl}
+        alt={displayName}
+        width={size}
+        height={size}
+        style={{
+          borderRadius: "50%",
+          objectFit: "cover",
+          border: "1.5px solid var(--neutral-200)",
+          flexShrink: 0,
+        }}
+      />
+    ) : (
+      <div
+        aria-hidden="true"
+        style={{
+          width: size, height: size,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+          fontSize: size >= 40 ? "0.95rem" : "0.7rem",
+          fontWeight: 700, color: "#fff",
+          letterSpacing: "0.02em",
+          userSelect: "none",
+        }}
+      >
+        {initials}
+      </div>
+    );
 
   return (
     <header
@@ -120,8 +186,7 @@ export function AppTopBar({ onMenuClick, tagline }: Props) {
         </button>
       )}
 
-      {/* Logo — full SVG with tagline (Amir 2026-05-11: bigger). 220px
-          width = ~47px height in the 56px top bar. */}
+      {/* Logo */}
       <a
         href="/dashboard"
         style={{ display: "inline-flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}
@@ -151,135 +216,218 @@ export function AppTopBar({ onMenuClick, tagline }: Props) {
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Right side: avatar + name · Settings · Sign out */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-        {/* Avatar + name — hidden on very small screens */}
-        {displayName && (
-          <div
-            className="hidden sm:flex items-center gap-2"
-            style={{ marginRight: "0.25rem" }}
+      {/* Right side — clickable avatar/name button + dropdown */}
+      {displayName && (
+        <div ref={menuRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="User menu"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: "0.25rem 0.5rem 0.25rem 0.25rem",
+              borderRadius: "999px",
+              outline: menuOpen ? "2px solid #00B8A9" : "2px solid transparent",
+              outlineOffset: "2px",
+              transition: "outline-color 0.15s, background 0.15s",
+            }}
           >
-            {/* Avatar: photo if available, else initials circle */}
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                width={30}
-                height={30}
-                style={{
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                  border: "1.5px solid var(--neutral-200)",
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 30, height: 30,
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                  fontSize: "0.7rem", fontWeight: 700, color: "#fff",
-                  letterSpacing: "0.02em",
-                  userSelect: "none",
-                }}
-              >
-                {initials}
-              </div>
-            )}
-
-            {/* Full name */}
-            <span style={{
-              fontSize: "0.85rem",
-              color: "var(--neutral-800)",
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}>
+            {renderAvatar(30)}
+            <span
+              className="hidden sm:inline"
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--neutral-800)",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
               {displayName}
             </span>
-          </div>
-        )}
+            {/* Caret */}
+            <svg
+              className="hidden sm:inline"
+              width="12" height="12" viewBox="0 0 24 24"
+              fill="none" stroke="var(--neutral-500)"
+              strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"
+              aria-hidden="true"
+              style={{
+                transform: menuOpen ? "rotate(180deg)" : "rotate(0)",
+                transition: "transform 0.15s",
+                marginLeft: "2px",
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
-        {/* Divider */}
-        {displayName && (
-          <span
-            className="hidden sm:inline"
-            style={{
-              width: 1, height: 16,
-              background: "var(--neutral-300)",
-              display: "inline-block",
-              margin: "0 0.25rem",
-              flexShrink: 0,
-            }}
-            aria-hidden="true"
-          />
-        )}
+          {/* Dropdown panel */}
+          {menuOpen && (
+            <div
+              role="menu"
+              aria-label="User menu"
+              className="icareeros-user-menu"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: 0,
+                minWidth: "260px",
+                maxWidth: "340px",
+                background: "#162338",
+                border: "1px solid #1F2E48",
+                borderRadius: "12px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.35)",
+                padding: "0",
+                overflow: "hidden",
+                zIndex: 250,
+              }}
+            >
+              {/* Header — non-clickable */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "14px 16px",
+                }}
+              >
+                {renderAvatar(40)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#FFFFFF",
+                      fontSize: "0.9rem",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {displayName}
+                  </p>
+                  {email && (
+                    <p
+                      style={{
+                        margin: "2px 0 0",
+                        color: "#7B9AC0",
+                        fontSize: "0.78rem",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {email}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-        {/* Settings link */}
-        <a
-          href="/settings"
-          style={{
-            display: "flex", alignItems: "center", gap: "0.35rem",
-            fontSize: "0.82rem", fontWeight: 600,
-            color: "var(--neutral-600)",
-            textDecoration: "none",
-            padding: "0.35rem 0.65rem",
-            borderRadius: "8px",
-            transition: "background 0.15s, color 0.15s",
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLAnchorElement).style.background = "var(--neutral-100)";
-            (e.currentTarget as HTMLAnchorElement).style.color = "var(--primary)";
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-            (e.currentTarget as HTMLAnchorElement).style.color = "var(--neutral-600)";
-          }}
-          aria-label="Settings"
-        >
-          {/* Gear icon */}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            aria-hidden="true">
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-          <span className="hidden md:inline">Settings</span>
-        </a>
+              <div style={{ height: 1, background: "#1F2E48" }} />
 
-        {/* Sign out button */}
-        <button
-          onClick={signOut}
-          style={{
-            border: "1.5px solid var(--neutral-300)",
-            background: "transparent",
-            color: "var(--neutral-700)",
-            padding: "0.4rem 1rem",
-            borderRadius: "50px",
-            fontWeight: 600,
-            fontSize: "0.82rem",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--primary)";
-            el.style.color = "var(--primary)";
-          }}
-          onMouseLeave={e => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--neutral-300)";
-            el.style.color = "var(--neutral-700)";
-          }}
-        >
-          Sign out
-        </button>
-      </div>
+              {/* Menu items */}
+              <a
+                href="/careerprofile"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                onMouseEnter={() => setHovered("profile")}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "11px 16px",
+                  fontSize: "0.86rem",
+                  color: "#E5EAF2",
+                  textDecoration: "none",
+                  borderLeft: hovered === "profile" ? "3px solid #00B8A9" : "3px solid transparent",
+                  background: hovered === "profile" ? "rgba(0,184,169,0.07)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span>Career Profile</span>
+              </a>
+
+              <a
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                onMouseEnter={() => setHovered("settings")}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "11px 16px",
+                  fontSize: "0.86rem",
+                  color: "#E5EAF2",
+                  textDecoration: "none",
+                  borderLeft: hovered === "settings" ? "3px solid #00B8A9" : "3px solid transparent",
+                  background: hovered === "settings" ? "rgba(0,184,169,0.07)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true">
+                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span>Settings</span>
+              </a>
+
+              <div style={{ height: 1, background: "#1F2E48" }} />
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={signOut}
+                onMouseEnter={() => setHovered("signout")}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  width: "100%",
+                  padding: "11px 16px",
+                  fontSize: "0.86rem",
+                  color: "#E5EAF2",
+                  background: hovered === "signout" ? "rgba(0,184,169,0.07)" : "transparent",
+                  border: "none",
+                  borderLeft: hovered === "signout" ? "3px solid #00B8A9" : "3px solid transparent",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.15s",
+                  font: "inherit",
+                  fontFamily: "inherit",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                <span>Sign out</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
