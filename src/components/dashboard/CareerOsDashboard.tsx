@@ -398,15 +398,32 @@ export function CareerOsDashboard() {
       if (result.status === "abandoned") {
         setError(result.error ?? "Failed to start cycle.");
       } else {
-        // Switch view to the new cycle (in case user had others)
-        await refreshCycle(userId, result.cycleId);
+        // Bug 7 fix (2026-06-18): clear the goal input + close the modal
+        // IMMEDIATELY after the cycle row is committed server-side — before
+        // the refresh round-trip. Previously the cleanup ran after
+        // `await refreshCycle`, so if any of refreshCycle's 5 awaited
+        // queries threw, the goal input stayed on screen with the typed
+        // text and the button just reverted to "Start cycle" — visually
+        // identical to "nothing happened" while the cycle actually existed
+        // in the DB.
         setShowGoalInput(false);
         setGoal("");
+        try {
+          await refreshCycle(userId, result.cycleId);
+        } catch (e) {
+          // Cycle is in the DB — surface a soft error and let the user
+          // recover with a page refresh.
+          setError(
+            "Cycle created, but the dashboard didn't refresh. Reload the page to see it.",
+          );
+          console.warn("[handleStartCycle] refreshCycle failed:", e);
+          router.refresh();
+        }
       }
     } finally {
       setRunning(false);
     }
-  }, [userId, goal, refreshCycle]);
+  }, [userId, goal, refreshCycle, router]);
 
   /**
    * Skip the current cycle without finishing it. Useful for roadmaps where
@@ -442,15 +459,24 @@ export function CareerOsDashboard() {
       if (result.status === "abandoned") {
         setError(result.error ?? "Failed to start cycle.");
       } else {
-        // Switch view to the new cycle
-        await refreshCycle(userId, result.cycleId);
+        // Bug 7 fix (2026-06-18): same pattern as handleStartCycle — clear
+        // the input first, then refresh in a guarded await.
         setShowGoalInput(false);
         setGoal("");
+        try {
+          await refreshCycle(userId, result.cycleId);
+        } catch (e) {
+          setError(
+            "Cycle created, but the dashboard didn't refresh. Reload the page to see it.",
+          );
+          console.warn("[handleStartParallelCycle] refreshCycle failed:", e);
+          router.refresh();
+        }
       }
     } finally {
       setRunning(false);
     }
-  }, [userId, refreshCycle]);
+  }, [userId, refreshCycle, router]);
 
   /**
    * @deprecated Sprint 5 Phase 2 — dashboard 'Run' now routes to the stage
