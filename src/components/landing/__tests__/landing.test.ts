@@ -66,17 +66,23 @@ describe("Landing page component files", () => {
     }
   });
 
-  it("root page.tsx no longer imports the two audience deep-dive sections (v2 2026-06-17)", () => {
+  it("root page.tsx no longer imports or renders the two audience deep-dive sections (v2 2026-06-17)", () => {
     // Per COWORK-BRIEF-platform-subdomain-landings-v2: RootJobSeekerSection
     // and RootHiringTeamSection live ONLY inside JobsLanding / HireLanding.
     // Root surface is now a thin front door (hero + platform overview +
     // vision + CTA).
+    //
+    // Asserting on import statements + JSX render (not arbitrary string
+    // mention) so the doc comment is free to reference the symbols.
     const pageSrc = readFileSync(
       resolve(LANDING_DIR, "../../app/page.tsx"),
       "utf-8"
     );
     for (const { export: name } of SECTION_COMPONENTS) {
-      expect(pageSrc).not.toContain(name);
+      const importRe = new RegExp(`import\\s*\\{\\s*${name}\\s*\\}`);
+      const renderRe = new RegExp(`<${name}\\s*/?>`);
+      expect(pageSrc).not.toMatch(importRe);
+      expect(pageSrc).not.toMatch(renderRe);
     }
   });
 
