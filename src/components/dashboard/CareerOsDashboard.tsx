@@ -185,7 +185,10 @@ function CycleManagementPanel({
   /** HARD delete (DELETE /api/career-os/cycles/[id]). Caller refreshes after. */
   onDelete:         (id: string) => Promise<void>;
 }) {
-  const [open, setOpen]           = useState(false);
+  // 2026-06-18 (Design A): default open. Previously the panel was buried
+  // beneath the cycle ring and collapsed; users couldn't find the Delete
+  // affordance to clear the 3-active-cycle cap.
+  const [open, setOpen]           = useState(true);
   const [confirming, setConfirm]  = useState<string | null>(null);
   const [busy, setBusy]           = useState<string | null>(null);
 
@@ -679,6 +682,42 @@ export function CareerOsDashboard() {
       {/* Phase 5 Item 2 — onboarding banner; renders only when profileReady=false */}
       <OnboardingCta profileReady={profileReady} hasActiveCycle={!!cycle} />
 
+      {/* 2026-06-18 (Design A) — Cycle management panel hoisted to the top,
+          right under the page header / + New Cycle button. Renders whenever
+          there is at least one active cycle OR any completed cycle history
+          to surface — previously only rendered with 2+ active. Default-open
+          (see CycleManagementPanel useState(true)). Makes Delete + Switch
+          discoverable as a primary surface; the user no longer has to scroll
+          past the ring + stage cards to find the affordance that clears the
+          3-active-cycle cap. */}
+      {cycle && (activeCycles.length >= 1 || completedCycles.length > 0) && (
+        <CycleManagementPanel
+          cycles={activeCycles}
+          completedCycles={completedCycles}
+          selectedId={cycle.id}
+          onSwitch={(c) => {
+            if (!userId) return;
+            void (async () => {
+              await refreshCycle(userId, c.id);
+              const stage = c.current_stage as CareerOsStage;
+              const href = STAGE_HREF[stage];
+              if (href) router.push(href);
+            })();
+          }}
+          onDelete={async (id) => {
+            if (!userId) return;
+            const res = await fetch(`/api/career-os/cycles/${id}`, {
+              method: "DELETE",
+            });
+            if (!res.ok && res.status !== 204) {
+              const body = await res.json().catch(() => ({} as { error?: string }));
+              throw new Error(body.error ?? `Delete failed (${res.status})`);
+            }
+            await refreshCycle(userId);
+          }}
+        />
+      )}
+
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -924,44 +963,6 @@ export function CareerOsDashboard() {
               </p>
             </div>
 
-            {/* Multi-cycle switcher — renders when user has 2+ active
-                cycles OR any completed cycle to surface. The dropdown rows
-                show the "Cycle #N" badge for disambiguation, per the Fix 1
-                carve-out. */}
-            {(activeCycles.length > 1 || completedCycles.length > 0) && (
-              <CycleManagementPanel
-                cycles={activeCycles}
-                completedCycles={completedCycles}
-                selectedId={cycle.id}
-                onSwitch={(c) => {
-                  if (!userId) return;
-                  void (async () => {
-                    await refreshCycle(userId, c.id);
-                    const stage = c.current_stage as CareerOsStage;
-                    const href = STAGE_HREF[stage];
-                    if (href) router.push(href);
-                  })();
-                }}
-                onDelete={async (id) => {
-                  if (!userId) return;
-                  // 2026-06-18 — HARD delete via the new
-                  // /api/career-os/cycles/[id] endpoint. Previously this
-                  // soft-abandoned in place (status='abandoned') despite
-                  // the button being labeled "Delete" — confusing UX.
-                  const res = await fetch(`/api/career-os/cycles/${id}`, {
-                    method: "DELETE",
-                  });
-                  if (!res.ok && res.status !== 204) {
-                    const body = await res.json().catch(() => ({} as { error?: string }));
-                    throw new Error(body.error ?? `Delete failed (${res.status})`);
-                  }
-                  // If the deleted cycle was the active view, the next
-                  // refresh will fall back to whichever active cycle is
-                  // freshest. If none remain, the empty state shows.
-                  await refreshCycle(userId);
-                }}
-              />
-            )}
           </section>
 
           {/* On-demand coaching brief — now below the active-cycle indicator
