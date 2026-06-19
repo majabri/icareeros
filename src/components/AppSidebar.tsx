@@ -91,8 +91,9 @@ const STAGES: StageSection[] = [
     // sidebar placement changed.
     stage: "advise", num: 2, label: "Advise", icon: "resume",
     items: [
-      { href: "/advise", label: "Career Paths", icon: "resume" },
-      { href: "/coach",  label: "AI Coach",     icon: "coach"  },
+      { href: "/advise",        label: "Career Paths",    icon: "resume" },
+      { href: "/aicoach",       label: "AI Coach",         icon: "coach"  },
+      { href: "/personalcoach", label: "Personal Coach",   icon: "coach"  },
     ],
   },
   {
