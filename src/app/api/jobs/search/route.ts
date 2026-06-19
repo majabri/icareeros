@@ -22,7 +22,9 @@ import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import type { CookieOptions } from "@supabase/ssr";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import { type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import { searchOpportunities } from "@/services/integrations/opportunityAggregator";
+import type { OpportunitySearchFilters } from "@/services/opportunityTypes";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
 import { chaseApplyUrlsBatch }    from "@/services/jobs/applyUrlChaser";
@@ -222,24 +224,52 @@ export async function POST(req: Request) {
     }
 
     const variants = await buildQueryVariants(params.what ?? "");
+
+    // 2026-06-18 (feat/jobs-opportunity-aggregator) — route through the
+    // aggregator so each variant fans out to LinkedIn / Indeed / DB / Adzuna
+    // in parallel instead of Adzuna-only. The aggregator handles per-source
+    // dedupe + fallback already; we still dedupe again ACROSS variants since
+    // each variant is a separate query.
+    function paramsToFilters(what: string): OpportunitySearchFilters {
+      const isRemote = !!params.remote
+        || (params.where ?? "").toLowerCase().includes("remote");
+      const types = params.jobType ? [params.jobType] : [];
+      return {
+        skills:       [],
+        jobTypes:     types,
+        location:     isRemote ? "remote" : (params.where ?? ""),
+        query:        what,
+        careerLevel:  "",
+        targetTitles: [what],
+        salaryMin:    params.salaryMin !== undefined ? String(params.salaryMin) : undefined,
+        salaryMax:    params.salaryMax !== undefined ? String(params.salaryMax) : undefined,
+        searchSource: "all",
+        minFitScore:  0,
+        showFlagged:  false,
+      };
+    }
+
     const variantResults = await Promise.all(
       variants.map((what) =>
-        searchAdzuna({ ...params, what, resultsPerPage: 10 }).catch((e) => {
+        searchOpportunities({
+          filters: paramsToFilters(what),
+          limit:   40,                  // ~ 4 sources × 10
+          offset:  0,
+        }).catch((e) => {
           console.warn(`[/api/jobs/search] variant "${what}" failed:`, e instanceof Error ? e.message : e);
-          return { opportunities: [], total: 0, fallback: true };
+          return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };
         }),
       ),
     );
 
-    // Merge + dedupe across variants. Tag the result `total` with the sum of
-    // raw totals (which may double-count) for transparency; UI cares about
-    // the unique count anyway.
+    // Merge + dedupe across variants AND aggregate per-source counts so the
+    // UI can show "25 jobs from Adzuna · LinkedIn · Database" without
+    // double-counting.
     const seenKeys = new Set<string>();
     const mergedOpps: OpportunityResult[] = [];
     let rawTotal = 0;
-    let anyFallback = false;
+    const sourceCounts: Record<string, { count: number; fallback?: boolean }> = {};
     for (const vr of variantResults) {
-      if (vr.fallback) anyFallback = true;
       rawTotal += vr.total;
       for (const opp of vr.opportunities) {
         const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
@@ -248,11 +278,25 @@ export async function POST(req: Request) {
           mergedOpps.push(opp);
         }
       }
+      for (const [src, info] of Object.entries(vr.sources ?? {})) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const i = info as any;
+        const acc = sourceCounts[src] ?? { count: 0, fallback: undefined };
+        acc.count += i.count ?? 0;
+        if (typeof i.fallback === "boolean") {
+          acc.fallback = (acc.fallback ?? true) && i.fallback;
+        }
+        sourceCounts[src] = acc;
+      }
     }
+    // Treat the whole result as "fallback" only when every source that
+    // reported a fallback flag was in fallback mode.
+    const anyFallback = Object.values(sourceCounts).every(s => s.fallback === true);
     const result = {
       opportunities: mergedOpps,
       total:         rawTotal,
       fallback:      anyFallback,
+      sources:       sourceCounts,
     };
 
     // Resolve direct apply-on-company URLs from descriptions, then chase
@@ -322,6 +366,9 @@ export async function POST(req: Request) {
       derivedFrom,
       page: params.page,
       sourceFallback: result.fallback,
+      // 2026-06-18 — per-source counts so the page can show
+      // "N opportunities from Adzuna · LinkedIn · Database".
+      sources: result.sources,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Search failed";

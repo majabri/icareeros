@@ -51,6 +51,9 @@ export default function JobsPage() {
   const [total,          setTotal]          = useState(0);
   const [derivedFrom,    setDerivedFrom]    = useState<{ source: "auto" | "manual"; what: string; where: string } | null>(null);
   const [warning,        setWarning]        = useState<string | null>(null);
+  // 2026-06-18 — per-source counts from the aggregator. Used by the small
+  // "from Adzuna · LinkedIn · Database" line below the results count.
+  const [sources,        setSources]        = useState<Record<string, { count: number; fallback?: boolean }>>({});
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
 
@@ -85,6 +88,7 @@ export default function JobsPage() {
     setWarning(null);
     setResults([]);
     setFitScores({});
+    setSources({});
 
     try {
       // Auto mode → AI agent (multi-query plan + parallel run + dedupe)
@@ -115,6 +119,9 @@ export default function JobsPage() {
       setResults(opps);
       setTotal(typeof data.total === "number" ? data.total : opps.length);
       setDerivedFrom(data.derivedFrom ?? null);
+      if (data.sources && typeof data.sources === "object") {
+        setSources(data.sources as Record<string, { count: number; fallback?: boolean }>);
+      }
       if (data.warning) setWarning(data.warning);
 
       // Non-blocking fit scoring against active cycle
@@ -333,6 +340,32 @@ export default function JobsPage() {
           <div className="text-sm text-gray-500">
             <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
             {scoringFit && <span className="ml-2 text-xs">· Ranking…</span>}
+
+            {/* 2026-06-18 — per-source indicator. Renders muted slate-blue,
+                only sources that actually returned results. Sorted by count
+                desc so the heaviest source reads first. */}
+            {Object.keys(sources).length > 0 && (() => {
+              const labels: Record<string, string> = {
+                adzuna:   "Adzuna",
+                linkedin: "LinkedIn",
+                indeed:   "Indeed",
+                database: "Database",
+              };
+              const active = Object.entries(sources)
+                .filter(([, info]) => (info?.count ?? 0) > 0)
+                .sort(([, a], [, b]) => (b.count ?? 0) - (a.count ?? 0))
+                .map(([k]) => labels[k] ?? k);
+              if (active.length === 0) return null;
+              return (
+                <div
+                  className="mt-1 text-[11px]"
+                  style={{ color: "#7B9AC0" }}
+                  aria-label={`Sources: ${active.join(", ")}`}
+                >
+                  from {active.join(" · ")}
+                </div>
+              );
+            })()}
           </div>
           <div className="space-y-3">
             {decoratedResults.map((opp, i) => (

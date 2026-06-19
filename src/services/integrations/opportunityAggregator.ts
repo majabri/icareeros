@@ -10,10 +10,11 @@
 
 import { searchLinkedIn } from "./linkedInAdapter";
 import { searchIndeed }   from "./indeedAdapter";
+import { searchAdzuna, type AdzunaSearchParams } from "./adzunaAdapter";
 import { createClient }   from "@/lib/supabase";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
 
-export type SearchSource = "all" | "linkedin" | "indeed" | "database";
+export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna";
 
 export interface AggregatedSearchOptions {
   filters: OpportunitySearchFilters;
@@ -29,6 +30,7 @@ export interface AggregatedSearchResult {
     linkedin?: { count: number; fallback: boolean };
     indeed?:   { count: number; fallback: boolean };
     database?: { count: number };
+    adzuna?:   { count: number; fallback: boolean };
   };
 }
 
@@ -49,11 +51,15 @@ export async function searchOpportunities(
   const includeLinkedIn = includeAll || sources.includes("linkedin");
   const includeIndeed   = includeAll || sources.includes("indeed");
   const includeDatabase = includeAll || sources.includes("database");
+  const includeAdzuna   = includeAll || sources.includes("adzuna");
 
-  const perSource = Math.ceil(limit / (includeAll ? 3 : sources.length));
+  // Per-source budget. We now fan out to FOUR sources by default, so
+  // include Adzuna in the divisor when "all" was requested.
+  const perSource = Math.ceil(limit / (includeAll ? 4 : sources.length));
 
-  // Fan out searches in parallel
-  const [linkedInRes, indeedRes, dbRes] = await Promise.all([
+  // Fan out in parallel. Use Promise.allSettled so a single-source failure
+  // (e.g. Adzuna 429, Indeed edge-fn outage) doesn't sink the whole batch.
+  const [linkedInSettled, indeedSettled, dbSettled, adzunaSettled] = await Promise.allSettled([
     includeLinkedIn
       ? searchLinkedIn({ filters, limit: perSource, offset })
       : Promise.resolve(null),
@@ -63,16 +69,29 @@ export async function searchOpportunities(
     includeDatabase
       ? searchDatabase(filters, perSource, offset)
       : Promise.resolve(null),
+    includeAdzuna
+      ? searchAdzuna(filtersToAdzunaParams(filters, perSource, offset))
+      : Promise.resolve(null),
   ]);
 
-  // Merge and deduplicate by URL (first seen wins)
+  // Unwrap settled results. Failures are logged but degrade silently
+  // to an empty/fallback shape so the aggregator's contract is preserved.
+  const linkedInRes = unwrap(linkedInSettled, "linkedin");
+  const indeedRes   = unwrap(indeedSettled,   "indeed");
+  const dbRes       = unwrap(dbSettled,       "database");
+  const adzunaRes   = unwrap(adzunaSettled,   "adzuna");
+
+  // Merge and deduplicate by URL (first seen wins). Order matters — we
+  // prefer LinkedIn → Indeed → DB → Adzuna so the source that surfaces a
+  // job first owns the dedupe key. Per-source counts below are reported
+  // BEFORE dedupe so the page can show raw provider counts.
   const seen = new Set<string>();
   const merged: OpportunityResult[] = [];
 
-  for (const result of [linkedInRes, indeedRes, dbRes]) {
+  for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes]) {
     if (!result) continue;
     for (const opp of result.opportunities) {
-      const key = opp.url || `${opp.company}::${opp.title}`;
+      const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
         merged.push(opp);
@@ -94,7 +113,64 @@ export async function searchOpportunities(
       ...(linkedInRes ? { linkedin: { count: linkedInRes.opportunities.length, fallback: linkedInRes.fallback } } : {}),
       ...(indeedRes   ? { indeed:   { count: indeedRes.opportunities.length,   fallback: indeedRes.fallback   } } : {}),
       ...(dbRes       ? { database: { count: dbRes.opportunities.length                                       } } : {}),
+      ...(adzunaRes   ? { adzuna:   { count: adzunaRes.opportunities.length,   fallback: adzunaRes.fallback   } } : {}),
     },
+  };
+}
+
+// ── Settled-result unwrapper ──────────────────────────────────────────────
+//
+// allSettled fixes the "one bad source breaks them all" problem we had with
+// Promise.all. Each adapter already returns a fallback shape on its own
+// errors, but Promise.allSettled handles the case where the adapter itself
+// throws unexpectedly (e.g. network reset before the try/catch fires).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrap(settled: PromiseSettledResult<any>, sourceName: string): any {
+  if (settled.status === "fulfilled") return settled.value;
+  console.warn(`[aggregator] ${sourceName} settle-rejected:`, settled.reason);
+  // Mimic the adapter empty/fallback shape so the merge loop above is happy.
+  if (sourceName === "database") return { opportunities: [], total: 0 };
+  return { opportunities: [], total: 0, fallback: true };
+}
+
+// ── Filters → AdzunaSearchParams adapter ──────────────────────────────────
+//
+// OpportunitySearchFilters is the shared shape used by the LinkedIn/Indeed
+// adapters via the search-jobs edge function. Adzuna's REST API takes a
+// flatter shape (what/where/jobType/salary*) — translate here.
+function filtersToAdzunaParams(
+  filters: OpportunitySearchFilters,
+  limit: number,
+  offset: number,
+): AdzunaSearchParams {
+  const what = filters.query
+    || filters.targetTitles?.[0]
+    || filters.skills?.[0]
+    || "";
+
+  const isRemote = (filters.location ?? "").toLowerCase().includes("remote");
+
+  const firstType = (filters.jobTypes ?? [])[0] ?? "";
+  const jobType =
+    firstType === "full-time" || firstType === "full_time" ? "full_time"
+    : firstType === "part-time" || firstType === "part_time" ? "part_time"
+    : firstType === "contract" ? "contract"
+    : firstType === "permanent" ? "permanent"
+    : undefined;
+
+  const salaryMin = filters.salaryMin ? Number(filters.salaryMin) : undefined;
+  const salaryMax = filters.salaryMax ? Number(filters.salaryMax) : undefined;
+
+  return {
+    what,
+    where: isRemote ? undefined : filters.location || undefined,
+    remote: isRemote,
+    jobType,
+    salaryMin: Number.isFinite(salaryMin) ? salaryMin : undefined,
+    salaryMax: Number.isFinite(salaryMax) ? salaryMax : undefined,
+    resultsPerPage: Math.min(50, Math.max(10, limit)),
+    page: Math.floor(offset / Math.max(1, limit)) + 1,
+    sortBy: "relevance",
   };
 }
 
