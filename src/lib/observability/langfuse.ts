@@ -71,7 +71,7 @@ export function createTracedClient(userId: string, routeName: string): Anthropic
     // to `undefined` and the SDK threw:
     //   "a.create(...).withResponse is not a function"
     //
-    // This broke EVERY streaming route in the project (/aicoach,
+    // This broke EVERY streaming route in the project (/advise coach tab,
     // /interview/prep, /interview/session). Non-streaming `messages.create`
     // callers were unaffected because the await-wrapping was harmless for
     // them.

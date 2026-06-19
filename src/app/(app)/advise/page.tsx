@@ -1,38 +1,22 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import Link from "next/link";
-import { AdvisePageInner } from "./AdvisePageInner";
+import { AdviseTabs } from "./AdviseTabs";
 
 export const metadata: Metadata = { title: "Career Advice — iCareerOS" };
 
 export default function AdvisePage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
+      <header className="mb-2">
         <h2 className="text-2xl font-semibold text-gray-900">Career Advice</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Stage 2 of Career OS. AI-recommended paths, next actions, and a realistic timeline based on your evaluation.
+          Stage 2 of Career OS. AI-recommended paths, next actions, a realistic
+          timeline based on your evaluation — plus your AI career coach.
         </p>
 
-        {/* 2026-06-18 (5-stage refactor) — sub-nav tabs. Coach is now a
-            sub-feature of Advise; the page that handles AI coaching lives
-            at /coach (unchanged). */}
-        <nav className="mt-4 flex gap-1 border-b border-gray-200" aria-label="Advise sub-navigation">
-          <span
-            className="border-b-2 border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700"
-            aria-current="page"
-          >
-            Career Paths
-          </span>
-          <Link
-            href="/aicoach"
-            className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
-          >
-            AI Coach
-          </Link>
-        </nav>
+        {/* 2026-06-18 (T-022) — sub-nav tabs. AI Coach folded into this page
+            from /aicoach; the standalone /aicoach route is retired. */}
+        <AdviseTabs />
       </header>
-      <Suspense fallback={null}><AdvisePageInner /></Suspense>
     </div>
   );
 }
