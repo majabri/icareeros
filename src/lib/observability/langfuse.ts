@@ -57,34 +57,65 @@ export function createTracedClient(userId: string, routeName: string): Anthropic
   const originalCreate = base.messages.create.bind(base.messages) as (...args: any[]) => any;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tracedCreate = async (...args: any[]) => {
-    const [params] = args as [Anthropic.MessageCreateParamsNonStreaming];
-    const trace = lf.trace({ name: routeName, userId });
-    const generation = trace.generation({
-      name: `${routeName}/generation`,
-      model: params.model,
-      input: JSON.stringify(params.messages ?? params.system ?? ""),
-      startTime: new Date(),
-    });
+  const tracedCreate = (...args: any[]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [params] = args as [any];
 
-    const startMs = Date.now();
-    try {
-      const result = await originalCreate(...args);
-      generation.end({
-        output: result?.content?.[0]?.text ?? JSON.stringify(result),
-        usage: {
-          input:  result?.usage?.input_tokens  ?? 0,
-          output: result?.usage?.output_tokens ?? 0,
-        },
-      });
-      trace.update({ metadata: { durationMs: Date.now() - startMs } });
-      void lf.flushAsync().catch(() => {});
-      return result;
-    } catch (err) {
-      generation.end({ output: String(err), level: "ERROR" });
-      void lf.flushAsync().catch(() => {});
-      throw err;
+    // 2026-06-18 — Streaming pass-through (P0 fix).
+    //
+    // The SDK's `messages.stream()` helper internally calls
+    //   `messages.create({...params, stream: true}).withResponse()`
+    // and depends on the create-call returning an APIPromise (which has
+    // .withResponse()), NOT a plain Promise. The Langfuse tracing wrapper
+    // was an `async` function, so the chained `.withResponse()` resolved
+    // to `undefined` and the SDK threw:
+    //   "a.create(...).withResponse is not a function"
+    //
+    // This broke EVERY streaming route in the project (/aicoach,
+    // /interview/prep, /interview/session). Non-streaming `messages.create`
+    // callers were unaffected because the await-wrapping was harmless for
+    // them.
+    //
+    // The original intent of this file (see comment block below — "only
+    // patches the non-streaming messages.create") was correct in spirit
+    // but not in implementation. The branch below restores that intent:
+    // when the caller is streaming, pass through to the raw SDK so the
+    // internal APIPromise + .withResponse() chain stays intact. Per-stream
+    // tracing for streaming routes is handled post-completion via
+    // recordCoachSessionTrace and friends (see below).
+    if (params?.stream === true) {
+      return originalCreate(...args);
     }
+
+    // Non-streaming path: existing trace wrapper (unchanged).
+    return (async () => {
+      const trace = lf.trace({ name: routeName, userId });
+      const generation = trace.generation({
+        name: `${routeName}/generation`,
+        model: params.model,
+        input: JSON.stringify(params.messages ?? params.system ?? ""),
+        startTime: new Date(),
+      });
+
+      const startMs = Date.now();
+      try {
+        const result = await originalCreate(...args);
+        generation.end({
+          output: result?.content?.[0]?.text ?? JSON.stringify(result),
+          usage: {
+            input:  result?.usage?.input_tokens  ?? 0,
+            output: result?.usage?.output_tokens ?? 0,
+          },
+        });
+        trace.update({ metadata: { durationMs: Date.now() - startMs } });
+        void lf.flushAsync().catch(() => {});
+        return result;
+      } catch (err) {
+        generation.end({ output: String(err), level: "ERROR" });
+        void lf.flushAsync().catch(() => {});
+        throw err;
+      }
+    })();
   };
 
   // Patch messages.create in place — avoids Proxy cast issues
