@@ -25,7 +25,7 @@ export default function AdvisePage() {
             Career Paths
           </span>
           <Link
-            href="/coach"
+            href="/aicoach"
             className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
           >
             AI Coach

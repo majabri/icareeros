@@ -83,6 +83,11 @@ const nextConfig = {
       { source: "/jobs",            destination: "/opportunities",        permanent: true },
       { source: "/applications",    destination: "/pipeline",             permanent: true },
       { source: "/targetskills",    destination: "/learn",                permanent: true },
+
+      // 2026-06-18 (feat/jobs-personal-coach) — /coach → /aicoach. The
+      // page (server + UI) moved to /aicoach; bookmarks + Career Profile
+      // dropdown still work via this 308.
+      { source: "/coach",           destination: "/aicoach",              permanent: true },
     ];
   },
 

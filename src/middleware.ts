@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { isProductionHost, platformFromHost } from "@/lib/platform-host";
 
 // ─── Route lists ────────────────────────────────────────────────────────────
-const PROTECTED = ["/dashboard", "/settings", "/opportunities", "/pipeline", "/profile", "/careerprofile", "/interview", "/evaluate", "/advise", "/learn", "/act", "/coach", "/achieve", "/offers", "/support", "/recruiter"];
+const PROTECTED = ["/dashboard", "/settings", "/opportunities", "/pipeline", "/profile", "/careerprofile", "/interview", "/evaluate", "/advise", "/learn", "/act", "/aicoach", "/personalcoach", "/achieve", "/offers", "/support", "/recruiter"];
 const ADMIN_PROTECTED = ["/admin"];
 const AUTH_ONLY = ["/auth/login", "/auth/signup"];
 

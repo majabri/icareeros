@@ -168,7 +168,7 @@ export function CoachBriefPanel({ cycleId, initial, className, plan, profileRead
           </p>
           {plan && plan !== "free" && (
             <p className="mt-3 text-sm">
-              <Link href="/coach" className="font-semibold text-brand-700 hover:text-brand-900" data-testid="coach-brief-cta-chat">
+              <Link href="/aicoach" className="font-semibold text-brand-700 hover:text-brand-900" data-testid="coach-brief-cta-chat">
                 Or chat with your coach →
               </Link>
             </p>
