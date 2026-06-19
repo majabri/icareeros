@@ -91,9 +91,11 @@ const STAGES: StageSection[] = [
     // sidebar placement changed.
     stage: "advise", num: 2, label: "Advise", icon: "resume",
     items: [
-      { href: "/advise",        label: "Career Paths",    icon: "resume" },
-      { href: "/aicoach",       label: "AI Coach",         icon: "coach"  },
-      { href: "/personalcoach", label: "Personal Coach",   icon: "coach"  },
+      // 2026-06-18 (T-022) — AI Coach folded into the /advise page as a
+      // tab. Standalone /aicoach route retired; the sidebar Career Paths
+      // entry now lands on /advise (Career Paths tab active by default).
+      { href: "/advise",        label: "Career Paths",   icon: "resume" },
+      { href: "/personalcoach", label: "Personal Coach", icon: "coach"  },
     ],
   },
   {
