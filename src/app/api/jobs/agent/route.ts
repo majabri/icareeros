@@ -23,7 +23,9 @@ import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
-import { searchAdzuna, type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import { type AdzunaSearchParams } from "@/services/integrations/adzunaAdapter";
+import { searchOpportunities } from "@/services/integrations/opportunityAggregator";
+import type { OpportunitySearchFilters } from "@/services/opportunityTypes";
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { validateJobs } from "@/services/jobs/jobValidator";
 import { attachCompanyApplyUrls } from "@/services/jobs/companyUrlResolver";
@@ -229,10 +231,33 @@ QUALITY
       page:    1,
     }));
 
+    // 2026-06-18 (feat/jobs-opportunity-aggregator) — route each plan
+    // through the aggregator so it fans out to LinkedIn / Indeed / DB /
+    // Adzuna in parallel instead of Adzuna-only. The aggregator handles
+    // per-source dedupe; we still dedupe ACROSS plans below.
+    function planParamsToFilters(p: AdzunaSearchParams): OpportunitySearchFilters {
+      const isRemote = !!p.remote || (p.where ?? "").toLowerCase().includes("remote");
+      return {
+        skills:       [],
+        jobTypes:     p.jobType ? [p.jobType] : [],
+        location:     isRemote ? "remote" : (p.where ?? ""),
+        query:        p.what ?? "",
+        careerLevel:  "",
+        targetTitles: p.what ? [p.what] : [],
+        searchSource: "all",
+        minFitScore:  0,
+        showFlagged:  false,
+      };
+    }
+
     const results = await Promise.all(
-      adzunaParamsList.map(p => searchAdzuna(p).catch(e => {
+      adzunaParamsList.map(p => searchOpportunities({
+        filters: planParamsToFilters(p),
+        limit:   40,   // ~4 sources × 10 per plan
+        offset:  0,
+      }).catch(e => {
         console.warn("[jobs/agent] one plan failed:", e instanceof Error ? e.message : e);
-        return { opportunities: [], total: 0, fallback: true };
+        return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };
       }))
     );
 
@@ -240,9 +265,12 @@ QUALITY
     const seen = new Set<string>();
     const merged: OpportunityResult[] = [];
     let aggregateTotal = 0;
-    let allFallback = true;
+    // Per-source counts across all plans, summed pre-dedupe — the UI uses
+    // this for the "from Adzuna · LinkedIn · Database" line. allFallback
+    // stays true only when EVERY source that reports a fallback flag is in
+    // fallback mode (i.e. nothing real came back).
+    const sourceCounts: Record<string, { count: number; fallback?: boolean }> = {};
     results.forEach((res) => {
-      if (!res.fallback) allFallback = false;
       aggregateTotal += res.total;
       for (const opp of res.opportunities) {
         const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
@@ -251,7 +279,18 @@ QUALITY
           merged.push(opp);
         }
       }
+      for (const [src, info] of Object.entries(res.sources ?? {})) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const i = info as any;
+        const acc = sourceCounts[src] ?? { count: 0, fallback: undefined };
+        acc.count += i.count ?? 0;
+        if (typeof i.fallback === "boolean") {
+          acc.fallback = (acc.fallback ?? true) && i.fallback;
+        }
+        sourceCounts[src] = acc;
+      }
     });
+    const allFallback = Object.values(sourceCounts).every(s => s.fallback === true);
 
     // ── Validate quality + drop bad jobs ─────────────────────────────────
     const validated = validateJobs(merged);
@@ -546,6 +585,8 @@ QUALITY
         flagged:     validated.flaggedCount,
       },
       sourceFallback: allFallback,
+      // 2026-06-18 — per-source counts summed across all plans.
+      sources: sourceCounts,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Agent search failed";

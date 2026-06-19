@@ -99,4 +99,130 @@ describe("opportunityAggregator", () => {
       body: expect.objectContaining({ source_filter: "database" }),
     });
   });
+
+  // ── 2026-06-18 (feat/jobs-opportunity-aggregator) — Adzuna added as
+  //    a 4th source ────────────────────────────────────────────────────
+  describe("Adzuna source", () => {
+    const ADZUNA_OPP = {
+      id: "adzuna-001",
+      title: "Adzuna PM",
+      company: "AdzCo",
+      url: "https://adzuna.example.com/jobs/1",
+      source: "adzuna",
+      fit_score: 50,
+    };
+
+    function mockAdzunaFetch(payload: { results: Array<Record<string, unknown>>; count: number }) {
+      return vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => payload,
+      } as Response);
+    }
+
+    it("includes Adzuna results in the aggregated set when keys are configured", async () => {
+      process.env.ADZUNA_APP_ID  = "test-app-id";
+      process.env.ADZUNA_APP_KEY = "test-app-key";
+
+      // LinkedIn / Indeed / DB return empty so we isolate Adzuna's contribution
+      mockFunctions.invoke
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "linkedin" }, error: null })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "indeed"   }, error: null })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "database" }, error: null });
+
+      mockAdzunaFetch({
+        results: [{
+          id: "001",
+          title: "Adzuna PM",
+          company:  { display_name: "AdzCo" },
+          location: { display_name: "Remote" },
+          description: "great role",
+          redirect_url: ADZUNA_OPP.url,
+          created: "2026-06-18T00:00:00Z",
+        }],
+        count: 1,
+      });
+
+      const result = await searchOpportunities({ filters: baseFilters });
+
+      expect(result.opportunities.length).toBe(1);
+      expect(result.opportunities[0].source).toBe("adzuna");
+      expect(result.sources.adzuna).toEqual({ count: 1, fallback: false });
+    });
+
+    it("falls back to empty when ADZUNA_APP_ID / ADZUNA_APP_KEY are missing — does not throw", async () => {
+      // Force the adapter's `if (!appId || !appKey)` early-return path.
+      // Use empty strings (falsy) rather than delete — the latter can leak
+      // earlier-test values across the same vitest worker.
+      process.env.ADZUNA_APP_ID  = "";
+      process.env.ADZUNA_APP_KEY = "";
+
+      // All edge-fn sources empty too
+      mockFunctions.invoke.mockResolvedValue({
+        data: { opportunities: [], total: 0, source: "database" },
+        error: null,
+      });
+
+      const result = await searchOpportunities({ filters: baseFilters });
+
+      // Behavioural assertion (impl-independent of fetch call count):
+      // aggregator returns the empty/fallback shape, doesn't throw.
+      expect(result.opportunities).toEqual([]);
+      expect(result.sources.adzuna).toEqual({ count: 0, fallback: true });
+    });
+
+    it("dedupes across Adzuna + LinkedIn when both return the same URL", async () => {
+      process.env.ADZUNA_APP_ID  = "test-app-id";
+      process.env.ADZUNA_APP_KEY = "test-app-key";
+
+      const SHARED_URL = "https://shared.example.com/jobs/77";
+
+      mockFunctions.invoke
+        // LinkedIn returns the shared URL
+        .mockResolvedValueOnce({
+          data: {
+            opportunities: [{
+              id: "li-77",
+              title: "Shared Role",
+              company: "Shared Co",
+              url: SHARED_URL,
+              source: "linkedin",
+              fit_score: 80,
+            }],
+            total: 1,
+            source: "linkedin",
+          },
+          error: null,
+        })
+        // Indeed empty
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "indeed"   }, error: null })
+        // DB empty
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "database" }, error: null });
+
+      // Adzuna ALSO returns the shared URL — should dedupe with LinkedIn
+      mockAdzunaFetch({
+        results: [{
+          id: "001",
+          title: "Shared Role",
+          company:  { display_name: "Shared Co" },
+          location: { display_name: "Remote" },
+          description: "duplicate post",
+          redirect_url: SHARED_URL,
+          created: "2026-06-18T00:00:00Z",
+        }],
+        count: 1,
+      });
+
+      const result = await searchOpportunities({ filters: baseFilters });
+
+      // Cross-source dedupe: only ONE entry in the merged set, but per-source
+      // counts still show 1 in each provider (so the page can report "1 from
+      // LinkedIn, 1 from Adzuna" without lying about provider reach).
+      expect(result.opportunities.length).toBe(1);
+      expect(result.sources.linkedin?.count).toBe(1);
+      expect(result.sources.adzuna?.count).toBe(1);
+      // LinkedIn came first in the merge order → its row wins the dedupe slot.
+      expect(result.opportunities[0].source).toBe("linkedin");
+    });
+  });
 });
