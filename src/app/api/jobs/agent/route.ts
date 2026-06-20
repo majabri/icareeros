@@ -292,6 +292,22 @@ QUALITY
     });
     const allFallback = Object.values(sourceCounts).every(s => s.fallback === true);
 
+    // ── Merge quality-gate filtered results across plans (Brief Task 3) ──
+    const filteredAcc: { count: number; reasons: Array<{ title: string; company: string; reason: string }> } = { count: 0, reasons: [] };
+    results.forEach((res) => {
+      if (res && (res as { filtered?: { count: number; reasons?: Array<{ title: string; company: string; reason: string }> } }).filtered) {
+        const f = (res as { filtered: { count: number; reasons?: Array<{ title: string; company: string; reason: string }> } }).filtered;
+        filteredAcc.count += f.count ?? 0;
+        if (Array.isArray(f.reasons)) {
+          for (const r of f.reasons) {
+            if (!filteredAcc.reasons.some(x => x.title === r.title && x.company === r.company)) {
+              filteredAcc.reasons.push(r);
+            }
+          }
+        }
+      }
+    });
+
     // ── Validate quality + drop bad jobs ─────────────────────────────────
     const validated = validateJobs(merged);
     const cleaned   = validated.kept;
@@ -587,6 +603,8 @@ QUALITY
       sourceFallback: allFallback,
       // 2026-06-18 — per-source counts summed across all plans.
       sources: sourceCounts,
+      // 2026-06-20 — quality-gate filtered postings (Brief Task 3).
+      filtered: filteredAcc,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Agent search failed";

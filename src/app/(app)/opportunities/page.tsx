@@ -54,6 +54,9 @@ export default function JobsPage() {
   // 2026-06-18 — per-source counts from the aggregator. Used by the small
   // "from Adzuna · LinkedIn · Database" line below the results count.
   const [sources,        setSources]        = useState<Record<string, { count: number; fallback?: boolean }>>({});
+  // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
+  const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
+  const [filteredOpen,   setFilteredOpen]   = useState(false);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
 
@@ -89,6 +92,7 @@ export default function JobsPage() {
     setResults([]);
     setFitScores({});
     setSources({});
+    setFiltered({ count: 0, reasons: [] });
 
     try {
       // Auto mode → AI agent (multi-query plan + parallel run + dedupe)
@@ -121,6 +125,9 @@ export default function JobsPage() {
       setDerivedFrom(data.derivedFrom ?? null);
       if (data.sources && typeof data.sources === "object") {
         setSources(data.sources as Record<string, { count: number; fallback?: boolean }>);
+      }
+      if (data.filtered && typeof data.filtered === "object") {
+        setFiltered(data.filtered as { count: number; reasons: Array<{ title: string; company: string; reason: string }> });
       }
       if (data.warning) setWarning(data.warning);
 
@@ -340,16 +347,30 @@ export default function JobsPage() {
           <div className="text-sm text-gray-500">
             <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
             {scoringFit && <span className="ml-2 text-xs">· Ranking…</span>}
+            {filtered.count > 0 && (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setFilteredOpen(true)}
+                  className="text-xs underline underline-offset-2 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 rounded"
+                  style={{ color: "#7B9AC0" }}
+                >
+                  Filtered out {filtered.count} low-quality posting{filtered.count === 1 ? "" : "s"}
+                </button>
+              </div>
+            )}
 
             {/* 2026-06-18 — per-source indicator. Renders muted slate-blue,
                 only sources that actually returned results. Sorted by count
                 desc so the heaviest source reads first. */}
             {Object.keys(sources).length > 0 && (() => {
               const labels: Record<string, string> = {
-                adzuna:   "Adzuna",
-                linkedin: "LinkedIn",
-                indeed:   "Indeed",
-                database: "Database",
+                adzuna:    "Adzuna",
+                linkedin:  "LinkedIn",
+                indeed:    "Indeed",
+                database:  "Database",
+                ats:       "ATS Direct",
+                hackernews:"Hacker News",
               };
               const active = Object.entries(sources)
                 .filter(([, info]) => (info?.count ?? 0) > 0)
@@ -363,6 +384,20 @@ export default function JobsPage() {
                   aria-label={`Sources: ${active.join(", ")}`}
                 >
                   from {active.join(" · ")}
+                  {filtered.count > 0 && (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={() => setFilteredOpen(true)}
+                        className="underline underline-offset-2 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 rounded"
+                        style={{ color: "#7B9AC0" }}
+                        aria-label={`Show ${filtered.count} filtered postings and reasons`}
+                      >
+                        {filtered.count} filtered
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })()}
@@ -385,6 +420,59 @@ export default function JobsPage() {
       {/* Wave 2 — in-platform Job Detail Drawer. Renders only when
           selectedJob is set; the drawer manages its own scrim. */}
       <JobDetailDrawer job={selectedJob} onClose={closeJob} cycleId={cycleId} />
+
+      {/* Brief Task 3 — quality-gate filtered drawer.
+          Opens from the "N filtered" link; shows up to 50 reason rows. */}
+      {filteredOpen && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end"
+          aria-modal="true"
+          role="dialog"
+          aria-label="Filtered postings"
+          onClick={() => setFilteredOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/30" />
+          <div
+            className="relative h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  {filtered.count} posting{filtered.count === 1 ? "" : "s"} filtered out
+                </h2>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Removed by the quality gate (stale, thin, or red-flag content). Showing first {Math.min(50, filtered.reasons.length)}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilteredOpen(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                aria-label="Close filtered postings"
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {filtered.reasons.slice(0, 50).map((r, i) => (
+                <li key={`${r.company}-${r.title}-${i}`} className="px-5 py-3">
+                  <div className="text-sm font-medium text-gray-900">{r.title || "—"}</div>
+                  <div className="text-xs text-gray-500">{r.company || "—"}</div>
+                  <div className="mt-1 text-xs" style={{ color: "#FF6B6B" }}>
+                    {r.reason}
+                  </div>
+                </li>
+              ))}
+              {filtered.reasons.length === 0 && (
+                <li className="px-5 py-6 text-center text-xs text-gray-400">
+                  No reason details available.
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

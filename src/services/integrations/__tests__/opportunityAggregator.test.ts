@@ -10,6 +10,14 @@ vi.mock("@/lib/supabase", () => ({
   createClient: vi.fn(() => mockSupabase),
 }));
 
+// Stub the live-network adapters so tests stay hermetic.
+vi.mock("../atsAdapter", () => ({
+  searchATS: vi.fn(async () => ({ opportunities: [], total: 0, fallback: false })),
+}));
+vi.mock("../hnAdapter", () => ({
+  searchHackerNews: vi.fn(async () => ({ opportunities: [], total: 0, fallback: false })),
+}));
+
 const baseFilters = {
   skills: ["Python"],
   jobTypes: ["full-time"],
