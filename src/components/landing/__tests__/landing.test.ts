@@ -38,8 +38,11 @@ const SECTION_COMPONENTS = [
 
 // Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27): the
 // Phase 5 collapse is reversed. jobs.* and hire.* now serve their own
-// standalone landings; each has its own nav (with "← iCareerOS" back
-// link) and a wrapper component that composes the audience section.
+// standalone landings; each has its own nav and a wrapper component
+// that composes the audience section. The back-link to root that the
+// subdomain navs originally carried was removed per Strategy 2026-06-20
+// (feat/platform-nav-freeze) — the logo click is now the only
+// affordance back to icareeros.com root.
 const SUBDOMAIN_COMPONENTS = [
   { file: "JobsLandingNav.tsx", export: "JobsLandingNav" },
   { file: "HireLandingNav.tsx", export: "HireLandingNav" },
@@ -134,11 +137,22 @@ describe("Landing page component files", () => {
     expect(navSrc).not.toMatch(/"#hiring-teams"/);
   });
 
-  it("subdomain landing nav components include the '← iCareerOS' back-nav", () => {
+  it("subdomain landing nav components no longer contain the back-link (removed per Strategy 2026-06-20)", () => {
     for (const file of ["JobsLandingNav.tsx", "HireLandingNav.tsx"]) {
       const code = src(file);
-      expect(code).toContain("← iCareerOS");
+      // The literal "← iCareerOS" string must not appear anywhere (text, attribute, or import).
+      expect(code).not.toMatch(/← iCareerOS/);
+      // The Logo still links to icareeros.com — that's the new home affordance (PR #306).
       expect(code).toContain('href="https://icareeros.com"');
+    }
+  });
+
+  it("subdomain landing nav components have sticky positioning with backdrop blur", () => {
+    for (const file of ["JobsLandingNav.tsx", "HireLandingNav.tsx", "LandingNav.tsx"]) {
+      const code = src(file);
+      expect(code).toMatch(/position: "sticky"/);
+      expect(code).toMatch(/top: 0/);
+      expect(code).toMatch(/backdropFilter: "blur\(8px\)"/);
     }
   });
 });

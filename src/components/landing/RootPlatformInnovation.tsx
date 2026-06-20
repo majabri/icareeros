@@ -15,7 +15,7 @@ import { BRAND_COLORS } from "@/lib/design-tokens";
  */
 export function RootPlatformInnovation() {
   return (
-    <section id="platform" className="landing-fade-bg" style={{ padding: "4rem 3rem", background: "var(--neutral-100)" }}>
+    <section id="platform" className="landing-fade-bg" style={{ padding: "4rem 3rem", background: "var(--neutral-100)", scrollMarginTop: "72px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
         {/* Heading */}
