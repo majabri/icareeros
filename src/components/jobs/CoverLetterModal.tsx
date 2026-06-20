@@ -75,6 +75,30 @@ export function CoverLetterModal({
     URL.revokeObjectURL(url);
   }, [result, companyName]);
 
+  // Brief B3 Task 17 — print-to-PDF via the browser's native print dialog.
+  // Opens a hidden iframe with cover-letter HTML and a print stylesheet, then
+  // invokes window.print(). The user picks "Save as PDF" from the OS dialog.
+  const printAsPdf = useCallback(() => {
+    if (!result) return;
+    const win = window.open("", "_blank", "width=800,height=900");
+    if (!win) return;
+    const safe = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    win.document.write(`<!doctype html><html><head><title>Cover Letter — ${safe(companyName)}</title>
+      <meta charset="utf-8" />
+      <style>
+        @page { margin: 1in; }
+        body { font-family: Georgia, "Times New Roman", serif; color: #111; max-width: 7in; margin: 0.6in auto; line-height: 1.55; }
+        .subject { font-weight: 600; margin-bottom: 1.2em; font-size: 14pt; }
+        .body { white-space: pre-wrap; font-size: 12pt; }
+        @media print { body { margin: 0.6in auto; } }
+      </style></head><body>
+      <div class="subject">Subject: ${safe(result.subject)}</div>
+      <div class="body">${safe(result.body)}</div>
+      <script>setTimeout(() => { window.print(); }, 250);</script>
+    </body></html>`);
+    win.document.close();
+  }, [result, companyName]);
+
   return (
     /* Backdrop */
     <div
@@ -225,6 +249,15 @@ export function CoverLetterModal({
                 aria-label="Download cover letter as text file"
               >
                 ↓ Download .txt
+              </button>
+              <button
+                onClick={printAsPdf}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5
+                           text-xs font-semibold text-gray-700 hover:bg-gray-100
+                           transition-colors"
+                aria-label="Print cover letter as PDF"
+              >
+                🖨 Save as PDF
               </button>
               <button
                 onClick={copyToClipboard}

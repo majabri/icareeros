@@ -6,18 +6,33 @@
  */
 
 export type ApplicationStatus =
-  | "researching" | "applying" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
+  | "researching"      // Brief B3 Task 14 — new status (after wishlist add, before applying)
+  | "applying"         // legacy
+  | "applied"          // legacy
+  | "screening"        // Brief B3 Task 14 — new (recruiter screen call scheduled / done)
+  | "interviewing"     // legacy
+  | "final_round"      // Brief B3 Task 14 — new (final round / panel)
+  | "offer"            // legacy
+  | "accepted"         // Brief B3 Task 14 — new (offer accepted, awaiting start)
+  | "rejected"         // legacy
+  | "withdrawn";       // legacy
 
 export const STATUS_ORDER: ReadonlyArray<ApplicationStatus> = [
-  "researching", "applying", "applied", "interviewing", "offer", "rejected", "withdrawn",
+  "researching", "applying", "applied",
+  "screening",   "interviewing", "final_round",
+  "offer", "accepted",
+  "rejected", "withdrawn",
 ];
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   researching:  "Researching",
   applying:     "Applying",
   applied:      "Applied",
+  screening:    "Screening",
   interviewing: "Interviewing",
+  final_round:  "Final round",
   offer:        "Offer",
+  accepted:     "Accepted",
   rejected:     "Rejected",
   withdrawn:    "Withdrawn",
 };
@@ -48,8 +63,11 @@ export interface PipelineCounts {
   researching:  number;
   applying:     number;
   applied:      number;
+  screening:    number;
   interviewing: number;
+  final_round:  number;
   offer:        number;
+  accepted:     number;
   rejected:     number;
   withdrawn:    number;
   /** Active = not in a terminal state (rejected / withdrawn). */
@@ -109,8 +127,10 @@ export function countApplications(
 ): PipelineCounts {
   const c: PipelineCounts = {
     total: rows.length,
-    researching: 0, applying: 0,
-    applied: 0, interviewing: 0, offer: 0, rejected: 0, withdrawn: 0,
+    researching: 0, applying: 0, applied: 0,
+    screening: 0, interviewing: 0, final_round: 0,
+    offer: 0, accepted: 0,
+    rejected: 0, withdrawn: 0,
     active: 0,
   };
   for (const r of rows) {

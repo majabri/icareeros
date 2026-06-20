@@ -31,8 +31,13 @@ function makeRow(over: Partial<Application> = {}): Application {
 }
 
 describe("STATUS_ORDER + STATUS_LABEL", () => {
-  it("has the seven expected statuses in order (Wave 3.5 added researching + applying)", () => {
-    expect(STATUS_ORDER).toEqual(["researching", "applying", "applied", "interviewing", "offer", "rejected", "withdrawn"]);
+  it("has the ten expected statuses in order (Brief B3 added screening, final_round, accepted)", () => {
+    expect(STATUS_ORDER).toEqual([
+      "researching", "applying", "applied",
+      "screening", "interviewing", "final_round",
+      "offer", "accepted",
+      "rejected", "withdrawn",
+    ]);
   });
   it("every status has a label", () => {
     for (const s of STATUS_ORDER) {
@@ -134,16 +139,20 @@ describe("countApplications", () => {
     const c = countApplications(rows);
     expect(c).toEqual({
       total: 6,
-      researching: 0, applying: 0,
-      applied: 2, interviewing: 1, offer: 1, rejected: 1, withdrawn: 1,
+      researching: 0, applying: 0, applied: 2,
+      screening: 0, interviewing: 1, final_round: 0,
+      offer: 1, accepted: 0,
+      rejected: 1, withdrawn: 1,
       active: 4, // applied(2) + interviewing(1) + offer(1)
     });
   });
   it("empty → all zeros", () => {
     expect(countApplications([])).toEqual({
       total: 0,
-      researching: 0, applying: 0,
-      applied: 0, interviewing: 0, offer: 0, rejected: 0, withdrawn: 0,
+      researching: 0, applying: 0, applied: 0,
+      screening: 0, interviewing: 0, final_round: 0,
+      offer: 0, accepted: 0,
+      rejected: 0, withdrawn: 0,
       active: 0,
     });
   });

@@ -34,8 +34,11 @@ const STATUS_PILL: Record<ApplicationStatus, string> = {
   researching:  "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30",
   applying:     "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30",
   applied:      "bg-gray-100 text-gray-700 border-gray-200",
+  screening:    "bg-violet-50 text-violet-700 border-violet-200",
   interviewing: "bg-brand-50 text-brand-700 border-brand-200",
+  final_round:  "bg-orange-50 text-orange-700 border-orange-200",
   offer:        "bg-green-50 text-green-700 border-green-200",
+  accepted:     "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold",
   rejected:     "bg-red-50 text-red-700 border-red-200",
   withdrawn:    "bg-amber-50 text-amber-700 border-amber-200",
 };
@@ -57,6 +60,16 @@ export function ApplicationsPipeline() {
   const [sort,        setSort]        = useState<SortKey>("applied_at_desc");
   const [showForm,    setShowForm]    = useState(false);
   const [initialPayload, setInitialPayload] = useState<IncomingTrackPayload | null>(null);
+  // Brief B3 Task 15 — view toggle.
+  const [viewMode,    setViewMode]    = useState<"list" | "kanban">(
+    () => (typeof window !== "undefined" && window.localStorage.getItem("pipelineViewMode") === "kanban") ? "kanban" : "list"
+  );
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("pipelineViewMode", viewMode);
+  }, [viewMode]);
+  // Brief B3 Task 18 — per-row notes editing.
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [draftNotes,     setDraftNotes]     = useState<string>("");
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -108,6 +121,22 @@ export function ApplicationsPipeline() {
     }
   }
 
+  async function handleNotesSave(id: string) {
+    const cur = draftNotes;
+    setRows(prev => prev.map(r => r.id === id ? { ...r, notes: cur } : r));
+    setEditingNotesId(null);
+    setDraftNotes("");
+    const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: cur }),
+    });
+    if (!res.ok) {
+      setError(`Failed to save notes (HTTP ${res.status}).`);
+      void reload();
+    }
+  }
+
   async function handleDelete(id: string) {
     const target = rows.find(r => r.id === id);
     const label  = target ? `${target.job_title} @ ${target.company}` : "this application";
@@ -147,6 +176,27 @@ export function ApplicationsPipeline() {
         ) : <span /> /* keep flex justify */ }
 
         <div className="flex items-center gap-2">
+          {/* Brief B3 Task 15 — view toggle */}
+          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden mr-2" role="tablist" aria-label="Pipeline view">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "list"}
+              onClick={() => setViewMode("list")}
+              className={`px-3 py-1.5 text-xs font-medium ${viewMode === "list" ? "bg-brand-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "kanban"}
+              onClick={() => setViewMode("kanban")}
+              className={`px-3 py-1.5 text-xs font-medium border-l border-gray-300 ${viewMode === "kanban" ? "bg-brand-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+            >
+              Kanban
+            </button>
+          </div>
           <label className="text-xs text-gray-500">Status</label>
           <select
             value={statusFilter}
@@ -221,7 +271,7 @@ export function ApplicationsPipeline() {
             </a>
           </div>
         </div>
-      ) : (
+      ) : viewMode === "list" ? (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full text-sm" data-testid="applications-table">
             <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
@@ -238,8 +288,49 @@ export function ApplicationsPipeline() {
                 <tr key={row.id} data-testid={`application-row-${row.id}`}>
                   <td className="px-4 py-3 align-top">
                     <p className="font-medium text-gray-900">{row.job_title}</p>
-                    {row.notes && (
-                      <p className="text-xs text-gray-500 line-clamp-2 max-w-md">{row.notes}</p>
+                    {editingNotesId === row.id ? (
+                      <div className="mt-1">
+                        <textarea
+                          value={draftNotes}
+                          onChange={(e) => setDraftNotes(e.target.value)}
+                          rows={3}
+                          className="w-full max-w-md rounded border border-gray-300 px-2 py-1 text-xs"
+                          placeholder="Notes (recruiter contact, follow-up reminders, prep links, etc.)"
+                          autoFocus
+                        />
+                        <div className="mt-1 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleNotesSave(row.id)}
+                            className="rounded bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-brand-700"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingNotesId(null); setDraftNotes(""); }}
+                            className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : row.notes ? (
+                      <p
+                        className="mt-1 text-xs text-gray-500 line-clamp-2 max-w-md cursor-pointer hover:text-gray-700"
+                        onClick={() => { setEditingNotesId(row.id); setDraftNotes(row.notes ?? ""); }}
+                        title="Click to edit notes"
+                      >
+                        {row.notes}
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setEditingNotesId(row.id); setDraftNotes(""); }}
+                        className="mt-1 text-xs text-gray-400 underline underline-offset-2 hover:text-brand-600"
+                      >
+                        + Add notes
+                      </button>
                     )}
                   </td>
                   <td className="px-4 py-3 align-top text-gray-700">
@@ -281,6 +372,53 @@ export function ApplicationsPipeline() {
               ))}
             </tbody>
           </table>
+        </div>
+      ) : (
+        // Brief B3 Task 15 — Kanban view: column per status, card per application.
+        <div className="overflow-x-auto" data-testid="applications-kanban">
+          <div className="flex gap-3 pb-2">
+            {STATUS_ORDER.map((status) => {
+              const col = visible.filter(r => r.status === status);
+              return (
+                <div key={status} className="flex w-64 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${STATUS_PILL[status]}`}>
+                      {STATUS_LABEL[status]}
+                    </span>
+                    <span className="text-xs text-gray-500">{col.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {col.length === 0 && (
+                      <p className="rounded border border-dashed border-gray-300 bg-white px-2 py-3 text-center text-[11px] text-gray-400">
+                        Empty
+                      </p>
+                    )}
+                    {col.map((row) => (
+                      <div
+                        key={row.id}
+                        className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm"
+                        data-testid={`kanban-card-${row.id}`}
+                      >
+                        <p className="text-sm font-medium text-gray-900 line-clamp-2">{row.job_title}</p>
+                        <p className="text-xs text-gray-500">{row.company}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-400">{fmtDate(row.applied_at)}</p>
+                        <select
+                          value={row.status}
+                          onChange={(e) => void handleStatusChange(row.id, e.target.value as ApplicationStatus)}
+                          className="mt-2 w-full rounded border border-gray-300 px-1.5 py-0.5 text-[11px]"
+                          aria-label={`Change status of ${row.job_title}`}
+                        >
+                          {STATUS_ORDER.map((s) => (
+                            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
