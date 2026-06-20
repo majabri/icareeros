@@ -35,6 +35,7 @@ describe("opportunityAggregator", () => {
       company: "TechCo",
       url: "https://example.com/jobs/1",
       source: "linkedin",
+      description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required.",
     };
 
     mockFunctions.invoke
@@ -59,9 +60,9 @@ describe("opportunityAggregator", () => {
 
   it("sorts by fit_score descending", async () => {
     const opps = [
-      { id: "1", title: "A", company: "X", url: "https://x.com/1", fit_score: 60, source: "linkedin" },
-      { id: "2", title: "B", company: "Y", url: "https://y.com/2", fit_score: 90, source: "database" },
-      { id: "3", title: "C", company: "Z", url: "https://z.com/3", fit_score: 75, source: "indeed" },
+      { id: "1", title: "A", company: "Xeno Corp", url: "https://x.com/1", fit_score: 60, source: "linkedin", description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required." },
+      { id: "2", title: "B", company: "Yumi Labs", url: "https://y.com/2", fit_score: 90, source: "database", description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required." },
+      { id: "3", title: "C", company: "Zeta Inc", url: "https://z.com/3", fit_score: 75, source: "indeed",   description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required." },
     ];
 
     mockFunctions.invoke
@@ -136,9 +137,9 @@ describe("opportunityAggregator", () => {
           title: "Adzuna PM",
           company:  { display_name: "AdzCo" },
           location: { display_name: "Remote" },
-          description: "great role",
+          description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required.",
           redirect_url: ADZUNA_OPP.url,
-          created: "2026-06-18T00:00:00Z",
+          created: new Date().toISOString(),
         }],
         count: 1,
       });
@@ -188,6 +189,7 @@ describe("opportunityAggregator", () => {
               url: SHARED_URL,
               source: "linkedin",
               fit_score: 80,
+              description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required.",
             }],
             total: 1,
             source: "linkedin",
@@ -206,9 +208,9 @@ describe("opportunityAggregator", () => {
           title: "Shared Role",
           company:  { display_name: "Shared Co" },
           location: { display_name: "Remote" },
-          description: "duplicate post",
+          description: "We are hiring an experienced data scientist to drive our analytics platform. Responsibilities include building ML pipelines, mentoring junior engineers, partnering with product and design, owning end-to-end model lifecycle from training to production deployment, and contributing to the company-wide data strategy. You will work with Python, SQL, Spark, and cloud infrastructure. This is a senior role on a high-impact team building data-driven product features. Strong communication and collaboration skills required.",
           redirect_url: SHARED_URL,
-          created: "2026-06-18T00:00:00Z",
+          created: new Date().toISOString(),
         }],
         count: 1,
       });
@@ -223,6 +225,84 @@ describe("opportunityAggregator", () => {
       expect(result.sources.adzuna?.count).toBe(1);
       // LinkedIn came first in the merge order → its row wins the dedupe slot.
       expect(result.opportunities[0].source).toBe("linkedin");
+    });
+  });
+
+  // ── 2026-06-19 (Brief Tasks 1 + 16) — quality gate + source weighting ─
+  describe("Quality gate + source weighting", () => {
+    it("filters out thin postings and surfaces them under `filtered`", async () => {
+      const longDesc = "A".repeat(400);
+      mockFunctions.invoke
+        .mockResolvedValueOnce({
+          data: {
+            opportunities: [
+              // 1 good, 1 thin
+              { id: "g1", title: "Good Role",  company: "GoodCo", url: "https://good.example.com/1", source: "linkedin", description: longDesc, fit_score: 70 },
+              { id: "b1", title: "Bad Role",   company: "BadCo",  url: "https://bad.example.com/1",  source: "linkedin", description: "tiny", fit_score: 80 },
+            ],
+            total: 2,
+            source: "linkedin",
+          },
+          error: null,
+        })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "indeed"   }, error: null })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "database" }, error: null });
+
+      const result = await searchOpportunities({ filters: baseFilters });
+
+      // Only the good role survives.
+      expect(result.opportunities).toHaveLength(1);
+      expect(result.opportunities[0].id).toBe("g1");
+
+      // The bad role appears under filtered with a reason.
+      expect(result.filtered.count).toBe(1);
+      expect(result.filtered.reasons[0].title).toBe("Bad Role");
+      expect(result.filtered.reasons[0].reason).toMatch(/thin job description/i);
+    });
+
+    it("higher source weight beats higher fit when scores are close", async () => {
+      const longDesc = "B".repeat(400);
+      // Adzuna fixture (weight 0.8) with high fit
+      process.env.ADZUNA_APP_ID  = "test-id";
+      process.env.ADZUNA_APP_KEY = "test-key";
+      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          results: [{
+            id: "1",
+            title: "Engineer",
+            company: { display_name: "AdzCo" },
+            location: { display_name: "Remote" },
+            description: longDesc,
+            redirect_url: "https://adzuna.example.com/1",
+            created: new Date().toISOString(),
+          }],
+          count: 1,
+        }),
+      } as Response);
+
+      // LinkedIn fixture (weight 0.9) with high fit too
+      mockFunctions.invoke
+        .mockResolvedValueOnce({
+          data: {
+            opportunities: [
+              { id: "li-1", title: "Engineer", company: "LinkedCo", url: "https://linkedin.example.com/1", source: "linkedin", description: longDesc, fit_score: 80, quality_score: 80 },
+            ],
+            total: 1,
+            source: "linkedin",
+          },
+          error: null,
+        })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "indeed"   }, error: null })
+        .mockResolvedValueOnce({ data: { opportunities: [], total: 0, source: "database" }, error: null });
+
+      const result = await searchOpportunities({ filters: baseFilters });
+
+      // Both pass quality gate; LinkedIn (0.9) should outrank Adzuna (0.8)
+      // when both have similar fit. Specifically: linkedin appears first.
+      const titles = result.opportunities.map(o => o.source);
+      expect(titles[0]).toBe("linkedin");
     });
   });
 });

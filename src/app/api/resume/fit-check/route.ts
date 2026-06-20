@@ -3,6 +3,39 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 
+/**
+ * POST /api/resume/fit-check
+ *
+ * 2026-06-19 (Brief Tasks 2 + 17) — extended return shape:
+ *   - `breakdown` sub-scores: skillsCoverage, seniorityFit, locationFit,
+ *     experienceFit, redFlagsFound — drive the labeled bars on /evaluate/job-fit
+ *     and the compact tooltip on opportunity cards.
+ *   - `keywordCoverage`: per-keyword presence with a coverage percentage,
+ *     rendered as covered/missing tag clouds.
+ */
+
+export interface FitBreakdown {
+  /** 0-100 — proportion of JD-required skills present on the resume. */
+  skillsCoverage: number;
+  /** Seniority alignment vs JD seniority signals. */
+  seniorityFit: "match" | "overqualified" | "underqualified" | "unknown";
+  /** Location alignment — remote_ok captures remote-friendly JDs. */
+  locationFit: "match" | "remote_ok" | "mismatch" | "unknown";
+  /** 0-100 — years/depth of experience signal vs JD requirement. */
+  experienceFit: number;
+  /** Red flags present IN THE JD itself (unpaid, commission-only, etc). */
+  redFlagsFound: string[];
+}
+
+export interface KeywordCoverage {
+  /** JD keywords that ALSO appear in the resume (case-insensitive). */
+  covered: string[];
+  /** JD keywords NOT found on the resume. */
+  missing: string[];
+  /** 0-100 — covered.length / (covered+missing) total * 100. */
+  coverageScore: number;
+}
+
 export interface FitCheckResult {
   fitScore: number;
   summary: string;
@@ -10,6 +43,8 @@ export interface FitCheckResult {
   gaps: string[];
   missingSkills: string[];
   recommendations: string[];
+  breakdown: FitBreakdown;
+  keywordCoverage: KeywordCoverage;
 }
 
 export async function POST(req: NextRequest) {
@@ -56,14 +91,26 @@ ${resumeText}
 ${jobDescription}
 </job_description>
 
-Provide a detailed fit analysis. Respond ONLY with valid JSON in this exact format:
+Provide a detailed, explainable fit analysis. Respond ONLY with valid JSON in this exact format:
 {
   "fitScore": <integer 0-100>,
   "summary": "<2-3 sentence overall assessment>",
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
   "gaps": ["<gap 1>", "<gap 2>", "<gap 3>"],
   "missingSkills": ["<skill 1>", "<skill 2>"],
-  "recommendations": ["<recommendation 1>", "<recommendation 2>", "<recommendation 3>"]
+  "recommendations": ["<recommendation 1>", "<recommendation 2>", "<recommendation 3>"],
+  "breakdown": {
+    "skillsCoverage": <integer 0-100>,
+    "seniorityFit": "<one of: match | overqualified | underqualified | unknown>",
+    "locationFit":  "<one of: match | remote_ok | mismatch | unknown>",
+    "experienceFit": <integer 0-100>,
+    "redFlagsFound": ["<JD red flag 1>", "<JD red flag 2>"]
+  },
+  "keywordCoverage": {
+    "covered": ["<keyword 1>", "<keyword 2>"],
+    "missing": ["<keyword 1>", "<keyword 2>"],
+    "coverageScore": <integer 0-100>
+  }
 }
 
 Guidelines:
@@ -71,11 +118,30 @@ Guidelines:
 - strengths: 3-5 specific things the candidate has that match the job
 - gaps: 2-4 specific things the job requires that the candidate lacks or has weakly
 - missingSkills: concrete skills/tools/technologies in the JD not on the resume
-- recommendations: 2-4 actionable steps to improve this resume for this specific role`;
+- recommendations: 2-4 actionable steps to improve this resume for this specific role
+- breakdown.skillsCoverage: count of REQUIRED skills present on resume / total REQUIRED * 100
+- breakdown.seniorityFit:
+    "match"            — candidate's seniority aligns with JD's
+    "overqualified"    — candidate is more senior than the role
+    "underqualified"   — candidate is less senior than the role
+    "unknown"          — neither resume nor JD declares seniority clearly
+- breakdown.locationFit:
+    "match"     — candidate's location matches the JD's hard location requirement
+    "remote_ok" — JD allows remote, regardless of candidate location
+    "mismatch"  — JD requires onsite in a different city/country
+    "unknown"   — JD or resume omits location
+- breakdown.experienceFit: 0-100 score on YEARS / DEPTH of experience vs JD requirement
+- breakdown.redFlagsFound: any RED FLAGS IN THE JD ITSELF (unpaid, equity-only, "competitive salary"
+  with no number, "commission only", "homework assignment", "working interview", MLM signals).
+  Empty array if none.
+- keywordCoverage.covered: distinct ATS-style keywords from the JD that ALSO appear on the resume (case-insensitive).
+- keywordCoverage.missing: distinct ATS-style keywords from the JD that DO NOT appear on the resume.
+- keywordCoverage.coverageScore: round(covered / (covered + missing) * 100). 0 when both are empty.
+- Aim for 8-15 keywords across covered + missing combined.`;
 
   const msg = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -87,6 +153,22 @@ Guidelines:
 
   try {
     const result: FitCheckResult = JSON.parse(jsonMatch[0]);
+
+    // Defensive defaults so older client code that hasn't been updated to
+    // read the new fields doesn't crash on legacy-shape consumers.
+    if (!result.breakdown) {
+      result.breakdown = {
+        skillsCoverage: 0,
+        seniorityFit:   "unknown",
+        locationFit:    "unknown",
+        experienceFit:  0,
+        redFlagsFound:  [],
+      };
+    }
+    if (!result.keywordCoverage) {
+      result.keywordCoverage = { covered: [], missing: [], coverageScore: 0 };
+    }
+
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
