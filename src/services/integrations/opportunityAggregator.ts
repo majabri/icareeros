@@ -12,6 +12,8 @@ import { searchLinkedIn } from "./linkedInAdapter";
 import { searchIndeed }   from "./indeedAdapter";
 import { searchAdzuna, type AdzunaSearchParams } from "./adzunaAdapter";
 import { applyQualityGate } from "./qualityGate";
+import { searchATS } from "./atsAdapter";
+import { searchHackerNews } from "./hnAdapter";
 import {
   inferSeniority,
   inferTargetSeniority,
@@ -21,7 +23,7 @@ import {
 import { createClient }   from "@/lib/supabase";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
 
-export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna";
+export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna" | "ats" | "hackernews";
 
 export interface AggregatedSearchOptions {
   filters: OpportunitySearchFilters;
@@ -38,6 +40,8 @@ export interface AggregatedSearchResult {
     indeed?:   { count: number; fallback: boolean };
     database?: { count: number };
     adzuna?:   { count: number; fallback: boolean };
+    ats?:        { count: number; fallback: boolean };
+    hackernews?: { count: number; fallback: boolean };
   };
   /**
    * Quality gate output (Brief Task 1). Counts and per-job reasons for
@@ -98,34 +102,29 @@ export async function searchOpportunities(
   const includeIndeed   = includeAll || sources.includes("indeed");
   const includeDatabase = includeAll || sources.includes("database");
   const includeAdzuna   = includeAll || sources.includes("adzuna");
+  const includeATS      = includeAll || sources.includes("ats");
+  const includeHN       = includeAll || sources.includes("hackernews");
 
-  // Per-source budget. We now fan out to FOUR sources by default, so
-  // include Adzuna in the divisor when "all" was requested.
-  const perSource = Math.ceil(limit / (includeAll ? 4 : sources.length));
+  // Per-source budget. SIX sources when "all" is requested.
+  const perSource = Math.ceil(limit / (includeAll ? 6 : sources.length));
 
   // Fan out in parallel. Use Promise.allSettled so a single-source failure
-  // (e.g. Adzuna 429, Indeed edge-fn outage) doesn't sink the whole batch.
-  const [linkedInSettled, indeedSettled, dbSettled, adzunaSettled] = await Promise.allSettled([
-    includeLinkedIn
-      ? searchLinkedIn({ filters, limit: perSource, offset })
-      : Promise.resolve(null),
-    includeIndeed
-      ? searchIndeed({ filters, limit: perSource, offset })
-      : Promise.resolve(null),
-    includeDatabase
-      ? searchDatabase(filters, perSource, offset)
-      : Promise.resolve(null),
-    includeAdzuna
-      ? searchAdzuna(filtersToAdzunaParams(filters, perSource, offset))
-      : Promise.resolve(null),
+  // doesn't sink the whole batch.
+  const [linkedInSettled, indeedSettled, dbSettled, adzunaSettled, atsSettled, hnSettled] = await Promise.allSettled([
+    includeLinkedIn ? searchLinkedIn({ filters, limit: perSource, offset }) : Promise.resolve(null),
+    includeIndeed   ? searchIndeed({ filters, limit: perSource, offset })   : Promise.resolve(null),
+    includeDatabase ? searchDatabase(filters, perSource, offset)            : Promise.resolve(null),
+    includeAdzuna   ? searchAdzuna(filtersToAdzunaParams(filters, perSource, offset)) : Promise.resolve(null),
+    includeATS      ? searchATS(filters)         : Promise.resolve(null),
+    includeHN       ? searchHackerNews(filters)  : Promise.resolve(null),
   ]);
 
-  // Unwrap settled results. Failures are logged but degrade silently
-  // to an empty/fallback shape so the aggregator's contract is preserved.
   const linkedInRes = unwrap(linkedInSettled, "linkedin");
   const indeedRes   = unwrap(indeedSettled,   "indeed");
   const dbRes       = unwrap(dbSettled,       "database");
   const adzunaRes   = unwrap(adzunaSettled,   "adzuna");
+  const atsRes      = unwrap(atsSettled,      "ats");
+  const hnRes       = unwrap(hnSettled,       "hackernews");
 
   // Merge and deduplicate by URL (first seen wins). Order matters — we
   // prefer LinkedIn → Indeed → DB → Adzuna so the source that surfaces a
@@ -134,7 +133,7 @@ export async function searchOpportunities(
   const seen = new Set<string>();
   const merged: OpportunityResult[] = [];
 
-  for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes]) {
+  for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes, atsRes, hnRes]) {
     if (!result) continue;
     for (const opp of result.opportunities) {
       const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
@@ -164,11 +163,18 @@ export async function searchOpportunities(
     }
   }
 
-  // ── Seniority scoring (Brief Task 7) ────────────────────────────────
-  // Compute a target seniority once, then enrich each surviving job with
-  // a per-job seniority score. The score gets folded into the sort
-  // multiplier below.
-  const targetLevel = await loadTargetSeniority();
+  // ── Feedback boost (Brief Task 10) + Seniority scoring (Brief Task 7) ──
+  // Fetch the user's recent feedback once, then enrich each surviving job:
+  // 1) Apply feedback boost to fit_score (+10 positive, -15 negative).
+  // 2) Compute per-job seniority score against target seniority.
+  const [feedbackBoosts, targetLevel] = await Promise.all([
+    loadFeedbackBoosts(),
+    loadTargetSeniority(),
+  ]);
+  // Apply feedback boost in place.
+  for (const opp of passed) {
+    opp.fit_score = applyFeedbackBoost(opp.fit_score, opp, feedbackBoosts);
+  }
   const scored = passed.map((opp) => {
     const jobLevel = inferSeniority(`${opp.title} ${opp.seniority ?? ""}`);
     const score    = seniorityScore(jobLevel, targetLevel);
@@ -213,6 +219,8 @@ export async function searchOpportunities(
       ...(indeedRes   ? { indeed:   { count: indeedRes.opportunities.length,   fallback: indeedRes.fallback   } } : {}),
       ...(dbRes       ? { database: { count: dbRes.opportunities.length                                       } } : {}),
       ...(adzunaRes   ? { adzuna:   { count: adzunaRes.opportunities.length,   fallback: adzunaRes.fallback   } } : {}),
+      ...(atsRes      ? { ats:        { count: atsRes.opportunities.length,      fallback: atsRes.fallback      } } : {}),
+      ...(hnRes       ? { hackernews: { count: hnRes.opportunities.length,       fallback: hnRes.fallback       } } : {}),
     },
     filtered: {
       count:   filteredReasons.length,
@@ -299,6 +307,60 @@ async function loadTargetSeniority(): Promise<Seniority> {
   } catch {
     return "unknown";
   }
+}
+
+// ── User feedback loader (Brief Task 10) ─────────────────────────────────
+//
+// Read public.opportunity_feedback for the active user — small table, no
+// pagination. Used to boost or penalize fit_score per-job before sort.
+// Returns a Map keyed by (company || job_url) so we can look up by URL OR
+// by company name (covers cross-listing of the same company on different
+// boards). Empty map on auth/DB errors.
+interface FeedbackBoostEntry { positive: number; negative: number; }
+async function loadFeedbackBoosts(): Promise<Map<string, FeedbackBoostEntry>> {
+  const map = new Map<string, FeedbackBoostEntry>();
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return map;
+    const { data } = await supabase
+      .from("opportunity_feedback")
+      .select("job_url, company, signal")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    for (const row of (data ?? []) as Array<{ job_url: string | null; company: string | null; signal: string }>) {
+      const keys = [
+        row.job_url?.toLowerCase(),
+        row.company?.toLowerCase(),
+      ].filter(Boolean) as string[];
+      const signal = row.signal === "positive" ? "positive" : row.signal === "negative" ? "negative" : null;
+      if (!signal) continue;
+      for (const key of keys) {
+        const entry = map.get(key) ?? { positive: 0, negative: 0 };
+        entry[signal] += 1;
+        map.set(key, entry);
+      }
+    }
+  } catch {
+    // Silent — feedback boost is best-effort
+  }
+  return map;
+}
+
+function applyFeedbackBoost(fit: number | null | undefined, opp: OpportunityResult, fb: Map<string, FeedbackBoostEntry>): number | null {
+  if (fit === null || fit === undefined) return fit ?? null;
+  const url = opp.url?.toLowerCase();
+  const co  = opp.company?.toLowerCase();
+  let delta = 0;
+  for (const key of [url, co]) {
+    if (!key) continue;
+    const e = fb.get(key);
+    if (!e) continue;
+    delta += e.positive * 10 - e.negative * 15;
+  }
+  if (delta === 0) return fit;
+  return Math.max(0, Math.min(100, fit + delta));
 }
 
 // ── Internal database search ───────────────────────────────────────────────

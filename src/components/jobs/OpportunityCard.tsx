@@ -11,6 +11,29 @@ import { ApplyConfirmModal } from "./ApplyConfirmModal";
 import { PipelineSavedToast } from "./PipelineSavedToast";
 import { resolveApplyTarget } from "@/services/jobs/applyHelpers";
 
+/**
+ * Brief Task 10 — fire-and-forget POST to record a per-job action signal
+ * for the aggregator's feedback boost. Never blocks the UI; silently swallows.
+ *
+ * Maps:
+ *   tracked|saved|applied  -> positive boost (+10 fit)
+ *   dismissed              -> negative penalty (-15 fit)
+ */
+function recordFeedback(opp: OpportunityResult, action: "saved" | "applied" | "tracked" | "dismissed") {
+  try {
+    void fetch("/api/opportunities/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action,
+        job_url: opp.apply_url_company ?? opp.url ?? null,
+        company: opp.company ?? null,
+        source:  opp.source ?? null,
+      }),
+    }).catch(() => {});
+  } catch { /* best-effort */ }
+}
+
 interface OpportunityCardProps {
   opportunity: OpportunityResult;
   cycleId?: string | null;
@@ -86,6 +109,7 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
       job_url:        opp.apply_url_company ?? opp.url ?? null,
       opportunity_id: typeof opp.id === "string" ? opp.id : null,
     });
+    recordFeedback(opp, "tracked");
     router.push("/applications?track=1");
   }
 
@@ -284,10 +308,13 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
           target={resolveApplyTarget(opp)}
           onClose={() => setShowApplyConfirm(false)}
           onCoverLetter={() => setShowCoverLetter(true)}
-          onApplied={(saved) => setToast({
-            message: saved ? "Saved to your Pipeline" : "Opened apply link (couldn't save to Pipeline)",
-            variant: saved ? "success" : "warning",
-          })}
+          onApplied={(saved) => {
+            recordFeedback(opp, saved ? "saved" : "applied");
+            setToast({
+              message: saved ? "Saved to your Pipeline" : "Opened apply link (couldn't save to Pipeline)",
+              variant: saved ? "success" : "warning",
+            });
+          }}
         />
       )}
 

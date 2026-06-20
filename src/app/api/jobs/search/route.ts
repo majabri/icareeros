@@ -289,6 +289,21 @@ export async function POST(req: Request) {
         sourceCounts[src] = acc;
       }
     }
+    // ── Merge quality-gate filtered counts (Brief Task 3) ─────────────
+    const filteredAcc: { count: number; reasons: Array<{ title: string; company: string; reason: string }> } = { count: 0, reasons: [] };
+    for (const vr of variantResults) {
+      const f = (vr as { filtered?: { count: number; reasons?: Array<{ title: string; company: string; reason: string }> } }).filtered;
+      if (!f) continue;
+      filteredAcc.count += f.count ?? 0;
+      if (Array.isArray(f.reasons)) {
+        for (const r of f.reasons) {
+          if (!filteredAcc.reasons.some(x => x.title === r.title && x.company === r.company)) {
+            filteredAcc.reasons.push(r);
+          }
+        }
+      }
+    }
+
     // Treat the whole result as "fallback" only when every source that
     // reported a fallback flag was in fallback mode.
     const anyFallback = Object.values(sourceCounts).every(s => s.fallback === true);
@@ -297,6 +312,7 @@ export async function POST(req: Request) {
       total:         rawTotal,
       fallback:      anyFallback,
       sources:       sourceCounts,
+      filtered:      filteredAcc,
     };
 
     // Resolve direct apply-on-company URLs from descriptions, then chase
@@ -369,6 +385,8 @@ export async function POST(req: Request) {
       // 2026-06-18 — per-source counts so the page can show
       // "N opportunities from Adzuna · LinkedIn · Database".
       sources: result.sources,
+      // 2026-06-20 — quality-gate filtered postings (Brief Task 3).
+      filtered: result.filtered,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Search failed";
