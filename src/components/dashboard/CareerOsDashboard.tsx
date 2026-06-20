@@ -175,6 +175,7 @@ async function loadProfileReady(userId: string): Promise<boolean> {
 
 function CycleManagementPanel({
   cycles, completedCycles = [], selectedId, onSwitch, onDelete,
+  onNewCycle, onSkip, newCycleAtCap, newCycleBusy, skipBusy,
 }: {
   cycles:           Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
   completedCycles?: Array<{ id: string; cycle_number: number; goal: string | null; current_stage: string }>;
@@ -183,6 +184,16 @@ function CycleManagementPanel({
   onSwitch:         (cycle: { id: string; current_stage: string }) => void;
   /** HARD delete (DELETE /api/career-os/cycles/[id]). Caller refreshes after. */
   onDelete:         (id: string) => Promise<void>;
+  /** 2026-06-20 layout: opens the goal input to start a new cycle. */
+  onNewCycle:       () => void;
+  /** 2026-06-20 layout: skips the active cycle without finishing it. */
+  onSkip:           () => void | Promise<void>;
+  /** Disables the "+ New Cycle" button when the user has hit MAX_ACTIVE_CYCLES. */
+  newCycleAtCap:    boolean;
+  /** Disables the "+ New Cycle" button while a start-cycle call is in flight. */
+  newCycleBusy:     boolean;
+  /** Disables the Skip link while a stage call is in flight. */
+  skipBusy:         boolean;
 }) {
   // 2026-06-18 (Design A): default open. Previously the panel was buried
   // beneath the cycle ring and collapsed; users couldn't find the Delete
@@ -283,9 +294,43 @@ function CycleManagementPanel({
           })}
           </div>
 
+          {/* 2026-06-20 layout — "+ New Cycle" lives inside the panel now
+              (was in the page header). Sits between the active list and the
+              completed section. Disabled with tooltip at MAX_ACTIVE_CYCLES. */}
+          <div className="border-t border-gray-100 bg-white px-4 py-3 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-gray-500">Start a parallel cycle for a different goal.</span>
+            <button
+              type="button"
+              onClick={onNewCycle}
+              disabled={newCycleAtCap || newCycleBusy}
+              title={newCycleAtCap
+                ? "Maximum active cycles reached — delete one above to start a new one"
+                : "Add a new cycle for a different goal — keeps your current cycle open"}
+              aria-disabled={newCycleAtCap}
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              + New Cycle
+            </button>
+          </div>
+
           {completedCycles.length > 0 && (
             <CompletedCyclesSection completedCycles={completedCycles} />
           )}
+
+          {/* 2026-06-20 layout — Skip moved here from the standalone
+              active-cycle indicator card (which has been dissolved). Muted
+              link in the panel footer. */}
+          <div className="border-t border-gray-100 bg-white px-4 py-2 text-right">
+            <button
+              type="button"
+              onClick={() => void onSkip()}
+              disabled={skipBusy}
+              title="Skip this cycle without finishing it. Useful for roadmaps with optional steps."
+              className="text-[11px] font-medium text-gray-500 hover:text-gray-700 underline underline-offset-2 disabled:opacity-50"
+            >
+              Skip this cycle without completing &rarr;
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -655,26 +700,10 @@ export function CareerOsDashboard() {
             <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} />
           )}
           <PlanBadge plan={plan} />
-          {/* Sprint 5 UX v2 (2026-05-16) — standalone outlined button at
-              the top of the dashboard. Only shown when an active cycle
-              exists; the empty-state below has its own "+ Start a cycle"
-              CTA. */}
-          {cycle && (() => {
-            const atCap = activeCycles.length >= MAX_ACTIVE_CYCLES;
-            return (
-              <button
-                onClick={() => setShowGoalInput(true)}
-                disabled={running || atCap}
-                title={atCap
-                  ? `Maximum ${MAX_ACTIVE_CYCLES} active cycles reached`
-                  : "Add a new cycle for a different goal — keeps your current cycle open"}
-                aria-disabled={atCap}
-                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                + New Cycle
-              </button>
-            );
-          })()}
+          {/* 2026-06-20 layout — "+ New Cycle" button moved out of the
+              header into CycleManagementPanel's footer. The empty-state
+              card below still has its own "+ Start a cycle" CTA for the
+              first-cycle path. */}
         </div>
       </div>
 
@@ -694,6 +723,11 @@ export function CareerOsDashboard() {
           cycles={activeCycles}
           completedCycles={completedCycles}
           selectedId={cycle.id}
+          onNewCycle={() => setShowGoalInput(true)}
+          onSkip={() => void handleSkipCycle()}
+          newCycleAtCap={activeCycles.length >= MAX_ACTIVE_CYCLES}
+          newCycleBusy={running}
+          skipBusy={running}
           onSwitch={(c) => {
             if (!userId) return;
             void (async () => {
@@ -826,6 +860,42 @@ export function CareerOsDashboard() {
             }}
           />
 
+          {/* 2026-06-20 layout — inline summary directly below the ring.
+              Replaces the dissolved standalone "Active-cycle indicator"
+              section. Goal (truncated) + Active pill + progress bar +
+              Stage N of M caption. No Skip button — that moved into
+              CycleManagementPanel. */}
+          <div className="space-y-2 px-1">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                {cycle.goal ? (
+                  <span className="font-medium text-gray-800 truncate">{cycle.goal}</span>
+                ) : (
+                  <span className="font-medium text-gray-500 italic">No goal set</span>
+                )}
+              </div>
+              <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700 shrink-0">
+                Active
+              </span>
+            </div>
+            <div>
+              <div className="h-1.5 w-full rounded-full bg-gray-100">
+                <div
+                  className="h-1.5 rounded-full bg-brand-500 transition-all"
+                  style={{
+                    width: Math.round(
+                      ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /
+                        STAGE_ORDER.length) * 100
+                    ) + "%",
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                Stage {STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1} of {STAGE_ORDER.length}
+              </p>
+            </div>
+          </div>
+
           {showGoalInput && (
             <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 shadow-sm space-y-3">
               <p className="text-sm font-medium text-brand-900">Start a parallel cycle for a different goal:</p>
@@ -855,29 +925,6 @@ export function CareerOsDashboard() {
               </div>
             </div>
           )}
-
-          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="dashboard-milestone-section">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">Career milestones</h3>
-              {careerXp.totalXp > 0 && (
-                <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} className="!py-0.5" />
-              )}
-            </div>
-            {careerXp.recentMilestones.length > 0 ? (
-              <MilestoneList milestones={careerXp.recentMilestones} compact />
-            ) : (
-              <p
-                className="text-sm text-gray-500"
-                data-testid="milestone-empty-state"
-              >
-                Your achievements will appear here.{" "}
-                <a href="/offers" className="font-medium text-brand-700 hover:text-brand-900 underline">
-                  Accept an offer
-                </a>{" "}
-                to earn your first milestone.
-              </p>
-            )}
-          </section>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {STAGE_ORDER.map((stage) => (
@@ -919,57 +966,35 @@ export function CareerOsDashboard() {
             ))}
           </div>
 
-          {/* Sprint 5 UX v2 (2026-05-16) — Active-cycle indicator + multi-
-              cycle switcher live BELOW the stage cards so the ring + cards
-              have clean breathing room at the top. Goal label only (no
-              "Cycle #N" prefix per Fix 1) — the #N badge is reserved for
-              the dropdown rows where the user actually compares cycles. */}
-          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between text-sm gap-3">
-              <div className="min-w-0">
-                {cycle.goal ? (
-                  <span className="font-medium text-gray-800 truncate">{cycle.goal}</span>
-                ) : (
-                  <span className="font-medium text-gray-500 italic">No goal set</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                  Active
-                </span>
-                <button
-                  onClick={() => void handleSkipCycle()}
-                  disabled={running}
-                  title="Skip this cycle without finishing it. Useful for roadmaps with optional steps."
-                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
-                >
-                  Skip
-                </button>
-              </div>
+          {/* 2026-06-20 layout — Career milestones now lives between the
+              stage cards and CoachBriefPanel (was above the cards). The
+              standalone Active-cycle indicator section that used to live
+              here has been dissolved — its content moved to the inline
+              summary directly below the ring. */}
+          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="dashboard-milestone-section">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900">Career milestones</h3>
+              {careerXp.totalXp > 0 && (
+                <CareerXpBadge totalXp={careerXp.totalXp} level={careerXp.level} className="!py-0.5" />
+              )}
             </div>
-
-            {/* Progress bar */}
-            <div>
-              <div className="h-1.5 w-full rounded-full bg-gray-100">
-                <div
-                  className="h-1.5 rounded-full bg-brand-500 transition-all"
-                  style={{
-                    width: Math.round(
-                      ((STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1) /
-                        STAGE_ORDER.length) * 100
-                    ) + "%",
-                  }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-400">
-                Stage {STAGE_ORDER.indexOf(currentStage ?? "evaluate") + 1} of {STAGE_ORDER.length}
+            {careerXp.recentMilestones.length > 0 ? (
+              <MilestoneList milestones={careerXp.recentMilestones} compact />
+            ) : (
+              <p
+                className="text-sm text-gray-500"
+                data-testid="milestone-empty-state"
+              >
+                Your achievements will appear here.{" "}
+                <a href="/offers" className="font-medium text-brand-700 hover:text-brand-900 underline">
+                  Accept an offer
+                </a>{" "}
+                to earn your first milestone.
               </p>
-            </div>
-
+            )}
           </section>
 
-          {/* On-demand coaching brief — now below the active-cycle indicator
-              per Sprint 5 UX v2 (2026-05-16). */}
+          {/* 2026-06-20 layout — On-demand coaching brief below milestones. */}
           <CoachBriefPanel
             cycleId={cycle.id}
             plan={plan}
