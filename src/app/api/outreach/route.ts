@@ -64,6 +64,11 @@ Return ONLY valid JSON — no prose, no markdown fences — matching this exact 
   ]
 }
 
+Additionally, alongside the JSON above, the same object MUST contain a "variants" key with EXACTLY 3 entries (id, label, subject, message, tone). The three variants are:
+  1. id="warm_intro"   — Friendly, curious — references a specific company detail
+  2. id="value_led"    — Direct, results-focused — leads with the candidate's most relevant win
+  3. id="referral"     — Polite, succinct — asks for a 15-min intro call or a referral
+
 Rules:
 - LinkedIn message: ≤300 characters (connection request note limit), punchy, no buzzwords
 - Email subject: ≤60 characters, specific to the role and company
@@ -173,7 +178,7 @@ export async function POST(req: Request) {
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: OUTREACH_SYSTEM,
       messages: [{ role: "user", content: userMessage }],
     });

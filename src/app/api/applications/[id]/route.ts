@@ -37,10 +37,13 @@ async function makeSupabaseServer() {
 }
 
 export type ApplicationStatus =
-  | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
+  | "researching" | "applying" | "applied"
+  | "screening" | "interviewing" | "final_round"
+  | "offer" | "accepted"
+  | "rejected" | "withdrawn";
 
 const VALID_STATUSES: ReadonlyArray<ApplicationStatus> =
-  ["applied", "interviewing", "offer", "rejected", "withdrawn"];
+  ["researching", "applying", "applied", "screening", "interviewing", "final_round", "offer", "accepted", "rejected", "withdrawn"];
 
 interface PatchBody {
   status?:           ApplicationStatus;
