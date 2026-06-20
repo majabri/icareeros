@@ -2,15 +2,13 @@
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
  * HireLandingNav — hire.icareeros.com nav.
  *
- * Per COWORK-BRIEF-platform-subdomain-landings-v1 (2026-05-27): jobs.* gets
- * a standalone landing with a "← iCareerOS" back-nav to the root marketing
- * surface. Otherwise mirrors LandingNav's structure (auth links absolute
- * icareeros.com URLs).
+ * Standalone landing nav for the subdomain. Mirrors LandingNav's structure
+ * (auth links absolute icareeros.com URLs). The back-link to root was
+ * removed per Strategy 2026-06-20 — the logo click goes to icareeros.com.
  */
 export function HireLandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -31,7 +29,10 @@ export function HireLandingNav() {
   return (
     <nav style={{
       background: "var(--surface-page)",
+      borderBottom: "1px solid rgba(255,255,255,0.08)",
       position: "sticky", top: 0, zIndex: 100,
+      backdropFilter: "blur(8px)",
+      WebkitBackdropFilter: "blur(8px)",
       boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
       transition: "box-shadow 0.3s",
     }}>
@@ -120,30 +121,6 @@ export function HireLandingNav() {
         </div>
       </div>
 
-      {/* Thin secondary row — back-link to root, below the main header line */}
-      <div style={{
-        borderTop: "1px solid var(--surface-border)",
-        padding: "0.45rem 1.5rem",
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}>
-        <a
-          href="https://icareeros.com"
-          style={{
-            fontSize: "0.8rem",
-            color: BRAND_COLORS.slateBlue,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
-          aria-label="Back to iCareerOS root"
-        >
-          ← iCareerOS
-        </a>
-      </div>
-
       {menuOpen && (
         <div style={{
           borderTop: "1px solid var(--surface-border)",
@@ -151,18 +128,6 @@ export function HireLandingNav() {
           padding: "1rem 1.5rem 1.5rem",
         }} className="nav-mobile-menu">
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0" }}>
-            <li>
-              <a
-                href="https://icareeros.com"
-                onClick={() => setMenuOpen(false)}
-                style={{
-                  display: "block", padding: "0.85rem 0",
-                  borderBottom: "1px solid var(--surface-border)",
-                  textDecoration: "none", color: "var(--text-secondary)",
-                  fontWeight: 500, fontSize: "1rem",
-                }}
-              >← iCareerOS</a>
-            </li>
             <li style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
               <ThemeToggle />
             </li>
