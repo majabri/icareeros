@@ -218,7 +218,8 @@ export type Database = {
           user_id?: string
         }
       }
-      job_applications: {
+      // 2026-06-20 (chore/jobs-migration-cleanup): renamed from `job_applications` to `applications` to match the canonical prod table name. App-code queries use .from("applications"); this generated types file was stale.
+      applications: {
         Row: {
           applied_at: string
           company: string
