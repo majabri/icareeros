@@ -26,6 +26,12 @@ export function HireLandingNav() {
     return () => window.removeEventListener("resize", fn);
   }, []);
 
+  const NAV_LINKS: Array<[string, string]> = [
+    ["https://icareeros.com/#platform", "The Platform"],
+    ["https://jobs.icareeros.com",      "For Job Seekers"],
+    ["https://hire.icareeros.com",      "For Hiring Teams"],
+  ];
+
   return (
     <nav style={{
       background: "var(--surface-page)",
@@ -46,6 +52,16 @@ export function HireLandingNav() {
           </a>
 
         <ul className="hidden lg:flex list-none m-0 p-0 items-center gap-8">
+          {NAV_LINKS.map(([href, label]) => (
+            <li key={href}>
+              <a
+                href={href}
+                className="text-sm font-normal whitespace-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors no-underline"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
           <li>
             <a
               href="https://icareeros.com/auth/login"
@@ -128,6 +144,16 @@ export function HireLandingNav() {
           padding: "1rem 1.5rem 1.5rem",
         }} className="nav-mobile-menu">
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0" }}>
+            {NAV_LINKS.map(([href, label]) => (
+              <li key={href}>
+                <a href={href} onClick={() => setMenuOpen(false)} style={{
+                  display: "block", padding: "0.85rem 0",
+                  borderBottom: "1px solid var(--surface-border)",
+                  textDecoration: "none", color: "var(--text-secondary)",
+                  fontWeight: 500, fontSize: "1rem",
+                }}>{label}</a>
+              </li>
+            ))}
             <li style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
               <ThemeToggle />
             </li>
