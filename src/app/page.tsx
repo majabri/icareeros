@@ -70,8 +70,8 @@ export default async function LandingPage() {
         <LandingNav />
         <main>
           <RootHeroSection />
-          <RootVisionSection />
           <RootPlatformInnovation />
+          <RootVisionSection />
           <RootCTASection />
         </main>
       </div>
