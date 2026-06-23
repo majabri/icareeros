@@ -69,10 +69,10 @@ export default async function LandingPage() {
       <div style={{ position: "relative", zIndex: 1 }}>
         <LandingNav />
         <main>
-          <RootHeroSection />
-          <RootVisionSection />
           <RootPlatformInnovation />
+          <RootVisionSection />
           <RootCTASection />
+          <RootHeroSection />
         </main>
       </div>
     </>
