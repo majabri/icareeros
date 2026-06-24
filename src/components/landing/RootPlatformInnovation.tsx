@@ -37,7 +37,7 @@ export function RootPlatformInnovation() {
             color: "var(--neutral-900)",
             lineHeight: 1.2,
           }}>
-            One operating system. Both sides of hiring.
+            Two loops. One platform. Both connected.
           </h2>
           <p style={{
             fontSize: "1.15rem",

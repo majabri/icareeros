@@ -65,7 +65,7 @@ export function RootCTASection() {
             Run your career like a system.
           </h2>
           <p style={{ fontSize: "1rem", marginBottom: "1.5rem", color: "var(--text-secondary, var(--neutral-700))" }}>
-            Six stages, AI coaching, continuous loop. Free to start.
+            Your next role is already out there. iCareerOS runs the loop until you find it. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=job_seeker" className="btn btn-primary">
             Start your career OS →
@@ -110,7 +110,7 @@ export function RootCTASection() {
             Hire candidates who are already prepared.
           </h2>
           <p style={{ fontSize: "1rem", marginBottom: "1.5rem", color: "var(--text-secondary, var(--neutral-700))" }}>
-            Verified, opt-in talent. AI JD analysis. Direct invites. Free to start.
+            They opted in. They've done the work. You just have to reach them. Free to start.
           </p>
           <a href="https://icareeros.com/auth/signup?role=employer" className="btn btn-secondary">
             Start hiring free →
