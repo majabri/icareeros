@@ -27,7 +27,6 @@ export function JobsLandingNav() {
   }, []);
 
   const NAV_LINKS: Array<[string, string]> = [
-    ["https://icareeros.com/#platform", "The Platform"],
     ["https://jobs.icareeros.com",      "For Job Seekers"],
     ["https://hire.icareeros.com",      "For Hiring Teams"],
   ];

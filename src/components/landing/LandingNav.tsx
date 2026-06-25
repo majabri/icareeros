@@ -13,8 +13,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
  * audience-switcher links no longer scroll within the page — they
  * navigate out to the standalone subdomain landings at
  * jobs.icareeros.com and hire.icareeros.com (Phase 5 collapse reversed).
- * The "The Platform" link still scrolls within the root page.
- * All auth links absolute icareeros.com URLs.
+ * All auth links absolute icareeros.com URLs. (The "The Platform"
+ * nav link was removed 2026-06-23 per Strategy — the platform section
+ * is still in the page body with id="platform" for direct linking.)
  */
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -33,7 +34,6 @@ export function LandingNav() {
   }, []);
 
   const NAV_LINKS: Array<[string, string]> = [
-    ["#platform",                       "The Platform"],
     ["https://jobs.icareeros.com",      "For Job Seekers"],
     ["https://hire.icareeros.com",      "For Hiring Teams"],
   ];
