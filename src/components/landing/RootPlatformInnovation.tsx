@@ -70,9 +70,9 @@ export function RootPlatformInnovation() {
             margin: "0 auto",
             lineHeight: 1.7,
           }}>
-            Pick the side that&rsquo;s yours. Both loops run on the
-            same platform — and connect when a hiring team reaches out
-            to a job seeker who&rsquo;s ready.
+            Pick your side. Both loops run on the same platform and
+            connect when a hiring team reaches a job seeker who&rsquo;s
+            ready.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export function RootPlatformInnovation() {
             href="https://jobs.icareeros.com"
             icon={<IconUser size={24} strokeWidth={1.5} color={BRAND_COLORS.teal} />}
             eyebrow="For job seekers"
-            heading="The career OS"
+            heading="Your career, continuously managed."
             body="A five-stage loop that runs from where you are today to where you want to be."
             stages={JOB_SEEKER_STAGES}
             ariaLabelStages="Five career-loop stages"
@@ -91,8 +91,8 @@ export function RootPlatformInnovation() {
             href="https://hire.icareeros.com"
             icon={<IconBuilding size={24} strokeWidth={1.5} color={BRAND_COLORS.teal} />}
             eyebrow="For hiring teams"
-            heading="The hiring OS"
-            body="A six-stage retention pathway from role design to long-term retention."
+            heading="Hire candidates who already know they fit."
+            body="A retention pathway from role design through long-term retention."
             stages={HIRING_TEAM_STAGES}
             ariaLabelStages="Six hiring-loop stages"
           />
