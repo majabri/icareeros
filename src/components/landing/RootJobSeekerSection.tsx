@@ -14,7 +14,7 @@ import { useCycleRotation } from "./useCycleRotation";
  *
  * Sprint Platform-Closure 2026-05-22:
  *   - Eyebrow: Title Case ("For Job Seekers")
- *   - Six stage CARDS in a 3-column grid (number / icon / headline / body)
+ *   - Five stage CARDS in a 3-column grid (number / icon / headline / body) — Coach folded into Advise per 5-stage refactor (PR #310)
  *   - Section heading + subhead + loop caption per brief
  *   - 5 feature cards (was 6)
  *   - Section-end CTA
@@ -42,12 +42,9 @@ const STAGES: readonly Stage[] = [
   { n: 4, label: "Act",      Icon: IconSearch,
     headline: "Apply with precision, not volume",
     body: "AI-drafted applications tailored per role. Tracked pipeline. Outreach templates. Apply smarter, not more." },
-  { n: 5, label: "Coach",    Icon: IconMicrophone,
-    headline: "Prepare like you have inside information",
-    body: "Role-specific interview prep, negotiation coaching, offer review. Know what to say and what to ask for." },
-  { n: 6, label: "Achieve",  Icon: IconTrophy,
+  { n: 5, label: "Achieve",  Icon: IconTrophy,
     headline: "Land the role. Start the loop again.",
-    body: "Offer management, milestone tracking, and a reset for your next goal — because careers don't stop." },
+    body: "Role-specific interview prep, offer analysis, salary benchmarks, and milestone tracking. Land the role knowing you were ready for it — then reset for the next goal." },
 ] as const;
 
 const PAINS = [
@@ -57,6 +54,7 @@ const PAINS = [
   "Interview prep happens the night before, if at all",
   "Offers arrive with no context on whether they're fair",
   "The cycle repeats for the next role, just as chaotic",
+  "AI is now screening your resume before a human ever reads it — and most job seekers have no idea how to optimize for it",
 ];
 
 const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
@@ -70,10 +68,12 @@ const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
     body: "Practice with questions built for the specific role and company — not generic drills." },
   { Icon: IconScale, title: "Offer context before you sign",
     body: "Salary benchmarks, negotiation framing, what to ask for and how." },
+  { Icon: IconMessageCircle, title: "AI coach on demand",
+    body: "Ask career questions, get a coaching brief, or practise for an interview — any time, without scheduling a session. Built into the Advise stage." },
 ];
 
-// Per-stage dwell (ms). 2s for stages 1-5, 5s pause on stage 6.
-const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 5000] as const;
+// Per-stage dwell (ms). 2s for stages 1-4, 5s pause on stage 5 (Achieve).
+const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 5000] as const;
 
 export function RootJobSeekerSection() {
   const { current: currentStage, setCurrent, setPaused } = useCycleRotation(
@@ -102,10 +102,11 @@ export function RootJobSeekerSection() {
             Your career doesn&rsquo;t need more advice. It needs a system.
           </h2>
           <p style={{ fontSize: "1.1rem", color: "var(--neutral-700)", maxWidth: 780, margin: "0 auto", lineHeight: 1.7 }}>
-            iCareerOS runs a continuous six-stage loop — from Evaluate
-            to Achieve — handling the mechanics of your job search so
-            you can focus on the one thing no AI can do for you:
-            showing up and performing.
+            iCareerOS runs a continuous five-stage loop — from
+            Evaluate to Achieve — handling resume tailoring, fit
+            scoring, interview prep, and offer analysis, so you can
+            focus on the one thing no AI can do: showing up prepared
+            and performing.
           </p>
         </div>
 

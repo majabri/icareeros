@@ -3,7 +3,10 @@
 import { STAGE_COLORS_ORDERED, BRAND_COLORS } from "@/lib/design-tokens";
 
 /**
- * CareerCycleSVG — animated circular 6-stage cycle visualisation.
+ * CareerCycleSVG — animated circular cycle visualisation, data-driven
+ * by the length of the `stages` prop (jobs.* drives a 5-element career
+ * loop; hire.* drives the People Retention Pathway). Positions auto-
+ * compute around the ring at 360/N degrees apart.
  *
  * Per-stage colors (Amir 2026-05-20) — every node and every connecting
  * arc carries its own brand-palette color, so the cycle reads as a
@@ -36,7 +39,7 @@ type Stage = {
   label: string;
 };
 
-/** Default 6-stage color palette — re-exported from the global
+/** 6-color brand palette — re-exported from the global
  *  design tokens so landing, dashboard, and sidebar share one source.
  *  See `src/lib/design-tokens.ts` STAGE_COLORS_ORDERED. */
 export const STAGE_COLORS = STAGE_COLORS_ORDERED;
@@ -89,7 +92,7 @@ export function CareerCycleSVG({
         width="100%"
         height="auto"
         role="img"
-        aria-label={`Six-stage ${centerLabel} cycle`}
+        aria-label={`${stages.length}-stage ${centerLabel} cycle`}
         style={{ display: "block" }}
       >
         <defs>

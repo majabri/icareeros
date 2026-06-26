@@ -2,7 +2,7 @@
 import {
   IconRulerMeasure, IconUserSearch, IconUsersPlus, IconHeartHandshake,
   IconTrendingUp, IconShieldCheck,
-  IconBrain, IconAdjustments, IconMailForward, IconBuilding, IconX,
+  IconBrain, IconAdjustments, IconMailForward, IconBuilding, IconRadar, IconX,
   type Icon,
 } from "@tabler/icons-react";
 import { BRAND_COLORS } from "@/lib/design-tokens";
@@ -41,7 +41,7 @@ const STAGES: readonly Stage[] = [
     body: "The candidates you find are working on the gaps relevant to their target roles — including yours." },
   { n: 4, label: "Support", Icon: IconHeartHandshake,
     headline: "They're applying with precision",
-    body: "iCareerOS candidates apply deliberately — tailored applications to roles that match. Less noise in your pipeline." },
+    body: "iCareerOS candidates apply deliberately — tailored applications to roles that match. Less noise in your pipeline. Higher signal per application." },
   { n: 5, label: "Develop", Icon: IconTrendingUp,
     headline: "They've done interview prep for your role",
     body: "Role-specific preparation built into the OS. First conversations are more substantive." },
@@ -56,6 +56,7 @@ const PAINS = [
   "Screening calls that reveal the resume was a stretch",
   "Offer-stage surprises — salary expectations nowhere near reality",
   "Time-to-fill measured in months, not weeks",
+  "AI auto-apply tools mean you're reviewing 10x more applications from candidates who used AI to blast 200 roles — most with no genuine interest in yours specifically",
 ];
 
 const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
@@ -69,6 +70,8 @@ const FEATURES: Array<{ Icon: Icon; title: string; body: string }> = [
     body: "Reach candidates where they're managing their job search. Track invite status and engagement." },
   { Icon: IconBuilding, title: "Company profile",
     body: "Show candidates who you are before they decide whether to respond. Culture, mission, open roles." },
+  { Icon: IconRadar, title: "Candidate readiness signals",
+    body: "See where each candidate is in their career OS. A candidate in Act is ready to apply now. One in Learn is a few weeks out. Reach out at the right moment." },
 ];
 
 const STAGE_DURATIONS_MS = [2000, 2000, 2000, 2000, 2000, 5000] as const;
@@ -99,9 +102,9 @@ export function RootHiringTeamSection() {
           <p style={{ fontSize: "1.1rem", color: "var(--neutral-700)", maxWidth: 780, margin: "0 auto", lineHeight: 1.7 }}>
             iCareerOS candidates aren&rsquo;t passive. They&rsquo;re
             actively managing their careers — assessing fit, building
-            skills, preparing for interviews — and they&rsquo;ve opted
-            in to be discovered. That&rsquo;s a different kind of
-            candidate.
+            skills, preparing for interviews — and they chose to be
+            discoverable. That&rsquo;s a different kind of first
+            conversation.
           </p>
         </div>
 
@@ -154,11 +157,12 @@ export function RootHiringTeamSection() {
         {/* Stages — heading + subhead + supporting cycle SVG + 3-column grid */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <h3 style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--neutral-900)", marginBottom: "0.6rem" }}>
-            The six stages — from the employer side.
+            What you get on the other side of the loop.
           </h3>
           <p style={{ fontSize: "1rem", color: "var(--neutral-700)", maxWidth: 720, margin: "0 auto", lineHeight: 1.65 }}>
-            Every candidate you reach is already working through this
-            loop. That&rsquo;s what makes them different.
+            Every candidate you reach is already working through a
+            structured career OS. That&rsquo;s what makes them
+            different from everyone else in your inbox.
           </p>
         </div>
 

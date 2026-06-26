@@ -1,5 +1,7 @@
 "use client";
 
+import { BRAND_COLORS } from "@/lib/design-tokens";
+
 /**
  * RootHeroSection — icareeros.com hero (dual-audience).
  *
@@ -17,7 +19,7 @@ export function RootHeroSection() {
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div style={{ maxWidth: 960, position: "relative", zIndex: 2 }}>
-        <div style={{ color:"#00B8A9", fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
+        <div style={{ color: BRAND_COLORS.teal, fontWeight:600, fontSize:"1rem", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"1px" }}>
           The intelligent career operating system
         </div>
 
@@ -29,6 +31,15 @@ export function RootHeroSection() {
           Two continuous loops — one for job seekers, one for hiring
           teams — running on the same platform. The system works
           because both sides are in it.
+        </p>
+
+        <p style={{
+          fontSize: "12px",
+          color: BRAND_COLORS.slateBlue,
+          marginTop: "0.75rem",
+          textAlign: "center" as const,
+        }}>
+          No credit card. Cancel any time. Both audiences welcome.
         </p>
 
       </div>

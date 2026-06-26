@@ -3,14 +3,14 @@
 /**
  * RootVisionSection — platform vision on icareeros.com.
  * Sprint Platform-Closure 2026-05-22 + v3 rewrite 2026-06-23: 4-paragraph copy.
- * Heading changed to "Built differently." — paragraphs unchanged.
+ * Heading changed to "One loop. Not ten tools." — paragraphs unchanged.
  */
 export function RootVisionSection() {
   return (
     <section className="landing-fade-bg" style={{ padding:"4rem 3rem", background:"var(--neutral-100)" }}>
       <div style={{ maxWidth:780, margin:"0 auto" }}>
         <h2 style={{ fontSize:"2.5rem", fontWeight:800, marginBottom:"2rem", color:"var(--neutral-900)", textAlign:"center" }}>
-          Built differently.
+          One loop. Not ten tools.
         </h2>
 
         <div style={{ display:"flex", flexDirection:"column", gap:"1.5rem", color:"var(--neutral-800)", fontSize:"1.1rem", lineHeight:1.75 }}>
