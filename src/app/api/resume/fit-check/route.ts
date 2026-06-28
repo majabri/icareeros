@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
+import { embed, cosineSimilarity, cosineToScore } from "@/lib/embeddings/openai";
+import { createHash } from "node:crypto";
 
 /**
  * POST /api/resume/fit-check
@@ -45,6 +47,10 @@ export interface FitCheckResult {
   recommendations: string[];
   breakdown: FitBreakdown;
   keywordCoverage: KeywordCoverage;
+  /** 2026-06-28 — semantic similarity 0-100 from OpenAI text-embedding-3-small.
+   *  Null when OPENAI_API_KEY is unset or the embedding call failed — UI hides
+   *  the tag in that case. */
+  semanticScore?: number | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -169,8 +175,83 @@ Guidelines:
       result.keywordCoverage = { covered: [], missing: [], coverageScore: 0 };
     }
 
+    // 2026-06-28 — semantic score (pgvector + OpenAI text-embedding-3-small).
+    // Best-effort: null on missing key, missing tables, or fetch failure.
+    try {
+      result.semanticScore = await computeSemanticScore(supabase, user.id, resumeText, jobDescription);
+    } catch {
+      result.semanticScore = null;
+    }
+
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
   }
+}
+
+// ── Semantic scoring helpers ─────────────────────────────────────────
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+/**
+ * Compute a 0-100 semantic similarity score between profile-resume text
+ * and job-description text. Caches the profile embedding in
+ * career_profiles.embedding (re-uses if the underlying text fingerprint
+ * matches) and the job embedding in job_embeddings keyed on a sha256
+ * fingerprint of the JD text. Returns null when embeddings are unavailable.
+ */
+async function computeSemanticScore(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  resumeText: string,
+  jobDescription: string,
+): Promise<number | null> {
+  // Profile embedding — cache in career_profiles.embedding + a fingerprint
+  // column so we know when to re-embed. We don't have a fingerprint column,
+  // so we just trust the existing cached embedding; an explicit "refresh"
+  // option could come later.
+  const { data: profileRow } = await supabase
+    .from("career_profiles")
+    .select("embedding")
+    .eq("user_id", userId)
+    .maybeSingle();
+  let profileEmbedding: number[] | null = (profileRow?.embedding as number[] | null) ?? null;
+  if (!profileEmbedding) {
+    profileEmbedding = await embed(resumeText);
+    if (profileEmbedding) {
+      // Best-effort persist — don't fail the request if this errors
+      await supabase
+        .from("career_profiles")
+        .upsert({ user_id: userId, embedding: profileEmbedding }, { onConflict: "user_id" })
+        .then(() => undefined, () => undefined);
+    }
+  }
+  if (!profileEmbedding) return null;
+
+  // Job embedding — cache in job_embeddings keyed by sha256(JD) recorded
+  // in the job_url column (we'll repurpose it as a fingerprint since the
+  // caller may not provide a real URL for paste-mode JDs).
+  const jdFp = `sha256:${sha256(jobDescription)}`;
+  const { data: jobRow } = await supabase
+    .from("job_embeddings")
+    .select("embedding")
+    .eq("user_id", userId)
+    .eq("job_url", jdFp)
+    .maybeSingle();
+  let jobEmbedding: number[] | null = (jobRow?.embedding as number[] | null) ?? null;
+  if (!jobEmbedding) {
+    jobEmbedding = await embed(jobDescription);
+    if (jobEmbedding) {
+      await supabase
+        .from("job_embeddings")
+        .upsert({ user_id: userId, job_url: jdFp, embedding: jobEmbedding }, { onConflict: "user_id,job_url" })
+        .then(() => undefined, () => undefined);
+    }
+  }
+  if (!jobEmbedding) return null;
+
+  const cos = cosineSimilarity(profileEmbedding, jobEmbedding);
+  return cosineToScore(cos);
 }

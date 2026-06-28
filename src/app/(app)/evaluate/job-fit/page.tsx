@@ -58,6 +58,9 @@ interface FitCheckResult {
   recommendations: string[];
   breakdown?: FitBreakdown;
   keywordCoverage?: KeywordCoverage;
+  /** 2026-06-28 — semantic similarity (0-100) from pgvector + OpenAI
+   *  text-embedding-3-small. Null when OPENAI_API_KEY is unset. */
+  semanticScore?: number | null;
 }
 
 interface CritiqueResult {
@@ -993,6 +996,15 @@ export default function ResumeAdvisorPage() {
                         label="Experience fit"
                         value={result.breakdown.experienceFit}
                       />
+                      {/* 2026-06-28 (Brief Task 2) — pgvector semantic similarity.
+                          Renders only when the backend returned a non-null value
+                          (i.e. OPENAI_API_KEY is configured and embeddings ran). */}
+                      {typeof result.semanticScore === "number" && (
+                        <BreakdownBar
+                          label="Semantic match"
+                          value={result.semanticScore}
+                        />
+                      )}
                       <BreakdownTag
                         label="Seniority"
                         value={result.breakdown.seniorityFit}

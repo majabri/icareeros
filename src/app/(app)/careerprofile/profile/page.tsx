@@ -141,6 +141,87 @@ export default function CareerProfilePage() {
   const [exportMsg, setExportMsg]             = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // GitHub import state — 2026-06-28 (Brief Task 1)
+  const [githubInput,       setGithubInput]       = useState("");
+  const [githubLoading,     setGithubLoading]     = useState(false);
+  const [githubError,       setGithubError]       = useState<string | null>(null);
+  const [githubPreview,     setGithubPreview]     = useState<{
+    username: string;
+    url: string;
+    name: string | null;
+    bio: string | null;
+    newSkills: string[];
+    reposScanned: number;
+  } | null>(null);
+  const [githubImported,    setGithubImported]    = useState(false);
+
+  async function handleGithubFetch() {
+    setGithubLoading(true);
+    setGithubError(null);
+    setGithubImported(false);
+    try {
+      const body: { username?: string; url?: string } = {};
+      const trimmed = githubInput.trim();
+      if (!trimmed) {
+        setGithubError("Enter a GitHub username or profile URL.");
+        return;
+      }
+      if (trimmed.startsWith("http")) body.url = trimmed;
+      else body.username = trimmed;
+      const res = await fetch("/api/career-profile/import-github", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ...body, confirm: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setGithubError(data?.error ?? `Fetch failed (HTTP ${res.status})`);
+        return;
+      }
+      setGithubPreview({
+        username:     data.username,
+        url:          data.url,
+        name:         data.name ?? null,
+        bio:          data.bio ?? null,
+        newSkills:    Array.isArray(data.newSkills) ? data.newSkills : [],
+        reposScanned: typeof data.reposScanned === "number" ? data.reposScanned : 0,
+      });
+    } catch (err) {
+      setGithubError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setGithubLoading(false);
+    }
+  }
+
+  async function handleGithubConfirm() {
+    if (!githubPreview) return;
+    setGithubLoading(true);
+    setGithubError(null);
+    try {
+      const res = await fetch("/api/career-profile/import-github", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ username: githubPreview.username, confirm: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setGithubError(data?.error ?? `Import failed (HTTP ${res.status})`);
+        return;
+      }
+      // Merge the newly-confirmed skills into the in-memory skills list.
+      const merged = Array.isArray(data.skills) ? (data.skills as string[]) : null;
+      if (merged) setSkills(merged);
+      setGithubImported(true);
+      setGithubPreview(null);
+      setGithubInput("");
+    } catch (err) {
+      setGithubError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setGithubLoading(false);
+    }
+  }
+
+
   async function ensureUser(): Promise<{ id: string; email: string } | null> {
     if (userId) return { id: userId, email: userEmail };
     const user = await getAuthedUser(supabase);
@@ -638,6 +719,116 @@ export default function CareerProfilePage() {
                     </div>}
               </div>
             )}
+          {/* ── GitHub Import ─────────────────────────────────────── */}
+          {/* 2026-06-28 — Brief Task 1: pulls public languages + topics from
+              the user's GitHub repos and unions them into Skills. Read-only
+              GitHub API (no auth, no scopes). */}
+          <Section
+            title="Import from GitHub"
+            subtitle="Add languages and topics from your public repos to Skills."
+          >
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  value={githubInput}
+                  onChange={e => setGithubInput(e.target.value)}
+                  placeholder="GitHub username or full profile URL"
+                  className={inputCls}
+                  disabled={githubLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleGithubFetch()}
+                  disabled={githubLoading || !githubInput.trim()}
+                  className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {githubLoading && !githubPreview ? "Fetching…" : "Fetch"}
+                </button>
+              </div>
+
+              {githubError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {githubError}
+                </p>
+              )}
+
+              {githubImported && !githubError && (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  GitHub skills merged into your profile.
+                </p>
+              )}
+
+              {githubPreview && (
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="flex flex-col gap-1">
+                    <a
+                      href={githubPreview.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-brand-700 hover:underline"
+                    >
+                      @{githubPreview.username}
+                    </a>
+                    {githubPreview.name && (
+                      <p className="text-sm text-gray-800">{githubPreview.name}</p>
+                    )}
+                    {githubPreview.bio && (
+                      <p className="text-xs text-gray-600">{githubPreview.bio}</p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Scanned {githubPreview.reposScanned} public repo
+                      {githubPreview.reposScanned === 1 ? "" : "s"} ·
+                      {" "}{githubPreview.newSkills.length} new skill
+                      {githubPreview.newSkills.length === 1 ? "" : "s"} found.
+                    </p>
+                  </div>
+
+                  {githubPreview.newSkills.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {githubPreview.newSkills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">
+                      No new skills detected — your profile already covers everything we found.
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleGithubConfirm()}
+                      disabled={githubLoading || githubPreview.newSkills.length === 0}
+                      className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {githubLoading ? "Importing…" : "Add to Skills"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setGithubPreview(null); setGithubError(null); }}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-500">
+                We read your public profile and the latest 100 repos (forks
+                and archived repos skipped). Skills are <strong>added</strong>
+                {" "}— nothing is removed.
+              </p>
+            </div>
+          </Section>
+
           </Section>
 
           {/* ── Personal Information ──────────────────────────────────── */}

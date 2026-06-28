@@ -141,5 +141,18 @@ export async function POST(req: Request) {
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? "insert_failed" }, { status: 500 });
   }
+
+  // 2026-06-28 — auto-log 'created' event to application_events.
+  // Best-effort: don't fail the request if the event insert errors.
+  await supabase
+    .from("application_events")
+    .insert({
+      user_id:        user.id,
+      application_id: data.id,
+      event_type:     "created",
+      metadata:       { status: data.status, job_title: data.job_title, company: data.company },
+    })
+    .then(() => undefined, () => undefined);
+
   return NextResponse.json({ application: data }, { status: 200 });
 }
