@@ -58,12 +58,14 @@ describe("fetchJobFromUrl — Greenhouse", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("returns error on Greenhouse API 404", async () => {
+  it("returns 'no longer listed' on Greenhouse API 404 (updated 2026-06-27 per Fix 4)", async () => {
     globalThis.fetch = vi.fn(() => mockJson({}, { status: 404 })) as unknown as typeof fetch;
     const r = await fetchJobFromUrl("https://boards.greenhouse.io/stripe/jobs/99999");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error).toMatch(/HTTP 404|usable job description/);
+    // Fix 4: ATS 404s now translate to a user-friendly "no longer listed"
+    // message instead of the raw "HTTP 404" string.
+    expect(r.error).toMatch(/no longer listed/i);
   });
 });
 
