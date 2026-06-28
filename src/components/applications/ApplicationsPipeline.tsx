@@ -12,7 +12,7 @@
  * Phase 5 Item 4 — see docs/specs/COWORK-BRIEF-phase5-v1.md.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AddApplicationForm } from "./AddApplicationForm";
 import {
@@ -43,6 +43,17 @@ const STATUS_PILL: Record<ApplicationStatus, string> = {
   withdrawn:    "bg-amber-50 text-amber-700 border-amber-200",
 };
 
+// 2026-06-28 (Brief Task 3) — application_events row shape returned by
+// GET /api/applications/[id]/events. Newest first.
+interface ApplicationEvent {
+  id:             string;
+  application_id: string;
+  event_type:     string;
+  metadata:       Record<string, unknown> | null;
+  occurred_at:    string;
+  created_at:     string;
+}
+
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
@@ -70,6 +81,41 @@ export function ApplicationsPipeline() {
   // Brief B3 Task 18 — per-row notes editing.
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [draftNotes,     setDraftNotes]     = useState<string>("");
+
+  // 2026-06-28 (Brief Task 3) — Activity timeline: events fetched lazily per
+  // row on first expand and cached in memory for the session.
+  const [expandedRowId,   setExpandedRowId]   = useState<string | null>(null);
+  const [eventsByApp,     setEventsByApp]     = useState<Record<string, ApplicationEvent[]>>({});
+  const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
+  const [eventsErrorById, setEventsErrorById] = useState<Record<string, string | null>>({});
+
+  const toggleActivity = useCallback(async (id: string) => {
+    if (expandedRowId === id) {
+      setExpandedRowId(null);
+      return;
+    }
+    setExpandedRowId(id);
+    if (eventsByApp[id]) return; // already loaded — reuse cached
+    setEventsLoadingId(id);
+    setEventsErrorById(prev => ({ ...prev, [id]: null }));
+    try {
+      const res = await fetch(`/api/applications/${id}/events`);
+      const data = await res.json();
+      if (!res.ok) {
+        setEventsErrorById(prev => ({ ...prev, [id]: data?.error ?? `HTTP ${res.status}` }));
+        return;
+      }
+      const events: ApplicationEvent[] = Array.isArray(data?.events) ? data.events : [];
+      setEventsByApp(prev => ({ ...prev, [id]: events }));
+    } catch (err) {
+      setEventsErrorById(prev => ({
+        ...prev,
+        [id]: err instanceof Error ? err.message : "Network error",
+      }));
+    } finally {
+      setEventsLoadingId(prev => (prev === id ? null : prev));
+    }
+  }, [expandedRowId, eventsByApp]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -285,7 +331,8 @@ export function ApplicationsPipeline() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visible.map((row) => (
-                <tr key={row.id} data-testid={`application-row-${row.id}`}>
+                <Fragment key={row.id}>
+                <tr data-testid={`application-row-${row.id}`}>
                   <td className="px-4 py-3 align-top">
                     <p className="font-medium text-gray-900">{row.job_title}</p>
                     {editingNotesId === row.id ? (
@@ -360,15 +407,39 @@ export function ApplicationsPipeline() {
                     </select>
                   </td>
                   <td className="px-4 py-3 align-top text-right">
-                    <button
-                      onClick={() => void handleDelete(row.id)}
-                      className="text-xs text-gray-400 hover:text-red-600"
-                      data-testid={`delete-${row.id}`}
-                    >
-                      Delete
-                    </button>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void toggleActivity(row.id)}
+                        className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                        aria-expanded={expandedRowId === row.id}
+                        aria-controls={`activity-${row.id}`}
+                        data-testid={`activity-toggle-${row.id}`}
+                      >
+                        {expandedRowId === row.id ? "Hide activity" : "Activity"}
+                      </button>
+                      <button
+                        onClick={() => void handleDelete(row.id)}
+                        className="text-xs text-gray-400 hover:text-red-600"
+                        data-testid={`delete-${row.id}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
+                {expandedRowId === row.id && (
+                  <tr id={`activity-${row.id}`} data-testid={`activity-${row.id}`}>
+                    <td colSpan={5} className="bg-gray-50 px-4 py-3">
+                      <ApplicationActivityTimeline
+                        loading={eventsLoadingId === row.id}
+                        error={eventsErrorById[row.id] ?? null}
+                        events={eventsByApp[row.id] ?? []}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -442,4 +513,82 @@ function Counter({ label, value, tint }: CounterProps) {
       <p className={`mt-1 text-2xl font-bold ${tintClass}`}>{value}</p>
     </div>
   );
+}
+
+
+// 2026-06-28 (Brief Task 3) — Activity timeline rendered inside the row's
+// expanded section. Pure presentational; parent handles fetching + caching.
+function ApplicationActivityTimeline({
+  loading,
+  error,
+  events,
+}: {
+  loading: boolean;
+  error:   string | null;
+  events:  ApplicationEvent[];
+}) {
+  if (loading) return <p className="text-xs italic text-gray-500">Loading activity…</p>;
+  if (error) {
+    return (
+      <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+        Failed to load activity: {error}
+      </p>
+    );
+  }
+  if (events.length === 0) {
+    return (
+      <p className="text-xs italic text-gray-500">
+        No activity logged for this application yet.
+      </p>
+    );
+  }
+  return (
+    <ol className="space-y-2 border-l-2 border-brand-200 pl-4">
+      {events.map((ev) => (
+        <li key={ev.id} className="relative">
+          <span className="absolute -left-[21px] mt-1 inline-block h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white" />
+          <p className="text-xs font-medium text-gray-900">{formatEventTitle(ev)}</p>
+          {formatEventDetail(ev) && (
+            <p className="text-[11px] text-gray-600">{formatEventDetail(ev)}</p>
+          )}
+          <p className="text-[10px] uppercase tracking-wider text-gray-400">
+            {fmtDate(ev.occurred_at)}
+          </p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function formatEventTitle(ev: ApplicationEvent): string {
+  switch (ev.event_type) {
+    case "created":             return "Application created";
+    case "status_changed":      return "Status changed";
+    case "note":                return "Note added";
+    case "follow_up":           return "Follow-up logged";
+    case "interview_scheduled": return "Interview scheduled";
+    case "interview_completed": return "Interview completed";
+    case "offer_received":      return "Offer received";
+    case "offer_accepted":      return "Offer accepted";
+    case "rejected":            return "Rejected";
+    case "withdrawn":           return "Withdrawn";
+    default:                    return ev.event_type;
+  }
+}
+
+function formatEventDetail(ev: ApplicationEvent): string | null {
+  const md = ev.metadata ?? {};
+  if (ev.event_type === "status_changed") {
+    const from = typeof md.from === "string" ? STATUS_LABEL[md.from as ApplicationStatus] ?? md.from : null;
+    const to   = typeof md.to   === "string" ? STATUS_LABEL[md.to   as ApplicationStatus] ?? md.to   : null;
+    if (from && to) return `${from} → ${to}`;
+    if (to)         return `Now: ${to}`;
+    return null;
+  }
+  if (ev.event_type === "note" && typeof md.note === "string") return md.note;
+  if (ev.event_type === "created" && typeof md.status === "string") {
+    const lbl = STATUS_LABEL[md.status as ApplicationStatus] ?? md.status;
+    return `Initial status: ${lbl}`;
+  }
+  return null;
 }
