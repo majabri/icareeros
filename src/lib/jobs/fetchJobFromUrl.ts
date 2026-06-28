@@ -18,6 +18,65 @@ const MAX_CHARS    = 10_000;
 const FETCH_TIMEOUT = 8_000;
 const UA = "Mozilla/5.0 (compatible; iCareerOS-FetchBot/1.0; +https://icareeros.com)";
 
+/**
+ * Hosts we never even try to fetch — these are login-walled or JS-rendered
+ * SPA shells that the regex stripper cannot meaningfully extract. Better to
+ * tell the user upfront than to silently return a cookie-banner / login-form
+ * shell that passes the length threshold but is useless to the LLM.
+ */
+const BLOCKED_HOSTS = [
+  "linkedin.com", "www.linkedin.com",
+  "indeed.com", "www.indeed.com",
+  "glassdoor.com", "www.glassdoor.com",
+  "monster.com", "www.monster.com",
+  "ziprecruiter.com", "www.ziprecruiter.com",
+  "myworkdayjobs.com",
+];
+
+/**
+ * Tokens that strongly suggest a real job description is present. Used as a
+ * content-quality gate on the generic HTML fallback. If none of these appear
+ * in the stripped text we reject the fetch.
+ */
+const JOB_CONTENT_SIGNALS = [
+  "responsibilities", "requirements", "qualifications",
+  "experience", "skills", "benefits", "compensation",
+  "about the role", "what you'll do", "what we're looking for",
+  "job description", "we are looking", "you will",
+];
+
+/**
+ * Tokens that strongly suggest we hit a login wall / cookie consent / SPA
+ * shell instead of a job description. Checked against the first ~2k chars
+ * (where login walls live) — finding them anywhere later is fine because
+ * many real job descriptions mention "cookie policy" in a footer.
+ */
+const LOGIN_SIGNALS = [
+  "sign in to", "log in to", "create an account",
+  "cookie policy", "privacy policy", "terms of service",
+  "javascript is required", "enable javascript",
+];
+
+/**
+ * Common shape returned when the caller passed a host's homepage / company
+ * page instead of a specific job posting URL. Distinct error so the UI can
+ * coach the user.
+ */
+function orgRootError(ats: string): FetchedJobError {
+  return {
+    ok:    false,
+    error: `This is a ${ats} company page, not a specific job posting. Please open a specific job listing and paste that URL.`,
+  };
+}
+
+/** Common 404 shape — translates ATS 404 to a user-friendly message. */
+function jobNotListedError(): FetchedJobError {
+  return {
+    ok:    false,
+    error: "This job posting is no longer listed. It may have been filled or removed. Try finding the current listing and paste that URL.",
+  };
+}
+
 export interface FetchedJob {
   ok:          true;
   source:      "greenhouse" | "lever" | "ashby" | "html";
@@ -45,6 +104,15 @@ export async function fetchJobFromUrl(rawUrl: string): Promise<FetchJobResult> {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return { ok: false, error: "Only http(s) URLs are supported." };
+  }
+
+  // Fix 1 — known login-walled / SPA-only hosts: reject upfront with a useful
+  // message instead of feeding the LLM 30k chars of login-form boilerplate.
+  if (BLOCKED_HOSTS.some(h => url.hostname === h || url.hostname.endsWith("." + h))) {
+    return {
+      ok:    false,
+      error: `${url.hostname} requires login to view job postings. Please paste the job description manually.`,
+    };
   }
 
   // Try ATS-specific fast paths first
@@ -84,6 +152,9 @@ function tryGreenhouse(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> |
   //   boards.greenhouse.io/<org>/jobs/<id>
   //   job-boards.greenhouse.io/<org>/jobs/<id>
   if (!/(^|\.)greenhouse\.io$/.test(u.hostname)) return null;
+  // Fix 3 — org-root URL like boards.greenhouse.io/<org> with no /jobs/<id>
+  const orgOnly = u.pathname.match(/^\/([^/]+)\/?$/);
+  if (orgOnly) return Promise.resolve(orgRootError("Greenhouse"));
   const m = u.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/);
   if (!m) return null;
   const [, org, id] = m;
@@ -92,6 +163,8 @@ function tryGreenhouse(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> |
       const res = await fetchWithTimeout(
         `https://boards-api.greenhouse.io/v1/boards/${org}/jobs/${id}`,
       );
+      // Fix 4 — translate 404 to a user-friendly "job no longer listed"
+      if (res.status === 404) return jobNotListedError();
       if (!res.ok) return { ok: false, error: `Greenhouse API: HTTP ${res.status}` } as FetchedJobError;
       const j = await res.json() as {
         title?: string;
@@ -115,7 +188,12 @@ function tryGreenhouse(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> |
 
 function tryLever(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null {
   if (u.hostname !== "jobs.lever.co") return null;
-  const m = u.pathname.match(/^\/([^/]+)\/([0-9a-f-]+)/i);
+  // Fix 3 — org-root URL like jobs.lever.co/<org> with no posting id
+  const orgOnly = u.pathname.match(/^\/([^/]+)\/?$/);
+  if (orgOnly) return Promise.resolve(orgRootError("Lever"));
+  // Fix 3 — tightened ID matcher: require at least 8 hex/hyphen chars so
+  // org-root URLs and 1- or 2-char path fragments don't false-positive.
+  const m = u.pathname.match(/^\/([^/]+)\/([0-9a-f-]{8}[0-9a-f-]*)/i);
   if (!m) return null;
   const [, org, id] = m;
   return (async () => {
@@ -123,6 +201,8 @@ function tryLever(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
       const res = await fetchWithTimeout(
         `https://api.lever.co/v0/postings/${org}/${id}?mode=json`,
       );
+      // Fix 4 — translate 404 to "job no longer listed"
+      if (res.status === 404) return jobNotListedError();
       if (!res.ok) return { ok: false, error: `Lever API: HTTP ${res.status}` } as FetchedJobError;
       const j = await res.json() as {
         text?:           string;
@@ -160,11 +240,16 @@ function tryLever(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
 
 function tryAshby(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null {
   if (u.hostname !== "jobs.ashbyhq.com" && u.hostname !== "ashbyhq.com") return null;
+  // Fix 3 — org-root URL like jobs.ashbyhq.com/<org> with no posting slug
+  const orgOnly = u.pathname.match(/^\/([^/]+)\/?$/);
+  if (orgOnly) return Promise.resolve(orgRootError("Ashby"));
   // Ashby is a SPA; the SSR'd HTML carries the job text inside a script tag
   // as `window.__APP_DATA__ = {...}`. We can pluck it out with a regex.
   return (async () => {
     try {
       const res = await fetchWithTimeout(u.toString());
+      // Fix 4 — translate 404 to "job no longer listed"
+      if (res.status === 404) return jobNotListedError();
       if (!res.ok) return { ok: false, error: `Ashby: HTTP ${res.status}` } as FetchedJobError;
       const html = await res.text();
       // Cheap structured extraction: look for a JSON blob containing
@@ -193,12 +278,29 @@ function tryAshby(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
 async function fetchAndExtractHtml(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> {
   try {
     const res = await fetchWithTimeout(u.toString());
+    if (res.status === 404) return jobNotListedError();
     if (!res.ok) return { ok: false, error: `Fetch: HTTP ${res.status}` };
-    const html  = await res.text();
-    const title = html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim();
+    const html        = await res.text();
+    const title       = html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim();
+    const strippedText = stripHtml(html);
+
+    // Fix 2 — content-quality gate. Replaces the prior caller-side
+    // length-only check (>= 80 chars) which let cookie-banner garbage
+    // pass. Reject if no job-content signals OR if the head of the
+    // stripped text reads like a login wall.
+    const textLower    = strippedText.toLowerCase();
+    const hasJobContent = JOB_CONTENT_SIGNALS.some(s => textLower.includes(s));
+    const hasLoginWall  = LOGIN_SIGNALS.some(s => textLower.slice(0, 2000).includes(s));
+    if (!hasJobContent || hasLoginWall) {
+      return {
+        ok:    false,
+        error: "Could not extract a job description from this URL. The page may require login or use JavaScript rendering. Please paste the job description manually.",
+      };
+    }
+
     return {
       title:       title?.replace(/\s*\|.*$/, ""),
-      description: stripHtml(html),
+      description: strippedText,
     };
   } catch (e) {
     return { ok: false, error: `Fetch failed: ${(e as Error).message}` };

@@ -207,6 +207,11 @@ export default function ResumeAdvisorPage() {
     title?: string; company?: string; location?: string; source: string;
   } | null>(null);
   const [urlFetchError, setUrlFetchError] = useState<string | null>(null);
+  // Fix 5 (2026-06-27) — suspicious-content warning. Set when the fetcher
+  // returned ok:true but the content looks like a login wall or is too short
+  // to be a real job description. UI shows an amber banner + "Paste manually"
+  // CTA so the user can bail before feeding junk to the LLM.
+  const [urlWarning,    setUrlWarning]    = useState<string | null>(null);
 
   // Fit check state
   const [checking, setChecking] = useState(false);
@@ -385,6 +390,7 @@ export default function ResumeAdvisorPage() {
 
     setUrlFetching(true);
     setUrlFetchError(null);
+    setUrlWarning(null);
     try {
       const res = await fetch("/api/resume/fetch-job-url", {
         method: "POST",
@@ -408,6 +414,21 @@ export default function ResumeAdvisorPage() {
         location: j.location,
         source:   j.source ?? "html",
       });
+      // Fix 5 — suspicious content sanity check at the page layer. Even when
+      // the server says ok:true, the description may still look like a login
+      // wall (short body, cookie-banner phrases). Warn the user before they
+      // analyze.
+      const desc = j.description ?? "";
+      const descLower = desc.toLowerCase();
+      const isSuspicious =
+        desc.length < 300 ||
+        descLower.includes("sign in") ||
+        descLower.includes("cookie policy");
+      if (isSuspicious) {
+        setUrlWarning(
+          "We fetched some text but it may not be a real job description. Review it below before analyzing, or paste the job description manually.",
+        );
+      }
       return j.description;
     } catch (e) {
       const msg = (e as Error).message;
@@ -892,6 +913,7 @@ export default function ResumeAdvisorPage() {
                     setUrlFetchedJD(null);
                     setUrlFetchMeta(null);
                     setUrlFetchError(null);
+                    setUrlWarning(null);
                   }}
                   placeholder="https://boards.greenhouse.io/<company>/jobs/<id> · jobs.lever.co/... · job posting URL"
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
@@ -901,12 +923,28 @@ export default function ResumeAdvisorPage() {
                     Fetching job description from URL…
                   </p>
                 )}
-                {urlFetchMeta && !urlFetchError && (
+                {urlFetchMeta && !urlFetchError && !urlWarning && (
                   <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                     <span className="font-semibold">✓ Fetched ({urlFetchMeta.source}):</span>{" "}
                     {urlFetchMeta.title || "job description"}
                     {urlFetchMeta.company && <> · <span className="font-medium">{urlFetchMeta.company}</span></>}
                     {urlFetchMeta.location && <> · {urlFetchMeta.location}</>}
+                  </div>
+                )}
+                {urlWarning && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-3">
+                    <span className="shrink-0">⚠</span>
+                    <div className="flex-1">{urlWarning}</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setJobSource("paste");
+                        setUrlWarning(null);
+                      }}
+                      className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                    >
+                      Paste manually instead
+                    </button>
                   </div>
                 )}
                 {urlFetchError && (
