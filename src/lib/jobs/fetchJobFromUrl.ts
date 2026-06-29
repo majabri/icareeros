@@ -79,7 +79,7 @@ function jobNotListedError(): FetchedJobError {
 
 export interface FetchedJob {
   ok:          true;
-  source:      "greenhouse" | "lever" | "ashby" | "html";
+  source:      "greenhouse" | "lever" | "ashby" | "html" | "jsonld" | "html_container";
   title?:      string;
   company?:    string;
   location?:   string;
@@ -274,27 +274,146 @@ function tryAshby(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
 }
 
 // ── Generic HTML fallback ────────────────────────────────────────────────
+//
+// 2026-06-28 rewrite (fix/jobs-fetch-jd-jsonld) — strategy ladder:
+//
+//   1. JSON-LD `JobPosting` schema — most enterprise job boards (RBC, banks,
+//      airlines, hospitals, government, large tech) embed structured data.
+//      Highest fidelity: gives us the job description, title, company,
+//      location directly from a structured payload. We do not need to
+//      guess at HTML containers.
+//
+//   2. Known container regexes — id/class patterns like job-description,
+//      jobDescription, posting-content, job-details, etc. Walk these in
+//      order and accept the first one whose stripped text is >= 300 chars
+//      AND passes the multi-signal gate (must hit >= 2 JOB_CONTENT_SIGNALS).
+//
+//   3. Whole-page strip with STRONGER gate — must hit >= 3 distinct
+//      JOB_CONTENT_SIGNALS overall AND >= 1 in the first 3000 chars
+//      (density check), AND must not hit any LOGIN_SIGNALS in the first
+//      2000 chars. This rejects the "job has been filled" / cookie-wall
+//      / SPA-shell cases that the prior any-substring gate let through.
+
+interface JobPostingLD {
+  "@type"?:  string | string[];
+  title?:    string;
+  description?: string;
+  hiringOrganization?: { name?: string };
+  jobLocation?: { address?: { addressLocality?: string; addressRegion?: string; addressCountry?: string } } | Array<{ address?: { addressLocality?: string; addressRegion?: string; addressCountry?: string } }>;
+}
+
+function tryJsonLdJobPosting(html: string): { title?: string; company?: string; location?: string; description: string } | null {
+  const blocks = html.match(/<script[^>]+type=["\']application\/ld\+json["\'][^>]*>([\s\S]*?)<\/script>/gi);
+  if (!blocks) return null;
+  for (const block of blocks) {
+    const inner = block.replace(/^<script[^>]*>/i, "").replace(/<\/script>$/i, "").trim();
+    if (!inner) continue;
+    let parsed: unknown;
+    try { parsed = JSON.parse(inner); } catch { continue; }
+    // JSON-LD may be a single object, an array, or a @graph wrapper.
+    const candidates: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : (parsed && typeof parsed === "object" && "@graph" in parsed && Array.isArray((parsed as { "@graph"?: unknown[] })["@graph"]))
+        ? ((parsed as { "@graph": unknown[] })["@graph"])
+        : [parsed];
+    for (const c of candidates) {
+      if (!c || typeof c !== "object") continue;
+      const posting = c as JobPostingLD;
+      const t = posting["@type"];
+      const isJobPosting = (Array.isArray(t) ? t.includes("JobPosting") : t === "JobPosting");
+      if (!isJobPosting) continue;
+      if (!posting.description) continue;
+      const desc = stripHtml(posting.description);
+      if (desc.length < 200) continue;
+      const loc = Array.isArray(posting.jobLocation) ? posting.jobLocation[0] : posting.jobLocation;
+      const addr = loc?.address;
+      const locStr = addr
+        ? [addr.addressLocality, addr.addressRegion, addr.addressCountry].filter(Boolean).join(", ")
+        : undefined;
+      return {
+        title:       posting.title,
+        company:     posting.hiringOrganization?.name,
+        location:    locStr || undefined,
+        description: desc,
+      };
+    }
+  }
+  return null;
+}
+
+const CONTAINER_PATTERNS: RegExp[] = [
+  /<div[^>]*(?:class|id)=["\'][^"\']*(?:job-description|jobDescription|job_description|posting-content|job-details|job-content|job-body|jobBody)[^"\']*["\'][^>]*>([\s\S]*?)<\/div>/i,
+  /<section[^>]*(?:class|id)=["\'][^"\']*(?:job-description|description|job-details|posting)[^"\']*["\'][^>]*>([\s\S]*?)<\/section>/i,
+  /<article[^>]*>([\s\S]*?)<\/article>/i,
+];
+
+function tryHtmlContainer(html: string): string | null {
+  for (const pat of CONTAINER_PATTERNS) {
+    const m = html.match(pat);
+    if (!m?.[1]) continue;
+    const text = stripHtml(m[1]);
+    if (text.length < 300) continue;
+    const textLower = text.toLowerCase();
+    const signalCount = JOB_CONTENT_SIGNALS.filter(s => textLower.includes(s)).length;
+    if (signalCount >= 2) return text;
+  }
+  return null;
+}
 
 async function fetchAndExtractHtml(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> {
   try {
     const res = await fetchWithTimeout(u.toString());
     if (res.status === 404) return jobNotListedError();
     if (!res.ok) return { ok: false, error: `Fetch: HTTP ${res.status}` };
-    const html        = await res.text();
-    const title       = html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim();
-    const strippedText = stripHtml(html);
+    const html  = await res.text();
+    const title = html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim();
 
-    // Fix 2 — content-quality gate. Replaces the prior caller-side
-    // length-only check (>= 80 chars) which let cookie-banner garbage
-    // pass. Reject if no job-content signals OR if the head of the
-    // stripped text reads like a login wall.
+    // ── Strategy 1 — JSON-LD JobPosting structured data ────────────────
+    const ld = tryJsonLdJobPosting(html);
+    if (ld) {
+      return {
+        title:       ld.title ?? title?.replace(/\s*\|.*$/, ""),
+        company:     ld.company,
+        location:    ld.location,
+        description: ld.description,
+        // Note: source tag is applied by the maybeWrap("html") wrapper —
+        // we do not override it here. The "html" source covers both
+        // JSON-LD and container hits from a generic URL; the dedicated
+        // jsonld / html_container source tags exist for future direct
+        // entry points if we add them.
+      };
+    }
+
+    // ── Strategy 2 — Known job-description container patterns ──────────
+    const containerText = tryHtmlContainer(html);
+    if (containerText) {
+      return {
+        title:       title?.replace(/\s*\|.*$/, ""),
+        description: containerText,
+      };
+    }
+
+    // ── Strategy 3 — Whole-page strip with stronger multi-signal gate ──
+    const strippedText = stripHtml(html);
     const textLower    = strippedText.toLowerCase();
-    const hasJobContent = JOB_CONTENT_SIGNALS.some(s => textLower.includes(s));
-    const hasLoginWall  = LOGIN_SIGNALS.some(s => textLower.slice(0, 2000).includes(s));
-    if (!hasJobContent || hasLoginWall) {
+    const hasLoginWall = LOGIN_SIGNALS.some(s => textLower.slice(0, 2000).includes(s));
+    if (hasLoginWall) {
       return {
         ok:    false,
         error: "Could not extract a job description from this URL. The page may require login or use JavaScript rendering. Please paste the job description manually.",
+      };
+    }
+    // Density check: must hit >= 3 distinct signals overall AND >= 1 in
+    // the first 3000 chars. The "job has been filled" page that triggered
+    // this rewrite passes a 1-signal substring check but fails the >= 3
+    // count and the density check.
+    const signalCount = JOB_CONTENT_SIGNALS.filter(s => textLower.includes(s)).length;
+    const earlyText   = textLower.slice(0, 3000);
+    const earlySignals = JOB_CONTENT_SIGNALS.filter(s => earlyText.includes(s)).length;
+    if (signalCount < 3 || earlySignals === 0) {
+      return {
+        ok:    false,
+        error: "Could not extract a job description from this URL. The posting may be expired, filled, or rendered via JavaScript. Please paste the job description manually.",
       };
     }
 
