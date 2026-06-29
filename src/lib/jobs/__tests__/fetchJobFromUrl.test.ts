@@ -108,7 +108,9 @@ describe("fetchJobFromUrl — Generic HTML fallback", () => {
           <style>.x{color:red}</style>
           <h1>Backend Engineer</h1>
           <p>We are looking for someone to ${"x".repeat(120)} build backend services.</p>
+          <p>Responsibilities include building distributed systems and mentoring engineers.</p>
           <p>You will collaborate with the team and ship code.</p>
+          <p>Requirements: 5+ years of experience in Go, Rust, or TypeScript. Strong communication skills.</p>
         </body>
       </html>
     `)) as unknown as typeof fetch;
@@ -160,5 +162,98 @@ describe("stripHtml", () => {
     // LLM context tidy), so the &nbsp; between D and E becomes one space.
     expect(stripHtml("<p>A &amp; B &lt; C &gt; D &nbsp;E &#39;F&#39;</p>"))
       .toBe("A & B < C > D E 'F'");
+  });
+});
+
+describe("fetchJobFromUrl — Generic HTML JSON-LD JobPosting (2026-06-28)", () => {
+  it("extracts the description from JSON-LD JobPosting", async () => {
+    const ld = {
+      "@context": "https://schema.org",
+      "@type":    "JobPosting",
+      title:      "Business Information Security Officer",
+      hiringOrganization: { name: "RBC" },
+      jobLocation: { address: { addressLocality: "Jersey City", addressRegion: "NJ", addressCountry: "USA" } },
+      description: "<p>You will own the security strategy for our global operations. Responsibilities include leading risk assessments, partnering with engineering on threat modeling, and reporting to the CISO. We are looking for someone with 8+ years of experience in information security, deep expertise in cloud security, and demonstrated leadership of cross-functional initiatives. Strong communication skills required.</p>",
+    };
+    globalThis.fetch = vi.fn(() => mockHtml(`
+      <html><head><title>BISO | RBC</title></head>
+      <body><script type="application/ld+json">${JSON.stringify(ld)}</script>
+      <p>cookie policy nav junk</p></body></html>
+    `)) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl("https://jobs.rbc.com/ca/en/job/123/BISO");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("html");
+    expect(r.title).toBe("Business Information Security Officer");
+    expect(r.company).toBe("RBC");
+    expect(r.location).toContain("Jersey City");
+    expect(r.description).toContain("security strategy");
+    expect(r.description).toContain("8+ years of experience");
+    // Cookie/nav junk from outside the JSON-LD must NOT leak in
+    expect(r.description).not.toContain("cookie policy");
+  });
+
+  it("handles JSON-LD wrapped in @graph", async () => {
+    const ld = { "@context": "https://schema.org", "@graph": [
+      { "@type": "BreadcrumbList", itemListElement: [] },
+      { "@type": "JobPosting", title: "Engineer", description: "Build cool things. " + "x".repeat(220) + ". You will collaborate with the team and have strong experience in this area." },
+    ]};
+    globalThis.fetch = vi.fn(() => mockHtml(`<html><body><script type="application/ld+json">${JSON.stringify(ld)}</script></body></html>`)) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl("https://example.com/job/1");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.description).toContain("Build cool things");
+  });
+});
+
+describe("fetchJobFromUrl — Generic HTML container patterns (2026-06-28)", () => {
+  it("extracts text from a job-description div container", async () => {
+    const inside = "We are looking for a senior backend engineer to lead our distributed systems work. Responsibilities include building distributed systems, mentoring the team, partnering with product on roadmap, and owning end-to-end delivery from design to production. Requirements: 7+ years of experience in Go or Rust, strong communication skills, ability to ship fast, and demonstrated leadership of cross-functional initiatives. Bonus: experience with kubernetes, postgres, and event-driven architectures.";
+    globalThis.fetch = vi.fn(() => mockHtml(`
+      <html><head><title>Backend | Acme</title></head>
+      <body>
+        <nav>home about jobs</nav>
+        <div class="job-description">${inside}</div>
+        <footer>cookie banner</footer>
+      </body></html>
+    `)) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl("https://acme.com/careers/backend");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.description).toContain("senior backend engineer");
+    expect(r.description).toContain("Responsibilities");
+    expect(r.description).not.toContain("cookie banner");
+  });
+});
+
+describe("fetchJobFromUrl — stronger multi-signal gate (2026-06-28)", () => {
+  it("REJECTS the 'job has been filled' / nav-junk page even when it contains substring signals", async () => {
+    // Mimic the RBC failure case: an HTTP 200 page that's mostly whitespace
+    // + nav + an apology. Single substring hits ("experience", "research",
+    // "skills") used to slip through the old gate.
+    globalThis.fetch = vi.fn(() => mockHtml(`
+      <html><head><title>Filled | RBC</title></head>
+      <body>
+        <nav>Technology Analytics Research Skills</nav>
+        <p>We are sorry &mdash; the job you are trying to apply for has been filled.</p>
+        <p>Find your next job. Choose a category.</p>
+      </body></html>
+    `)) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl("https://jobs.rbc.com/ca/en/job/EXPIRED/role");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toMatch(/(could not extract|expired|filled|paste)/i);
+  });
+
+  it("REJECTS a page with only one job-content signal", async () => {
+    globalThis.fetch = vi.fn(() => mockHtml(`
+      <html><body>
+        <p>${"a".repeat(500)}</p>
+        <p>You will benefit from working remotely.</p>
+      </body></html>
+    `)) as unknown as typeof fetch;
+    // "benefits" is the only signal — should be rejected by the >= 3 count
+    const r = await fetchJobFromUrl("https://example.com/garbage");
+    expect(r.ok).toBe(false);
   });
 });

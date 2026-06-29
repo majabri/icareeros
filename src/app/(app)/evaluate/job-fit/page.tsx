@@ -423,10 +423,17 @@ export default function ResumeAdvisorPage() {
       // analyze.
       const desc = j.description ?? "";
       const descLower = desc.toLowerCase();
+      // 2026-06-28 (fix/jobs-fetch-jd-jsonld) — raised threshold from 300
+      // to 500 + added "javascript is required" check. Real job postings
+      // are routinely 800-3000 chars; sub-500 means the fetcher likely
+      // hit a JS shell, expired listing, or container-stripped fragment.
       const isSuspicious =
-        desc.length < 300 ||
+        desc.length < 500 ||
         descLower.includes("sign in") ||
-        descLower.includes("cookie policy");
+        descLower.includes("cookie policy") ||
+        descLower.includes("javascript is required") ||
+        descLower.includes("job you are trying to apply for has been filled") ||
+        descLower.includes("posting is no longer");
       if (isSuspicious) {
         setUrlWarning(
           "We fetched some text but it may not be a real job description. Review it below before analyzing, or paste the job description manually.",
