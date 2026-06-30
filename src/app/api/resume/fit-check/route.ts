@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
-import { embed, cosineSimilarity, cosineToScore } from "@/lib/embeddings/openai";
-import { createHash } from "node:crypto";
+import { compareTexts, cosineToScore } from "@/lib/embeddings/openai";
 
 /**
  * POST /api/resume/fit-check
@@ -47,8 +46,8 @@ export interface FitCheckResult {
   recommendations: string[];
   breakdown: FitBreakdown;
   keywordCoverage: KeywordCoverage;
-  /** 2026-06-28 — semantic similarity 0-100 from OpenAI text-embedding-3-small.
-   *  Null when OPENAI_API_KEY is unset or the embedding call failed — UI hides
+  /** 2026-06-28 — semantic similarity 0-100 from a local TF-IDF model.
+   *  Null when either input is empty/whitespace — UI hides
    *  the tag in that case. */
   semanticScore?: number | null;
 }
@@ -207,67 +206,28 @@ Guidelines:
 
 // ── Semantic scoring helpers ─────────────────────────────────────────
 
-function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
-}
-
 /**
- * Compute a 0-100 semantic similarity score between profile-resume text
- * and job-description text. Caches the profile embedding in
- * career_profiles.embedding (re-uses if the underlying text fingerprint
- * matches) and the job embedding in job_embeddings keyed on a sha256
- * fingerprint of the JD text. Returns null when embeddings are unavailable.
+ * Compute a 0-100 semantic similarity score between resume text and
+ * job-description text using a local TF-IDF + cosine similarity model.
+ *
+ * 2026-06-28 — replaces the previous external embeddings path (which
+ * required a paid API key and returned null in production where the
+ * key was never set). The new path runs entirely in-process with no
+ * external API calls, no paid services, and no per-request DB round-trip.
+ *
+ * Returns null only when one of the inputs is empty/whitespace.
+ *
+ * Args are intentionally underscored — supabase/userId are no longer
+ * needed (the storage round-trip is gone) but kept in the signature so
+ * the caller site doesn't have to change.
  */
 async function computeSemanticScore(
-  supabase: ReturnType<typeof createServerClient>,
-  userId: string,
+  _supabase: unknown,
+  _userId:   string,
   resumeText: string,
   jobDescription: string,
 ): Promise<number | null> {
-  // Profile embedding — cache in career_profiles.embedding + a fingerprint
-  // column so we know when to re-embed. We don't have a fingerprint column,
-  // so we just trust the existing cached embedding; an explicit "refresh"
-  // option could come later.
-  const { data: profileRow } = await supabase
-    .from("career_profiles")
-    .select("embedding")
-    .eq("user_id", userId)
-    .maybeSingle();
-  let profileEmbedding: number[] | null = (profileRow?.embedding as number[] | null) ?? null;
-  if (!profileEmbedding) {
-    profileEmbedding = await embed(resumeText);
-    if (profileEmbedding) {
-      // Best-effort persist — don't fail the request if this errors
-      await supabase
-        .from("career_profiles")
-        .upsert({ user_id: userId, embedding: profileEmbedding }, { onConflict: "user_id" })
-        .then(() => undefined, () => undefined);
-    }
-  }
-  if (!profileEmbedding) return null;
-
-  // Job embedding — cache in job_embeddings keyed by sha256(JD) recorded
-  // in the job_url column (we'll repurpose it as a fingerprint since the
-  // caller may not provide a real URL for paste-mode JDs).
-  const jdFp = `sha256:${sha256(jobDescription)}`;
-  const { data: jobRow } = await supabase
-    .from("job_embeddings")
-    .select("embedding")
-    .eq("user_id", userId)
-    .eq("job_url", jdFp)
-    .maybeSingle();
-  let jobEmbedding: number[] | null = (jobRow?.embedding as number[] | null) ?? null;
-  if (!jobEmbedding) {
-    jobEmbedding = await embed(jobDescription);
-    if (jobEmbedding) {
-      await supabase
-        .from("job_embeddings")
-        .upsert({ user_id: userId, job_url: jdFp, embedding: jobEmbedding }, { onConflict: "user_id,job_url" })
-        .then(() => undefined, () => undefined);
-    }
-  }
-  if (!jobEmbedding) return null;
-
-  const cos = cosineSimilarity(profileEmbedding, jobEmbedding);
+  const cos = compareTexts(resumeText, jobDescription);
+  if (cos === null) return null;
   return cosineToScore(cos);
 }
