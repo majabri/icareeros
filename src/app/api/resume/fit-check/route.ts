@@ -145,17 +145,27 @@ Guidelines:
 - keywordCoverage.coverageScore: round(covered / (covered + missing) * 100). 0 when both are empty.
 - Aim for 8-15 keywords across covered + missing combined.`;
 
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    // fix/jobs-fit-check-wiring (Fix C, 2026-06-29) — deterministic scoring.
-    // The same URL was returning fitScore 88 and 92 across runs because the
-    // default sampling temperature is non-zero. temperature: 0 + top_p: 1
-    // make the score reproducible for a given (resume, JD) input pair.
-    temperature: 0,
-    top_p: 1,
-    messages: [{ role: "user", content: prompt }],
-  });
+  // fix/jobs-fit-check-500 (2026-06-29) — wrap in try/catch so an
+  // Anthropic-side failure returns a readable JSON body instead of a
+  // blank 500. Combining temperature + top_p triggered the prior 500.
+  let msg;
+  try {
+    msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2048,
+      // Deterministic scoring (Fix C from #336). Only temperature is set —
+      // Anthropic recommends choosing ONE of temperature or top_p, not both.
+      // The prior #336 also set top_p: 1; that combination produced an
+      // unhandled SDK rejection in production. Dropping top_p preserves
+      // determinism (temperature: 0 alone is enough).
+      temperature: 0,
+      messages: [{ role: "user", content: prompt }],
+    });
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : "Anthropic call failed";
+    console.error("[fit-check] anthropic.messages.create threw:", errMsg);
+    return NextResponse.json({ error: `Fit check service error: ${errMsg}` }, { status: 502 });
+  }
 
   const raw = (msg.content[0] as { type: string; text: string }).text;
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
