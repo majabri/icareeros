@@ -477,11 +477,21 @@ export default function ResumeAdvisorPage() {
       // LLM, which had no way to fetch and produced nonsense analyses.
       const jobText = await resolveJobText();
       if (jobText === null) { setChecking(false); return; }
-      const { data, error: fnError } = await supabase.functions.invoke("fit-check", {
-        body: { resumeText, jobDescription: jobText },
+      // 2026-06-29 (fix/jobs-fit-check-wiring Fix A) — call the Next.js
+      // API route instead of the Supabase edge function. The Next route
+      // returns the enriched B1 shape (fitScore + breakdown + keywordCoverage
+      // + recommendations + semanticScore from PR #334) that the UI's
+      // BreakdownBar / BreakdownTag / keyword-coverage section need to render.
+      // The edge function only returned the legacy 4-field shape, leaving
+      // the new components without data.
+      const res = await fetch("/api/resume/fit-check", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ resumeText, jobDescription: jobText }),
       });
-      if (fnError) throw new Error(fnError.message ?? "Fit check failed");
-      if (data?.error) throw new Error(data.error);
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Fit check failed (HTTP ${res.status})`);
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       setResult(data as FitCheckResult);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fit check failed");

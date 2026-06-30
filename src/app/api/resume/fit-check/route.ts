@@ -148,6 +148,12 @@ Guidelines:
   const msg = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
+    // fix/jobs-fit-check-wiring (Fix C, 2026-06-29) — deterministic scoring.
+    // The same URL was returning fitScore 88 and 92 across runs because the
+    // default sampling temperature is non-zero. temperature: 0 + top_p: 1
+    // make the score reproducible for a given (resume, JD) input pair.
+    temperature: 0,
+    top_p: 1,
     messages: [{ role: "user", content: prompt }],
   });
 

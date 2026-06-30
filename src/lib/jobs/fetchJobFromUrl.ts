@@ -14,7 +14,7 @@
  * (title / company / location) so the UI can show a confirmation banner.
  */
 
-const MAX_CHARS    = 10_000;
+const MAX_CHARS    = 15_000;
 const FETCH_TIMEOUT = 8_000;
 const UA = "Mozilla/5.0 (compatible; iCareerOS-FetchBot/1.0; +https://icareeros.com)";
 
