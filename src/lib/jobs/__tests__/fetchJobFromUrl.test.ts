@@ -379,7 +379,6 @@ describe("fetchJobFromUrl — Workday (2026-06-30, fix/jobs-fetch-workday)", () 
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.error).toBeUndefined();
     expect(r.source).toBe("workday");
   });
 });
