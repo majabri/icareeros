@@ -32,6 +32,20 @@ export interface StagePageScaffoldProps {
   noCycle:      boolean;
   /** When true, the user's profile isn't complete enough — warn but allow run. */
   profileIncomplete?: boolean;
+  /**
+   * 2026-06-30 (fix/jobs-stage-ux) — Optional upstream-stage gate. When any
+   * entry has `completed: false`, the Run/Re-run button is disabled and a
+   * yellow banner renders above it linking the user to each incomplete
+   * stage so they can satisfy the gate before clicking Run. The server-
+   * side gate in /api/career-os/act et al still enforces this — this is a
+   * client-side affordance so users don't hit the 422.
+   */
+  prerequisites?: Array<{
+    stage:     string;
+    label:     string;
+    completed: boolean;
+    href:      string;
+  }>;
   /** Whether the user has already run this stage at least once. */
   hasOutput:    boolean;
   /** Optional inline error to display in a red card. */
@@ -97,6 +111,11 @@ const EMPTY_NO_CYCLE = (
 
 export function StagePageScaffold(props: StagePageScaffoldProps) {
   const [confirming, setConfirming] = useState(false);
+  // 2026-06-30 — prereq gate. If any upstream stage hasn't completed, the
+  // Run/Re-run button is disabled and a banner explains which stages to
+  // finish first. When `prerequisites` is undefined or empty, prereqsMet=true.
+  const incompletePrereqs = (props.prerequisites ?? []).filter(p => !p.completed);
+  const prereqsMet = incompletePrereqs.length === 0;
 
   // Sprint 5 P3-fix — when a run completes (running goes true → false),
   // collapse any confirmation prompt back to the Re-run button so the
@@ -136,6 +155,29 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
         <CycleSwitcher cycleId={props.cycleId ?? null} userId={props.userId ?? null} />
         {props.children}
 
+        {!prereqsMet && (
+          <div
+            className="rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900"
+            data-testid="stage-prereq-banner-rerun"
+          >
+            <p className="font-medium">
+              Re-running this stage requires {incompletePrereqs.length === 1 ? "this stage" : "these stages"} first:
+            </p>
+            <ul className="mt-2 space-y-1">
+              {incompletePrereqs.map(p => (
+                <li key={p.stage}>
+                  <Link
+                    href={p.href}
+                    className="text-brand-700 hover:text-brand-800 underline underline-offset-2 font-medium"
+                  >
+                    &rarr; Run {p.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Re-run with inline confirmation (P3-3) */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           {!confirming && !props.running && (
@@ -152,7 +194,9 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
               </div>
               <button
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                disabled={!prereqsMet}
+                title={!prereqsMet ? "Complete the upstream stages first" : undefined}
+                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Re-run {props.stageLabel}
               </button>
@@ -213,6 +257,28 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
           first to get a more accurate result.
         </div>
       )}
+      {!prereqsMet && (
+        <div
+          className="rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900"
+          data-testid="stage-prereq-banner"
+        >
+          <p className="font-medium">
+            Complete {incompletePrereqs.length === 1 ? "this stage" : "these stages"} first:
+          </p>
+          <ul className="mt-2 space-y-1">
+            {incompletePrereqs.map(p => (
+              <li key={p.stage}>
+                <Link
+                  href={p.href}
+                  className="text-brand-700 hover:text-brand-800 underline underline-offset-2 font-medium"
+                >
+                  &rarr; Run {p.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
         <h3 className="text-lg font-semibold text-gray-900">Run {props.stageLabel} for this cycle</h3>
         <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
@@ -220,8 +286,9 @@ export function StagePageScaffold(props: StagePageScaffoldProps) {
         </p>
         <button
           onClick={() => void props.onRun()}
-          disabled={props.running}
-          className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          disabled={props.running || !prereqsMet}
+          title={!prereqsMet ? "Complete the upstream stages listed above first" : undefined}
+          className="mt-6 inline-flex items-center rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {props.running ? "Running…" : `Run ${props.stageLabel}`}
         </button>

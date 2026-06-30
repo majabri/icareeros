@@ -26,6 +26,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { STAGE_ORDER } from "@/components/dashboard/stageStatus";
 
 export type CareerOsStageKey = "evaluate" | "advise" | "learn" | "act" | "achieve" | "coach";
 
@@ -63,7 +64,9 @@ export async function persistStageNotes(
         ended_at: now,
       })
       .eq("id", existing.id);
-    return error ? { ok: false, error: error.message } : { ok: true };
+    if (error) return { ok: false, error: error.message };
+    await advanceCycleStageIfReady(sb, userId, cycleId, stage);
+    return { ok: true };
   }
 
   const { error } = await sb
@@ -77,5 +80,72 @@ export async function persistStageNotes(
       started_at: now,
       ended_at:   now,
     });
-  return error ? { ok: false, error: error.message } : { ok: true };
+  if (error) return { ok: false, error: error.message };
+  await advanceCycleStageIfReady(sb, userId, cycleId, stage);
+  return { ok: true };
+}
+
+/**
+ * 2026-06-30 (fix/jobs-stage-ux) — Auto-advance career_os_cycles.current_stage
+ * to the next stage in STAGE_ORDER when a stage completes, IF the cycle's
+ * current_stage pointer matches the stage that just completed.
+ *
+ * Why this is needed
+ * ──────────────────
+ * The orchestrator's `advanceStage()` function (only used by the dashboard's
+ * "Run" deep-link) already advances current_stage. But every stage page
+ * calls its API route directly, bypassing the orchestrator — so completion
+ * via the stage pages never advanced the pointer. That left some users
+ * with cycle.current_stage='evaluate' even though evaluate + advise were
+ * both `status='completed'` in career_os_stages.
+ *
+ * Behaviour
+ * ─────────
+ * - Only advances forward. Never moves backward or skips.
+ * - Only advances when the just-completed stage equals current_stage,
+ *   so re-running an earlier stage doesn't reset progress.
+ * - Stays on "achieve" when achieve completes (cycle completion is a
+ *   separate event handled by completeCycle in the orchestrator).
+ * - Best-effort: any error is swallowed so the persist call still
+ *   returns ok:true (the AI result and the stage row are already saved).
+ * - "coach" is not in STAGE_ORDER (5-stage model) — completing it is a
+ *   no-op for current_stage.
+ */
+async function advanceCycleStageIfReady(
+  sb:      SupabaseClient,
+  userId:  string,
+  cycleId: string,
+  stage:   CareerOsStageKey,
+): Promise<void> {
+  try {
+    // Use type-narrowing via Array.includes
+    const stageOrderList = STAGE_ORDER as readonly string[];
+    if (!stageOrderList.includes(stage)) return;
+
+    const { data: cycle } = await sb
+      .from("career_os_cycles")
+      .select("current_stage")
+      .eq("id", cycleId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!cycle) return;
+
+    // Only advance forward — if current_stage is already past us, do nothing.
+    if (cycle.current_stage !== stage) return;
+
+    const idx = stageOrderList.indexOf(stage);
+    const next = idx >= 0 && idx < stageOrderList.length - 1
+      ? stageOrderList[idx + 1]
+      : null;
+    if (!next) return; // achieve completed — leave pointer on achieve
+
+    await sb
+      .from("career_os_cycles")
+      .update({ current_stage: next })
+      .eq("id", cycleId)
+      .eq("user_id", userId);
+  } catch {
+    // Best-effort — log nothing, swallow everything. The stage row write
+    // already succeeded; auto-advance is a UX nicety, not a contract.
+  }
 }
