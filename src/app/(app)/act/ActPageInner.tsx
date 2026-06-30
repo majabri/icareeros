@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StagePageScaffold } from "@/components/stage/StagePageScaffold";
 import { useStageData } from "@/components/stage/useStageData";
 import { useAutorunStage } from "@/components/career-os/useAutorunStage";
 import { triggerAction, type ActResult, type ApplicationTier, type NetworkingTarget } from "@/services/ai/actService";
 import { arr, str, num } from "@/lib/career-os/normalize";
+import { createClient } from "@/lib/supabase";
 
 const HUB_LINKS: Array<{ href: string; label: string; description: string; icon: string }> = [
   { href: "/opportunities",         label: "Opportunities", description: "Search + score open jobs.",          icon: "💼" },
@@ -25,6 +26,35 @@ export function ActPageInner() {
   const { loading, userId, cycle, output, reload, setOutput } = useStageData<ActResult>("act");
   const [running, setRunning] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
+
+  // 2026-06-30 (fix/jobs-stage-ux) — load upstream stage statuses so the
+  // scaffold can disable Run + show a "complete these stages first" banner
+  // before the user hits the server-side 422 in /api/career-os/act.
+  const [prereqStatus, setPrereqStatus] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!userId || !cycle?.id) return;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("career_os_stages")
+          .select("stage, status")
+          .eq("user_id", userId)
+          .eq("cycle_id", cycle.id)
+          .in("stage", ["evaluate", "advise", "learn"]);
+        const map: Record<string, string> = {};
+        for (const row of (data ?? []) as Array<{ stage: string; status: string }>) {
+          map[row.stage] = row.status;
+        }
+        setPrereqStatus(map);
+      } catch { /* best-effort — empty map leaves prereqs un-gated */ }
+    })();
+  }, [userId, cycle?.id]);
+  const prerequisites = [
+    { stage: "evaluate", label: "Evaluate", completed: prereqStatus.evaluate === "completed", href: "/evaluate" },
+    { stage: "advise",   label: "Advise",   completed: prereqStatus.advise   === "completed", href: "/advise"   },
+    { stage: "learn",    label: "Learn",    completed: prereqStatus.learn    === "completed", href: "/learn"    },
+  ];
 
   async function handleRun() {
     if (!userId || !cycle) return;
@@ -65,6 +95,7 @@ export function ActPageInner() {
       cycleId={cycle?.id ?? null}
       userId={userId}
       onRun={handleRun}
+      prerequisites={prerequisites}
     >
       {output && <ActOutputPanel result={output} />}
       {/* Hub links always visible (even pre-run) so the user can jump into the tools */}

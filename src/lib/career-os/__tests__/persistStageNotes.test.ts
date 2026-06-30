@@ -208,3 +208,82 @@ describe("persistStageNotes — call shape", () => {
     }
   });
 });
+
+// ── Auto-advance tests (fix/jobs-stage-ux, 2026-06-30) ───────────────────
+
+/**
+ * Build a mock that handles BOTH `.from("career_os_stages")` (upsert path)
+ * AND `.from("career_os_cycles")` (auto-advance lookup + update). Tracks
+ * the latest cycles.update call so tests can assert what current_stage
+ * the helper advanced to.
+ */
+function makeSbWithCycles(opts: {
+  stageLookup?:   { data: unknown; error: unknown };
+  cycleLookup?:   { data: unknown; error: unknown };
+}): {
+  sb:           SupabaseClient;
+  cycleUpdated: { value: Record<string, unknown> | null };
+} {
+  const cycleUpdated: { value: Record<string, unknown> | null } = { value: null };
+  const from = (table: string) => {
+    const obj: Record<string, unknown> = {};
+    obj.select = (_cols: string) => obj;
+    obj.eq     = (_col: string, _val: unknown) => obj;
+    obj.in     = (_col: string, _val: unknown) => obj;
+    obj.maybeSingle = () => Promise.resolve(
+      table === "career_os_stages"  ? (opts.stageLookup ?? { data: null, error: null }) :
+      table === "career_os_cycles"  ? (opts.cycleLookup ?? { data: null, error: null }) :
+      { data: null, error: null }
+    );
+    obj.insert = () => Promise.resolve({ error: null });
+    obj.update = (patch: Record<string, unknown>) => {
+      if (table === "career_os_cycles") cycleUpdated.value = patch;
+      return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+    };
+    return obj;
+  };
+  return { sb: { from } as unknown as SupabaseClient, cycleUpdated };
+}
+
+describe("persistStageNotes — auto-advance cycle current_stage", () => {
+  it("advances current_stage when it matches the just-completed stage", async () => {
+    const { sb, cycleUpdated } = makeSbWithCycles({
+      cycleLookup: { data: { current_stage: "evaluate" }, error: null },
+    });
+    await persistStageNotes(sb, USER_ID, CYCLE_ID, "evaluate", RESULT);
+    expect(cycleUpdated.value).toEqual({ current_stage: "advise" });
+  });
+
+  it("does NOT advance when current_stage is already past the completed stage", async () => {
+    // Re-running evaluate when cycle has already advanced to learn — pointer stays put.
+    const { sb, cycleUpdated } = makeSbWithCycles({
+      cycleLookup: { data: { current_stage: "learn" }, error: null },
+    });
+    await persistStageNotes(sb, USER_ID, CYCLE_ID, "evaluate", RESULT);
+    expect(cycleUpdated.value).toBeNull();
+  });
+
+  it("stays on 'achieve' when achieve completes (no next stage)", async () => {
+    const { sb, cycleUpdated } = makeSbWithCycles({
+      cycleLookup: { data: { current_stage: "achieve" }, error: null },
+    });
+    await persistStageNotes(sb, USER_ID, CYCLE_ID, "achieve", RESULT);
+    expect(cycleUpdated.value).toBeNull();
+  });
+
+  it("no-ops when persisting the 'coach' sub-feature (not in 5-stage order)", async () => {
+    const { sb, cycleUpdated } = makeSbWithCycles({
+      cycleLookup: { data: { current_stage: "advise" }, error: null },
+    });
+    await persistStageNotes(sb, USER_ID, CYCLE_ID, "coach", RESULT);
+    expect(cycleUpdated.value).toBeNull();
+  });
+
+  it("silently swallows errors during the cycle lookup — persist still returns ok:true", async () => {
+    const { sb } = makeSbWithCycles({
+      cycleLookup: { data: null, error: { message: "boom" } },
+    });
+    const r = await persistStageNotes(sb, USER_ID, CYCLE_ID, "evaluate", RESULT);
+    expect(r.ok).toBe(true);
+  });
+});
