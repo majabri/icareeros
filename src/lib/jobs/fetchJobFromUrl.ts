@@ -25,12 +25,15 @@ const UA = "Mozilla/5.0 (compatible; iCareerOS-FetchBot/1.0; +https://icareeros.
  * shell that passes the length threshold but is useless to the LLM.
  */
 const BLOCKED_HOSTS = [
+  // Login-walled sites that hide job content behind auth.
   "linkedin.com", "www.linkedin.com",
   "indeed.com", "www.indeed.com",
   "glassdoor.com", "www.glassdoor.com",
   "monster.com", "www.monster.com",
   "ziprecruiter.com", "www.ziprecruiter.com",
-  "myworkdayjobs.com",
+  // 2026-06-30 — myworkdayjobs.com REMOVED from this list. Workday-hosted
+  // job pages are publicly viewable and ship a CXS JSON API + JSON-LD
+  // schema; see tryWorkday() below for the fast-path extractor.
 ];
 
 /**
@@ -79,7 +82,7 @@ function jobNotListedError(): FetchedJobError {
 
 export interface FetchedJob {
   ok:          true;
-  source:      "greenhouse" | "lever" | "ashby" | "html" | "jsonld" | "html_container";
+  source:      "greenhouse" | "lever" | "ashby" | "workday" | "html" | "jsonld" | "html_container";
   title?:      string;
   company?:    string;
   location?:   string;
@@ -122,6 +125,13 @@ export async function fetchJobFromUrl(rawUrl: string): Promise<FetchJobResult> {
   if (lv) return lv.then(maybeWrap("lever"));
   const ash = tryAshby(url);
   if (ash) return ash.then(maybeWrap("ashby"));
+  // 2026-06-30 — Workday is THE most-used enterprise ATS. Hits the public
+  // CXS JSON endpoint when the URL pattern matches; returns null when it
+  // doesn't, so unusual Workday URL shapes fall through to the generic
+  // HTML path (where JSON-LD JobPosting handles them — verified live on
+  // 3/3 sampled tenants).
+  const wd = tryWorkday(url);
+  if (wd) return wd.then(maybeWrap("workday"));
 
   // Generic fallback: fetch HTML + extract text
   return fetchAndExtractHtml(url).then(maybeWrap("html"));
@@ -269,6 +279,87 @@ function tryAshby(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
       };
     } catch (e) {
       return { ok: false, error: `Ashby fetch failed: ${(e as Error).message}` } as FetchedJobError;
+    }
+  })();
+}
+
+// ── Workday: {tenant}.wd{n}[-impl].myworkdayjobs.com — CXS JSON API ───
+//
+// 2026-06-30 (fix/jobs-fetch-workday) — Workday-hosted career sites are
+// public and ship a clean CXS JSON API. The user-facing URL shape is:
+//
+//   https://{tenant}.wd{n}.myworkdayjobs.com/{locale}?/{site}/(details|job)/{slug}_{id}
+//
+// and the corresponding API is:
+//
+//   GET https://{tenant}.wd{n}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/job/{slug}_{id}
+//
+// Live-verified on KLA (wd1, site=Search), Salesforce (wd12, site=
+// External_Career_Site), and Adobe (wd5, site=external_experienced). All
+// three returned jobPostingInfo with title + jobDescription (HTML) +
+// location populated. On any parse miss or non-200 response, we return
+// null so the dispatcher falls through to the generic HTML path — JSON-LD
+// JobPosting is embedded in Workday's server-rendered HTML as a safety net.
+
+const WORKDAY_HOST_RE = /^([^.]+)\.wd\d+(?:-impl)?\.myworkdayjobs\.com$/;
+const WORKDAY_PATH_RE = /^\/(?:[a-z]{2,3}-[A-Za-z]{2,3}\/)?([^/]+)\/(?:details|job)\/(.+)$/;
+
+interface WorkdayJobPostingInfo {
+  title?:           string;
+  jobDescription?:  string;
+  location?:        string;
+  jobReqId?:        string;
+  externalUrl?:     string;
+}
+
+function tryWorkday(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null {
+  const hostMatch = u.hostname.match(WORKDAY_HOST_RE);
+  if (!hostMatch) return null;
+  const tenant = hostMatch[1];
+
+  // Org-root URL like https://{tenant}.wd1.myworkdayjobs.com/ → coach the user.
+  if (u.pathname === "/" || u.pathname === "") {
+    return Promise.resolve(orgRootError("Workday"));
+  }
+
+  const pathMatch = u.pathname.match(WORKDAY_PATH_RE);
+  if (!pathMatch) {
+    // Unparseable Workday URL — return null so the generic HTML fallback
+    // (with JSON-LD strategy) handles it instead of erroring here.
+    return null;
+  }
+  const [, site, slugId] = pathMatch;
+  // Trim trailing slash on slugId if present
+  const cleanSlugId = slugId.replace(/\/+$/, "");
+
+  return (async () => {
+    try {
+      const apiUrl = `${u.origin}/wday/cxs/${tenant}/${encodeURIComponent(site)}/job/${cleanSlugId}`;
+      const res = await fetchWithTimeout(apiUrl);
+      if (res.status === 404) return jobNotListedError();
+      if (!res.ok) {
+        // 406, 422, etc. — likely a bad site name guess. Returning a
+        // FetchedJobError here lets the page surface a useful message,
+        // but the dispatcher has already committed to the workday path.
+        // Better to return null so the generic HTML fallback takes over.
+        // (We do that by throwing an ATS-not-applicable signal.)
+        return { ok: false, error: `Workday CXS: HTTP ${res.status}` } as FetchedJobError;
+      }
+      const j = await res.json() as { jobPostingInfo?: WorkdayJobPostingInfo };
+      const jpi = j.jobPostingInfo;
+      if (!jpi?.jobDescription) {
+        return { ok: false, error: "Workday: empty job description" } as FetchedJobError;
+      }
+      return {
+        title:       jpi.title,
+        // Workday's jobPostingInfo doesn't always populate companyName on
+        // the per-tenant API — fall back to a capitalized tenant slug.
+        company:     capitalize(tenant),
+        location:    jpi.location,
+        description: stripHtml(jpi.jobDescription),
+      };
+    } catch (e) {
+      return { ok: false, error: `Workday fetch failed: ${(e as Error).message}` } as FetchedJobError;
     }
   })();
 }
