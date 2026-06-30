@@ -257,3 +257,128 @@ describe("fetchJobFromUrl — stronger multi-signal gate (2026-06-28)", () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe("fetchJobFromUrl — Workday (2026-06-30, fix/jobs-fetch-workday)", () => {
+  it("extracts from the public CXS API on a wd1 / Search tenant (KLA-style URL)", async () => {
+    globalThis.fetch = vi.fn((url) => {
+      expect(String(url)).toBe(
+        "https://kla.wd1.myworkdayjobs.com/wday/cxs/kla/Search/job/Deputy-Chief-Information-Security-Officer--CISO-_2636445"
+      );
+      return mockJson({
+        jobPostingInfo: {
+          title:          "Deputy Chief Information Security Officer (CISO)",
+          jobDescription: "<p>You will lead our information security program. Responsibilities include partnering with engineering, owning the risk register, and reporting to the CISO. Requirements: 10+ years of experience in information security, deep expertise in cloud security, and demonstrated leadership of cross-functional initiatives. Strong communication skills required.</p>",
+          location:       "USA-MN-Remote-US04K",
+          jobReqId:       "2636445",
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const r = await fetchJobFromUrl(
+      "https://kla.wd1.myworkdayjobs.com/en-US/Search/details/Deputy-Chief-Information-Security-Officer--CISO-_2636445"
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("workday");
+    expect(r.title).toBe("Deputy Chief Information Security Officer (CISO)");
+    expect(r.company).toBe("Kla");
+    expect(r.location).toBe("USA-MN-Remote-US04K");
+    expect(r.description).toContain("information security program");
+    expect(r.description).toContain("Responsibilities");
+    expect(r.description).not.toContain("<p>");
+  });
+
+  it("handles wd12 shard + multi-word site name + JR-prefixed slug (Salesforce-style)", async () => {
+    globalThis.fetch = vi.fn((url) => {
+      expect(String(url)).toBe(
+        "https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/External_Career_Site/job/Sr-Solution-Architect_JR342230"
+      );
+      return mockJson({
+        jobPostingInfo: {
+          title:          "Senior Solution Architect, Retail Execution/Trade",
+          jobDescription: "<div>Lead our retail execution practice. You will build distributed systems, mentor the team, partner with product, and own end-to-end delivery. Requirements: 8+ years of experience in solution architecture, strong communication, and deep expertise in cloud platforms.</div>",
+          location:       "Indiana - Remote",
+        },
+      });
+    }) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl(
+      "https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site/details/Sr-Solution-Architect_JR342230"
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("workday");
+    expect(r.company).toBe("Salesforce");
+    expect(r.description).toContain("retail execution");
+  });
+
+  it("handles URL without a locale segment", async () => {
+    globalThis.fetch = vi.fn((url) => {
+      expect(String(url)).toBe(
+        "https://adobe.wd5.myworkdayjobs.com/wday/cxs/adobe/external_experienced/job/Cyber-IR-Lead_R168701"
+      );
+      return mockJson({
+        jobPostingInfo: {
+          title:          "Cyber Incident Response Lead",
+          jobDescription: "We are looking for an IR lead. Responsibilities include leading incident response, owning runbooks, and you will collaborate with engineering. Requirements: 5+ years in security operations, strong skills in forensics.",
+          location:       "Bucharest",
+        },
+      });
+    }) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl(
+      "https://adobe.wd5.myworkdayjobs.com/external_experienced/details/Cyber-IR-Lead_R168701"
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("workday");
+    expect(r.title).toBe("Cyber Incident Response Lead");
+  });
+
+  it("translates Workday CXS 404 to 'no longer listed'", async () => {
+    globalThis.fetch = vi.fn(() => mockJson({}, { status: 404 })) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl(
+      "https://kla.wd1.myworkdayjobs.com/en-US/Search/details/Expired_999"
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toMatch(/no longer listed/i);
+  });
+
+  it("falls through to the generic HTML path when the Workday URL path doesn't match", async () => {
+    // Path doesn't have /details/ or /job/ — unparseable. tryWorkday() must
+    // return null so the generic HTML strategy can take over.
+    globalThis.fetch = vi.fn(() => mockHtml(`
+      <html><head><title>Some Workday Page</title></head>
+      <body>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type":"JobPosting",
+          title:"From JSON-LD",
+          description:"This is a real job description with sufficient length to pass the gate. Responsibilities include x, y, and z. Requirements: experience, skills, and qualifications. You will collaborate.".repeat(2),
+          hiringOrganization:{name:"Acme"},
+        })}</script>
+      </body></html>
+    `)) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl(
+      "https://acme.wd5.myworkdayjobs.com/some/unusual/path"
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("html"); // JSON-LD branch tags as "html" via maybeWrap
+    expect(r.title).toBe("From JSON-LD");
+  });
+
+  it("treats myworkdayjobs.com as NOT blocked (was in BLOCKED_HOSTS before this PR)", async () => {
+    globalThis.fetch = vi.fn(() => mockJson({
+      jobPostingInfo: {
+        title:          "Test Role",
+        jobDescription: "Lead a team. Responsibilities include strategy. Requirements: experience and skills. You will deliver.",
+        location:       "Remote",
+      },
+    })) as unknown as typeof fetch;
+    const r = await fetchJobFromUrl(
+      "https://acme.wd1.myworkdayjobs.com/en-US/Search/details/Test_R1"
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.source).toBe("workday");
+  });
+});
