@@ -58,8 +58,8 @@ interface FitCheckResult {
   recommendations: string[];
   breakdown?: FitBreakdown;
   keywordCoverage?: KeywordCoverage;
-  /** 2026-06-28 — semantic similarity (0-100) from pgvector + OpenAI
-   *  text-embedding-3-small. Null when OPENAI_API_KEY is unset. */
+  /** 2026-06-28 — semantic similarity (0-100) from a local TF-IDF model.
+   *  Null only when one of the inputs is empty/whitespace. */
   semanticScore?: number | null;
 }
 
@@ -1013,9 +1013,9 @@ export default function ResumeAdvisorPage() {
                         label="Experience fit"
                         value={result.breakdown.experienceFit}
                       />
-                      {/* 2026-06-28 (Brief Task 2) — pgvector semantic similarity.
-                          Renders only when the backend returned a non-null value
-                          (i.e. OPENAI_API_KEY is configured and embeddings ran). */}
+                      {/* 2026-06-28 — local TF-IDF semantic similarity. Renders
+                          only when the backend returned a non-null value (i.e.
+                          both texts were non-empty). */}
                       {typeof result.semanticScore === "number" && (
                         <BreakdownBar
                           label="Semantic match"

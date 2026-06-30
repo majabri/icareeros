@@ -796,61 +796,104 @@ export type Database = {
       }
       career_profiles: {
         Row: {
-          user_id:         string
-          full_name:       string | null
-          phone:           string | null
-          contact_email:   string | null
-          linkedin_url:    string | null
-          location:        string | null
-          headline:        string | null
-          summary:         string | null
-          skills:          string[]
-          work_experience: Json
-          education:       Json
-          certifications:  Array<{ name: string; issuer: string; date: string; license_number: string }>
-          portfolio_items: Json
-          raw_text:        string | null
-          raw_text_format: string | null
-          created_at:      string
-          updated_at:      string
+          user_id:             string
+          full_name:           string | null
+          phone:               string | null
+          contact_email:       string | null
+          linkedin_url:        string | null
+          location:            string | null
+          headline:            string | null
+          summary:             string | null
+          skills:              string[]
+          work_experience:     Json
+          education:           Json
+          certifications:      Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items:     Json
+          raw_text:            string | null
+          raw_text_format:     string | null
+          /** vector(512) — local TF-IDF embedding (2026-06-28) */
+          embedding:           number[] | null
+          /** PR #334 — GitHub import audit columns */
+          github_url:          string | null
+          github_imported_at:  string | null
+          created_at:          string
+          updated_at:          string
         }
         Insert: {
-          user_id:          string
-          full_name?:       string | null
-          phone?:           string | null
-          contact_email?:   string | null
-          linkedin_url?:    string | null
-          location?:        string | null
-          headline?:        string | null
-          summary?:         string | null
-          skills?:          string[]
-          work_experience?: Json
-          education?:       Json
-          certifications?:  Array<{ name: string; issuer: string; date: string; license_number: string }>
-          portfolio_items?: Json
-          raw_text?:        string | null
-          raw_text_format?: string | null
-          created_at?:      string
-          updated_at?:      string
+          user_id:              string
+          full_name?:           string | null
+          phone?:               string | null
+          contact_email?:       string | null
+          linkedin_url?:        string | null
+          location?:            string | null
+          headline?:            string | null
+          summary?:             string | null
+          skills?:              string[]
+          work_experience?:     Json
+          education?:           Json
+          certifications?:      Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items?:     Json
+          raw_text?:            string | null
+          raw_text_format?:     string | null
+          embedding?:           number[] | null
+          github_url?:          string | null
+          github_imported_at?:  string | null
+          created_at?:          string
+          updated_at?:          string
         }
         Update: {
-          user_id?:         string
-          full_name?:       string | null
-          phone?:           string | null
-          contact_email?:   string | null
-          linkedin_url?:    string | null
-          location?:        string | null
-          headline?:        string | null
-          summary?:         string | null
-          skills?:          string[]
-          work_experience?: Json
-          education?:       Json
-          certifications?:  Array<{ name: string; issuer: string; date: string; license_number: string }>
-          portfolio_items?: Json
-          raw_text?:        string | null
-          raw_text_format?: string | null
-          created_at?:      string
-          updated_at?:      string
+          user_id?:             string
+          full_name?:           string | null
+          phone?:               string | null
+          contact_email?:       string | null
+          linkedin_url?:        string | null
+          location?:            string | null
+          headline?:            string | null
+          summary?:             string | null
+          skills?:              string[]
+          work_experience?:     Json
+          education?:           Json
+          certifications?:      Array<{ name: string; issuer: string; date: string; license_number: string }>
+          portfolio_items?:     Json
+          raw_text?:            string | null
+          raw_text_format?:     string | null
+          embedding?:           number[] | null
+          github_url?:          string | null
+          github_imported_at?:  string | null
+          created_at?:          string
+          updated_at?:          string
+        }
+      }
+      // 2026-06-28 — job_embeddings cache. Stores per-user, per-JD-URL
+      // pgvector embeddings produced by the local TF-IDF model.
+      job_embeddings: {
+        Row: {
+          id:           string
+          user_id:      string
+          job_url:      string
+          job_title:    string | null
+          company:      string | null
+          /** vector(512) — local TF-IDF embedding */
+          embedding:    number[] | null
+          created_at:   string
+        }
+        Insert: {
+          id?:          string
+          user_id:      string
+          job_url:      string
+          job_title?:   string | null
+          company?:     string | null
+          embedding?:   number[] | null
+          created_at?:  string
+        }
+        Update: {
+          id?:          string
+          user_id?:     string
+          job_url?:     string
+          job_title?:   string | null
+          company?:     string | null
+          embedding?:   number[] | null
+          created_at?:  string
         }
       }
     Views: { [_ in never]: never }
