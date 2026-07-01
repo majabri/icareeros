@@ -71,6 +71,17 @@ export default function JobsPage() {
   // so the view is shareable + back-button-safe.
   const [selectedJob, setSelectedJob] = useState<OpportunityResult | null>(null);
 
+  // 2026-06-30 (feat/jobs-opportunities-refresh) — "last updated N minutes ago"
+  // + manual Refresh button. Auto-search still fires on first mount; the tick
+  // effect below re-computes the relative-time label every 30 s so the display
+  // stays fresh without a full page render.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [nowTick,       setNowTick]       = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // ── Load active cycle (for fit scoring) ───────────────────────────────
   useEffect(() => {
     void (async () => {
@@ -122,6 +133,8 @@ export default function JobsPage() {
       const opps: OpportunityResult[] = Array.isArray(data.opportunities) ? data.opportunities : [];
       setResults(opps);
       setTotal(typeof data.total === "number" ? data.total : opps.length);
+      setLastUpdatedAt(new Date());
+      setNowTick(Date.now());
       setDerivedFrom(data.derivedFrom ?? null);
       if (data.sources && typeof data.sources === "object") {
         setSources(data.sources as Record<string, { count: number; fallback?: boolean }>);
@@ -225,6 +238,12 @@ export default function JobsPage() {
             ? "Curated for you."
             : "Search by keyword, location, and filters."}
         </p>
+        <LastUpdatedRow
+          lastUpdatedAt={lastUpdatedAt}
+          nowMs={nowTick}
+          loading={loading}
+          onRefresh={() => void runSearch(mode, manual)}
+        />
       </header>
 
       {/* Mode toggle */}
@@ -475,4 +494,92 @@ export default function JobsPage() {
       )}
     </div>
   );
+}
+
+// ── 2026-06-30 (feat/jobs-opportunities-refresh) — Last-updated row ─────
+//
+// Small header row: relative timestamp on the left, Refresh button on the
+// right. Staleness rules:
+//   • < 1h  → muted slate blue (#7B9AC0), plain "Last updated 4 minutes ago"
+//   • 1-24h → amber, appends "results may be outdated"
+//   • 24h+  → coral, appends "click Refresh to update"
+//
+// The parent's 30 s tick drives re-renders so "4 minutes ago" ticks to
+// "5 minutes ago" without a full data reload.
+
+interface LastUpdatedRowProps {
+  lastUpdatedAt: Date | null;
+  nowMs:         number;  // ticks every 30 s from parent
+  loading:       boolean;
+  onRefresh:     () => void;
+}
+
+function LastUpdatedRow({ lastUpdatedAt, nowMs, loading, onRefresh }: LastUpdatedRowProps) {
+  // Suppress the widget entirely until the first successful search lands.
+  if (!lastUpdatedAt) return null;
+
+  const ageMs = Math.max(0, nowMs - lastUpdatedAt.getTime());
+  const label = formatRelativeAge(ageMs);
+
+  // Color + suffix based on staleness buckets.
+  const hourMs = 60 * 60 * 1000;
+  let color = "#7B9AC0";
+  let suffix = "";
+  let refreshColor = "#7B9AC0";
+  if (ageMs >= 24 * hourMs) {
+    color = "#FF6B6B"; // coral
+    refreshColor = "#FF6B6B";
+    suffix = " — click Refresh to update";
+  } else if (ageMs >= hourMs) {
+    color = "#B45309"; // amber-700
+    refreshColor = "#B45309";
+    suffix = " — results may be outdated";
+  }
+
+  return (
+    <div className="mt-1 flex items-center justify-between gap-3" data-testid="opps-last-updated-row">
+      <span className="text-xs" style={{ color }} aria-live="polite">
+        Last updated {label}{suffix}
+      </span>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={loading}
+        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ color: refreshColor, borderColor: loading ? undefined : refreshColor + "33" }}
+        aria-label="Refresh opportunities"
+        data-testid="opps-refresh-btn"
+      >
+        <span aria-hidden>{loading ? "↻" : "↻"}</span>
+        {loading ? "Refreshing…" : "Refresh"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Format a millisecond age into the copy expected by the brief:
+ *   < 1 min                    → "just now"
+ *   1-59 min                   → "X minutes ago"
+ *   1-23 h                     → "X hours ago"
+ *   24-47 h                    → "yesterday"
+ *   48h+                       → "X days ago"
+ * Exported for potential future testing, otherwise module-local.
+ */
+export function formatRelativeAge(ageMs: number): string {
+  const minMs = 60 * 1000;
+  const hourMs = 60 * minMs;
+  const dayMs = 24 * hourMs;
+  if (ageMs < minMs) return "just now";
+  if (ageMs < hourMs) {
+    const m = Math.floor(ageMs / minMs);
+    return `${m} minute${m === 1 ? "" : "s"} ago`;
+  }
+  if (ageMs < dayMs) {
+    const h = Math.floor(ageMs / hourMs);
+    return `${h} hour${h === 1 ? "" : "s"} ago`;
+  }
+  const days = Math.floor(ageMs / dayMs);
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
 }
