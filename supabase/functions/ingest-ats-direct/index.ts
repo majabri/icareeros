@@ -2,13 +2,13 @@
  * feat/jobs-ats-aggregation Phase 2 — ingest-ats-direct edge function.
  *
  * Runs every ~4h (via pg_cron or the Supabase scheduler) to refresh the
- * public.job_postings table with every open posting on the curated ATS
+ * public.ats_jobs table with every open posting on the curated ATS
  * company list. The function fans out at BATCH_SIZE parallel requests to
  * avoid stampeding any single ATS host. Never throws — all per-tenant
  * failures degrade to a logged error in the response body.
  *
  * PENDING: this function is not yet deployed. Deployment steps:
- *   1. Ensure supabase/migrations/*_job_postings.sql has been applied
+ *   1. Ensure supabase/migrations/*_ats_jobs.sql has been applied
  *      (Platform-owned; the migration file's PENDING header notes this)
  *   2. supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
  *   3. Add a pg_cron entry:
@@ -81,7 +81,7 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
         is_active: true,
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
       if (error) throw new Error(`gh:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -115,7 +115,7 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
         is_active: true,
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
       if (error) throw new Error(`lever:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -150,7 +150,7 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
         is_active: true,
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
       if (error) throw new Error(`ashby:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -179,7 +179,7 @@ serve(async (_req) => {
     try {
       const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       const { count } = await supabase
-        .from("job_postings")
+        .from("ats_jobs")
         .update({ is_active: false })
         .lt("last_seen_at", cutoff)
         .eq("is_active", true)

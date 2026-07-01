@@ -6,7 +6,7 @@
 -- upserts every open posting here. Search queries then hit this table
 -- (via /api/jobs/search-db) instead of doing live fan-out on every request.
 
-CREATE TABLE IF NOT EXISTS public.job_postings (
+CREATE TABLE IF NOT EXISTS public.ats_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source TEXT NOT NULL,
   external_id TEXT,
@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS public.job_postings (
   UNIQUE(source, apply_url)
 );
 
-CREATE INDEX IF NOT EXISTS job_postings_company_idx ON public.job_postings(company);
-CREATE INDEX IF NOT EXISTS job_postings_title_idx
-  ON public.job_postings USING gin(to_tsvector('english', title));
-CREATE INDEX IF NOT EXISTS job_postings_active_idx
-  ON public.job_postings(is_active) WHERE is_active = true;
-CREATE INDEX IF NOT EXISTS job_postings_source_idx ON public.job_postings(source);
-CREATE INDEX IF NOT EXISTS job_postings_posted_at_idx ON public.job_postings(posted_at DESC);
+CREATE INDEX IF NOT EXISTS ats_jobs_company_idx ON public.ats_jobs(company);
+CREATE INDEX IF NOT EXISTS ats_jobs_title_idx
+  ON public.ats_jobs USING gin(to_tsvector('english', title));
+CREATE INDEX IF NOT EXISTS ats_jobs_active_idx
+  ON public.ats_jobs(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS ats_jobs_source_idx ON public.ats_jobs(source);
+CREATE INDEX IF NOT EXISTS ats_jobs_posted_at_idx ON public.ats_jobs(posted_at DESC);
