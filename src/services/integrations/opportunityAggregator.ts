@@ -14,6 +14,17 @@ import { searchAdzuna, type AdzunaSearchParams } from "./adzunaAdapter";
 import { applyQualityGate } from "./qualityGate";
 import { searchATS } from "./atsAdapter";
 import { searchHackerNews } from "./hnAdapter";
+// feat/jobs-ats-aggregation — 5 new ATS platforms (Phase 1A)
+import { searchWorkable }        from "./ats/workableAdapter";
+import { searchRecruitee }       from "./ats/recruiteeAdapter";
+import { searchSmartRecruiters } from "./ats/smartrecruitersAdapter";
+import { searchBreezy }          from "./ats/breezyAdapter";
+import { searchPinpoint }        from "./ats/pinpointAdapter";
+import {
+  GREENHOUSE_COMPANIES, LEVER_COMPANIES, ASHBY_COMPANIES,
+  WORKDAY_COMPANIES, WORKABLE_COMPANIES, RECRUITEE_COMPANIES,
+  SMARTRECRUITERS_COMPANIES, BREEZY_COMPANIES, PINPOINT_COMPANIES,
+} from "./ats/companyList";
 import {
   inferSeniority,
   inferTargetSeniority,
@@ -23,7 +34,7 @@ import {
 import { createClient }   from "@/lib/supabase";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
 
-export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna" | "ats" | "hackernews";
+export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna" | "ats" | "hackernews" | "curated_ats";
 
 export interface AggregatedSearchOptions {
   filters: OpportunitySearchFilters;
@@ -42,6 +53,24 @@ export interface AggregatedSearchResult {
     adzuna?:   { count: number; fallback: boolean };
     ats?:        { count: number; fallback: boolean };
     hackernews?: { count: number; fallback: boolean };
+    /**
+     * Curated ATS fan-out (Phase 1C). Per-platform breakdown so the page
+     * can show `"247 jobs from 89 companies · Greenhouse (45) · Lever (38) ..."`.
+     */
+    curated_ats?: {
+      greenhouse:      number;
+      lever:           number;
+      ashby:           number;
+      workday:         number;
+      workable:        number;
+      recruitee:       number;
+      smartrecruiters: number;
+      breezy:          number;
+      pinpoint:        number;
+      total:           number;
+      /** Total curated companies fanned out to. */
+      companies:       number;
+    };
   };
   /**
    * Quality gate output (Brief Task 1). Counts and per-job reasons for
@@ -104,19 +133,24 @@ export async function searchOpportunities(
   const includeAdzuna   = includeAll || sources.includes("adzuna");
   const includeATS      = includeAll || sources.includes("ats");
   const includeHN       = includeAll || sources.includes("hackernews");
+  const includeCurated  = includeAll || sources.includes("curated_ats");
 
-  // Per-source budget. SIX sources when "all" is requested.
-  const perSource = Math.ceil(limit / (includeAll ? 6 : sources.length));
+  // Per-source budget. SEVEN top-level sources when "all" is requested.
+  const perSource = Math.ceil(limit / (includeAll ? 7 : sources.length));
 
   // Fan out in parallel. Use Promise.allSettled so a single-source failure
   // doesn't sink the whole batch.
-  const [linkedInSettled, indeedSettled, dbSettled, adzunaSettled, atsSettled, hnSettled] = await Promise.allSettled([
+  const [
+    linkedInSettled, indeedSettled, dbSettled, adzunaSettled,
+    atsSettled, hnSettled, curatedSettled,
+  ] = await Promise.allSettled([
     includeLinkedIn ? searchLinkedIn({ filters, limit: perSource, offset }) : Promise.resolve(null),
     includeIndeed   ? searchIndeed({ filters, limit: perSource, offset })   : Promise.resolve(null),
     includeDatabase ? searchDatabase(filters, perSource, offset)            : Promise.resolve(null),
     includeAdzuna   ? searchAdzuna(filtersToAdzunaParams(filters, perSource, offset)) : Promise.resolve(null),
-    includeATS      ? searchATS(filters)         : Promise.resolve(null),
-    includeHN       ? searchHackerNews(filters)  : Promise.resolve(null),
+    includeATS      ? searchATS(filters)               : Promise.resolve(null),
+    includeHN       ? searchHackerNews(filters)        : Promise.resolve(null),
+    includeCurated  ? searchCuratedATS(filters)        : Promise.resolve(null),
   ]);
 
   const linkedInRes = unwrap(linkedInSettled, "linkedin");
@@ -125,6 +159,7 @@ export async function searchOpportunities(
   const adzunaRes   = unwrap(adzunaSettled,   "adzuna");
   const atsRes      = unwrap(atsSettled,      "ats");
   const hnRes       = unwrap(hnSettled,       "hackernews");
+  const curatedRes  = unwrap(curatedSettled,  "curated_ats");
 
   // Merge and deduplicate by URL (first seen wins). Order matters — we
   // prefer LinkedIn → Indeed → DB → Adzuna so the source that surfaces a
@@ -133,7 +168,7 @@ export async function searchOpportunities(
   const seen = new Set<string>();
   const merged: OpportunityResult[] = [];
 
-  for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes, atsRes, hnRes]) {
+  for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes, atsRes, hnRes, curatedRes]) {
     if (!result) continue;
     for (const opp of result.opportunities) {
       const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
@@ -221,6 +256,7 @@ export async function searchOpportunities(
       ...(adzunaRes   ? { adzuna:   { count: adzunaRes.opportunities.length,   fallback: adzunaRes.fallback   } } : {}),
       ...(atsRes      ? { ats:        { count: atsRes.opportunities.length,      fallback: atsRes.fallback      } } : {}),
       ...(hnRes       ? { hackernews: { count: hnRes.opportunities.length,       fallback: hnRes.fallback       } } : {}),
+      ...(curatedRes  ? { curated_ats: curatedRes.breakdown } : {}),
     },
     filtered: {
       count:   filteredReasons.length,
@@ -393,4 +429,89 @@ async function searchDatabase(
     console.error("[aggregator] database search unexpected error:", err);
     return { opportunities: [], total: 0 };
   }
+}
+
+// ── feat/jobs-ats-aggregation Phase 1C — Curated ATS fan-out ──────────
+//
+// Runs the 5 new adapters (Workable / Recruitee / SmartRecruiters / Breezy
+// / Pinpoint) in parallel and returns a merged opportunities array plus
+// a per-platform breakdown. Each adapter is empty-safe: a network failure
+// or missing company slug yields an empty array, not a throw.
+//
+// Note: Greenhouse / Lever / Ashby continue to be served by the existing
+// searchATS() adapter (via ats/atsAdapter.ts). This function stacks the
+// FIVE new platforms on top and reports the total company count for the
+// "N companies" surface line on /opportunities.
+
+interface CuratedATSResult {
+  opportunities: OpportunityResult[];
+  fallback:      boolean;
+  breakdown: {
+    greenhouse:      number;
+    lever:           number;
+    ashby:           number;
+    workday:         number;
+    workable:        number;
+    recruitee:       number;
+    smartrecruiters: number;
+    breezy:          number;
+    pinpoint:        number;
+    total:           number;
+    companies:       number;
+  };
+}
+
+export async function searchCuratedATS(filters: OpportunitySearchFilters): Promise<CuratedATSResult> {
+  const [workable, recruitee, sr, breezy, pinpoint] = await Promise.allSettled([
+    searchWorkable(filters),
+    searchRecruitee(filters),
+    searchSmartRecruiters(filters),
+    searchBreezy(filters),
+    searchPinpoint(filters),
+  ]);
+  const workableOpps        = workable.status === "fulfilled" ? workable.value : [];
+  const recruiteeOpps       = recruitee.status === "fulfilled" ? recruitee.value : [];
+  const smartrecruitersOpps = sr.status === "fulfilled" ? sr.value : [];
+  const breezyOpps          = breezy.status === "fulfilled" ? breezy.value : [];
+  const pinpointOpps        = pinpoint.status === "fulfilled" ? pinpoint.value : [];
+
+  // Dedupe by URL across the 5 new sources.
+  const seen = new Set<string>();
+  const opportunities: OpportunityResult[] = [];
+  for (const list of [workableOpps, recruiteeOpps, smartrecruitersOpps, breezyOpps, pinpointOpps]) {
+    for (const opp of list) {
+      const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      opportunities.push(opp);
+    }
+  }
+
+  const companies =
+    GREENHOUSE_COMPANIES.length + LEVER_COMPANIES.length + ASHBY_COMPANIES.length +
+    WORKDAY_COMPANIES.length + WORKABLE_COMPANIES.length + RECRUITEE_COMPANIES.length +
+    SMARTRECRUITERS_COMPANIES.length + BREEZY_COMPANIES.length + PINPOINT_COMPANIES.length;
+
+  return {
+    opportunities,
+    fallback: opportunities.length === 0,
+    breakdown: {
+      // Counts here reflect ONLY the 5 new platforms this function fans
+      // out to. Greenhouse / Lever / Ashby / Workday are served by the
+      // separate searchATS() path — their counts already surface under
+      // `sources.ats`. Companies count sums across all 9 lists for the
+      // "N companies" UI copy.
+      greenhouse:      0,
+      lever:           0,
+      ashby:           0,
+      workday:         0,
+      workable:        workableOpps.length,
+      recruitee:       recruiteeOpps.length,
+      smartrecruiters: smartrecruitersOpps.length,
+      breezy:          breezyOpps.length,
+      pinpoint:        pinpointOpps.length,
+      total:           opportunities.length,
+      companies,
+    },
+  };
 }

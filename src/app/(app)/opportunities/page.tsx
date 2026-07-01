@@ -53,7 +53,8 @@ export default function JobsPage() {
   const [warning,        setWarning]        = useState<string | null>(null);
   // 2026-06-18 — per-source counts from the aggregator. Used by the small
   // "from Adzuna · LinkedIn · Database" line below the results count.
-  const [sources,        setSources]        = useState<Record<string, { count: number; fallback?: boolean }>>({});
+  const [sources,        setSources]        = useState<Record<string, { count?: number; fallback?: boolean; total?: number; companies?: number }>>({});
+  const [sourcesInfoOpen, setSourcesInfoOpen] = useState(false);
   // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
   const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
   const [filteredOpen,   setFilteredOpen]   = useState(false);
@@ -137,7 +138,7 @@ export default function JobsPage() {
       setNowTick(Date.now());
       setDerivedFrom(data.derivedFrom ?? null);
       if (data.sources && typeof data.sources === "object") {
-        setSources(data.sources as Record<string, { count: number; fallback?: boolean }>);
+        setSources(data.sources as Record<string, { count?: number; fallback?: boolean; total?: number; companies?: number }>);
       }
       if (data.filtered && typeof data.filtered === "object") {
         setFiltered(data.filtered as { count: number; reasons: Array<{ title: string; company: string; reason: string }> });
@@ -384,18 +385,22 @@ export default function JobsPage() {
                 desc so the heaviest source reads first. */}
             {Object.keys(sources).length > 0 && (() => {
               const labels: Record<string, string> = {
-                adzuna:    "Adzuna",
-                linkedin:  "LinkedIn",
-                indeed:    "Indeed",
-                database:  "Database",
-                ats:       "ATS Direct",
-                hackernews:"Hacker News",
+                adzuna:      "Adzuna",
+                linkedin:    "LinkedIn",
+                indeed:      "Indeed",
+                database:    "Database",
+                ats:         "ATS Direct",
+                hackernews:  "Hacker News",
+                curated_ats: "Curated ATS",
               };
+              // feat/jobs-ats-aggregation Phase 3 — surface company count
+              // from the curated_ats breakdown when present.
+              const curated  = sources.curated_ats as { companies?: number; total?: number } | undefined;
               const active = Object.entries(sources)
-                .filter(([, info]) => (info?.count ?? 0) > 0)
-                .sort(([, a], [, b]) => (b.count ?? 0) - (a.count ?? 0))
+                .filter(([k, info]) => (info?.count ?? info?.total ?? 0) > 0 && k !== "curated_ats")
+                .sort(([, a], [, b]) => ((b.count ?? b.total ?? 0) - (a.count ?? a.total ?? 0)))
                 .map(([k]) => labels[k] ?? k);
-              if (active.length === 0) return null;
+              if (active.length === 0 && !curated) return null;
               return (
                 <div
                   className="mt-1 text-[11px]"
@@ -403,6 +408,19 @@ export default function JobsPage() {
                   aria-label={`Sources: ${active.join(", ")}`}
                 >
                   from {active.join(" · ")}
+                  {curated && curated.companies ? (
+                    <> · <span title={`Fanned out to ${curated.companies} curated companies across 9 ATS platforms`}>ATS Direct ({curated.companies} companies)</span></>
+                  ) : null}
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={() => setSourcesInfoOpen(true)}
+                    className="underline underline-offset-2 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 rounded"
+                    style={{ color: "#7B9AC0" }}
+                    aria-label="Where do these jobs come from?"
+                  >
+                    Sources
+                  </button>
                   {filtered.count > 0 && (
                     <>
                       {" · "}
@@ -439,6 +457,51 @@ export default function JobsPage() {
       {/* Wave 2 — in-platform Job Detail Drawer. Renders only when
           selectedJob is set; the drawer manages its own scrim. */}
       <JobDetailDrawer job={selectedJob} onClose={closeJob} cycleId={cycleId} />
+
+      {/* feat/jobs-ats-aggregation Phase 3 — Sources info popover. Simple
+          light-weight modal explaining where opportunities come from. */}
+      {sourcesInfoOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center"
+          aria-modal="true"
+          role="dialog"
+          aria-label="Sources info"
+          onClick={() => setSourcesInfoOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/30" />
+          <div
+            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-base font-semibold text-gray-900">Where jobs come from</h2>
+              <button
+                type="button"
+                onClick={() => setSourcesInfoOpen(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                aria-label="Close sources info"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              iCareerOS aggregates open positions from multiple sources in real time.
+              We prioritise direct-from-ATS listings (the highest-trust source) and
+              back off to job-board aggregators for coverage.
+            </p>
+            <ul className="mt-3 space-y-2 text-xs text-gray-700">
+              <li><strong className="text-brand-700">ATS Direct</strong> — Greenhouse, Lever, Ashby, Workday, Workable, Recruitee, SmartRecruiters, Breezy, Pinpoint. Canonical apply URL, weighted 1.0.</li>
+              <li><strong>Adzuna</strong> — global job-board aggregator; weighted 0.8.</li>
+              <li><strong>LinkedIn / Indeed</strong> — supplementary; weighted 0.9 / 0.8.</li>
+              <li><strong>Hacker News</strong> — the monthly "Who is hiring?" thread; weighted 0.9.</li>
+              <li><strong>Database</strong> — iCareerOS-curated internal listings; weighted 0.75.</li>
+            </ul>
+            <p className="mt-3 text-[11px] text-gray-400">
+              Listings that fail our quality gate (thin descriptions, expired postings, red-flag phrases) are filtered out — click the "N filtered" link on the results list to review.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Brief Task 3 — quality-gate filtered drawer.
           Opens from the "N filtered" link; shows up to 50 reason rows. */}
