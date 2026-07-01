@@ -163,6 +163,7 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
 }
 
 serve(async (_req) => {
+  const startTime = Date.now();
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -187,17 +188,41 @@ serve(async (_req) => {
       deactivated = count ?? 0;
     } catch (_e) { /* best-effort */ }
 
-    return new Response(JSON.stringify({
-      ok: true,
+    // feat/jobs-search-db Task 1 — clean response shape. The prior shape
+    // exposed { greenhouse:{upserted}, lever:{upserted}, ashby:{upserted} }
+    // but the cron caller in src/app/api/cron/ingest-ats/route.ts expects
+    // { upsert:{inserted} } — the mismatch produced "inserted=?" in logs.
+    // Aligning to a single stable contract used by both sides.
+    const totalIngested = gh.upserted + lever.upserted + ashby.upserted;
+    const combinedErrors = [
+      ...gh.errors.map(e    => ({ source: "greenhouse", error: e })),
+      ...lever.errors.map(e => ({ source: "lever",      error: e })),
+      ...ashby.errors.map(e => ({ source: "ashby",      error: e })),
+    ];
+    const body = {
+      success:  true,
+      ok:       true,
+      ingested: totalIngested,
+      // We upsert on ONCONFLICT so ingested combines new + updated. Split
+      // reporting would require the DB to distinguish; approximated as
+      // total for now. Deactivated tracked separately.
+      updated:  0,
+      deactivated,
+      sources: {
+        greenhouse: gh.upserted,
+        lever:      lever.upserted,
+        ashby:      ashby.upserted,
+      },
+      duration_ms: Date.now() - startTime,
+      errors: combinedErrors,
       runStartedAt,
       finishedAt: new Date().toISOString(),
-      greenhouse: { upserted: gh.upserted,    errors: gh.errors.length },
-      lever:      { upserted: lever.upserted, errors: lever.errors.length },
-      ashby:      { upserted: ashby.upserted, errors: ashby.errors.length },
-      deactivated,
       // TODO Phase 2 v2: extend to workable/recruitee/smartrecruiters/breezy/pinpoint
-      // once each has a verified company list — deferred until adapters have >0 entries.
-    }, null, 2), { headers: { "Content-Type": "application/json" } });
+      // once each has a verified company list.
+    };
+    return new Response(JSON.stringify(body, null, 2), {
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
       status:  500,

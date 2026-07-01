@@ -55,6 +55,8 @@ export default function JobsPage() {
   // "from Adzuna · LinkedIn · Database" line below the results count.
   const [sources,        setSources]        = useState<Record<string, { count?: number; fallback?: boolean; total?: number; companies?: number }>>({});
   const [sourcesInfoOpen, setSourcesInfoOpen] = useState(false);
+  // feat/jobs-search-db (Task 4) — where did results come from?
+  const [searchOrigin, setSearchOrigin] = useState<"database" | "live" | "mixed" | null>(null);
   // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
   const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
   const [filteredOpen,   setFilteredOpen]   = useState(false);
@@ -107,14 +109,29 @@ export default function JobsPage() {
     setFiltered({ count: 0, reasons: [] });
 
     try {
-      // Auto mode → AI agent (multi-query plan + parallel run + dedupe)
-      // Manual mode → direct single-query search
+      // feat/jobs-search-db (Task 4) — try /api/jobs/search-db first in auto
+      // mode. The DB is refreshed every 4h and returns in ~500ms (vs the
+      // 3-5s the AI agent takes on a fresh cold cache). Fall back to the
+      // agent when search-db returns fewer than 5 hits (source==="live"
+      // OR empty result).
       let res: Response;
+      let dbFirstUsed = false;
       if (m === "auto") {
-        res = await fetch("/api/jobs/agent", {
+        const dbRes = await fetch("/api/jobs/search-db", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-        });
+          body: JSON.stringify({ query: "", limit: 50 }),
+        }).catch(() => null);
+        const dbData = dbRes && dbRes.ok ? await dbRes.clone().json().catch(() => null) : null;
+        if (dbRes && dbRes.ok && dbData && Array.isArray(dbData.opportunities) && dbData.opportunities.length >= 5) {
+          res = dbRes;
+          dbFirstUsed = true;
+        } else {
+          res = await fetch("/api/jobs/agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+        }
       } else {
         res = await fetch("/api/jobs/search", {
           method: "POST",
@@ -138,7 +155,33 @@ export default function JobsPage() {
       setNowTick(Date.now());
       setDerivedFrom(data.derivedFrom ?? null);
       if (data.sources && typeof data.sources === "object") {
-        setSources(data.sources as Record<string, { count?: number; fallback?: boolean; total?: number; companies?: number }>);
+        // /api/jobs/search-db returns sources as Record<string, number>
+        // (per-ATS row count). /api/jobs/agent returns Record<string, {count,fallback}>.
+        // Normalise both to the { count?, fallback?, total?, companies? } shape
+        // the source-indicator block expects.
+        const srcMap = data.sources as Record<string, unknown>;
+        const normalised: Record<string, { count?: number; fallback?: boolean; total?: number; companies?: number }> = {};
+        for (const [k, v] of Object.entries(srcMap)) {
+          if (typeof v === "number")               normalised[k] = { count: v };
+          else if (v && typeof v === "object")     normalised[k] = v as { count?: number; fallback?: boolean; total?: number; companies?: number };
+        }
+        setSources(normalised);
+      }
+      // feat/jobs-search-db (Task 4) — search-db exposes `source` +
+      // `freshestAt` at the top level. Use freshestAt for the "Last updated"
+      // widget when the DB path served results so the timestamp reflects
+      // the DB's last_seen_at max, not the page-load moment.
+      if (typeof data.freshestAt === "string" && data.freshestAt.length > 0) {
+        setLastUpdatedAt(new Date(data.freshestAt));
+        setNowTick(Date.now());
+      }
+      // Persist source label so the indicator can render "database + live"
+      if (typeof data.source === "string") {
+        setSearchOrigin(data.source as "database" | "live" | "mixed");
+      } else if (dbFirstUsed) {
+        setSearchOrigin("database");
+      } else {
+        setSearchOrigin("live");
       }
       if (data.filtered && typeof data.filtered === "object") {
         setFiltered(data.filtered as { count: number; reasons: Array<{ title: string; company: string; reason: string }> });
@@ -407,6 +450,9 @@ export default function JobsPage() {
                   style={{ color: "#7B9AC0" }}
                   aria-label={`Sources: ${active.join(", ")}`}
                 >
+                  {searchOrigin === "database" && <><span className="font-medium text-teal-700">database</span>{" · "}</>}
+                  {searchOrigin === "mixed"    && <><span className="font-medium text-teal-700">database + live</span>{" · "}</>}
+                  {searchOrigin === "live"     && <><span className="font-medium">live search</span>{" · "}</>}
                   from {active.join(" · ")}
                   {curated && curated.companies ? (
                     <> · <span title={`Fanned out to ${curated.companies} curated companies across 9 ATS platforms`}>ATS Direct ({curated.companies} companies)</span></>

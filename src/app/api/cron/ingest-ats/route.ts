@@ -23,19 +23,23 @@ export const dynamic = "force-dynamic";
 // We leave generous headroom for slow ATSes.
 export const maxDuration = 60;
 
-interface UpsertResult {
-  inserted: number;
-  updated:  number;
-  error?:   string;
-}
-
+/**
+ * feat/jobs-search-db Task 1 — response shape aligned with the edge
+ * function's post-PR-#N output. Prior interface expected `upsert.inserted`
+ * which never appeared in the actual body — the log line hard-coded
+ * `inserted=?` as a symptom.
+ */
 interface IngestResponse {
-  ok:          boolean;
-  dry_run:     boolean;
-  elapsed_ms:  number;
-  total_jobs:  number;
-  by_company:  Record<string, { count: number; error?: string }>;
-  upsert:      UpsertResult | null;
+  success:      boolean;
+  ok:           boolean;
+  ingested:     number;
+  updated:      number;
+  deactivated:  number;
+  sources:      Record<string, number>;
+  duration_ms:  number;
+  errors:       Array<{ source: string; company?: string; error: string }>;
+  runStartedAt?: string;
+  finishedAt?:  string;
 }
 
 export async function POST(req: NextRequest) {
@@ -82,9 +86,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const sourceBreakdown = json?.sources
+      ? Object.entries(json.sources).map(([s, n]) => `${s}=${n}`).join(" ")
+      : "";
     console.info(
-      `[cron/ingest-ats] ok in ${elapsedMs}ms — inserted=${json?.upsert?.inserted ?? "?"} ` +
-      `total=${json?.total_jobs ?? "?"}`
+      `[cron/ingest-ats] ok in ${elapsedMs}ms — ingested=${json?.ingested ?? "?"} ` +
+      `updated=${json?.updated ?? "?"} deactivated=${json?.deactivated ?? "?"} ` +
+      `errors=${json?.errors?.length ?? 0} ` +
+      (sourceBreakdown ? `[${sourceBreakdown}]` : "")
     );
     return NextResponse.json({ ok: true, elapsedMs, result: json ?? null });
   } catch (e) {
