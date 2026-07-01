@@ -14,6 +14,8 @@ import { searchAdzuna, type AdzunaSearchParams } from "./adzunaAdapter";
 import { applyQualityGate } from "./qualityGate";
 import { searchATS } from "./atsAdapter";
 import { searchHackerNews } from "./hnAdapter";
+// feat/jobs-search-db — DB-first adapter over ats_jobs table
+import { searchFromDatabase } from "./dbJobsAdapter";
 // feat/jobs-ats-aggregation — 5 new ATS platforms (Phase 1A)
 import { searchWorkable }        from "./ats/workableAdapter";
 import { searchRecruitee }       from "./ats/recruiteeAdapter";
@@ -168,6 +170,9 @@ export async function searchOpportunities(
   const seen = new Set<string>();
   const merged: OpportunityResult[] = [];
 
+  // Merge order matches historical behavior (linkedin first). The
+  // /api/jobs/search-db route implements DB-first dedup at the route
+  // level for the /opportunities auto-search path.
   for (const result of [linkedInRes, indeedRes, dbRes, adzunaRes, atsRes, hnRes, curatedRes]) {
     if (!result) continue;
     for (const opp of result.opportunities) {
@@ -404,27 +409,16 @@ function applyFeedbackBoost(fit: number | null | undefined, opp: OpportunityResu
 async function searchDatabase(
   filters: OpportunitySearchFilters,
   limit: number,
-  offset: number
+  _offset: number
 ): Promise<{ opportunities: OpportunityResult[]; total: number }> {
-  const supabase = createClient();
-
+  // feat/jobs-search-db (Task 3) — route DB search through the new
+  // dbJobsAdapter which queries the ats_jobs table (populated by the
+  // ingest-ats-direct edge function ~every 4h). The old path invoked
+  // the "search-jobs" edge function which queried the older
+  // "opportunities" table — deprecated in favour of ats_jobs.
   try {
-    const { data, error } = await supabase.functions.invoke<{
-      opportunities: OpportunityResult[];
-      total: number;
-    }>("search-jobs", {
-      body: { ...filters, source_filter: "database", limit, offset },
-    });
-
-    if (error || !data) {
-      console.warn("[aggregator] database search error:", error);
-      return { opportunities: [], total: 0 };
-    }
-
-    return {
-      opportunities: data.opportunities ?? [],
-      total:         data.total ?? 0,
-    };
+    const res = await searchFromDatabase(filters, limit);
+    return { opportunities: res.opportunities, total: res.opportunities.length };
   } catch (err) {
     console.error("[aggregator] database search unexpected error:", err);
     return { opportunities: [], total: 0 };
