@@ -17,6 +17,12 @@ vi.mock("../atsAdapter", () => ({
 vi.mock("../hnAdapter", () => ({
   searchHackerNews: vi.fn(async () => ({ opportunities: [], total: 0, fallback: false })),
 }));
+// feat/jobs-ats-aggregation Phase 1A — stub the 5 new adapter modules.
+vi.mock("../ats/workableAdapter",        () => ({ searchWorkable:        vi.fn(async () => []) }));
+vi.mock("../ats/recruiteeAdapter",       () => ({ searchRecruitee:       vi.fn(async () => []) }));
+vi.mock("../ats/smartrecruitersAdapter", () => ({ searchSmartRecruiters: vi.fn(async () => []) }));
+vi.mock("../ats/breezyAdapter",          () => ({ searchBreezy:          vi.fn(async () => []) }));
+vi.mock("../ats/pinpointAdapter",        () => ({ searchPinpoint:        vi.fn(async () => []) }));
 
 const baseFilters = {
   skills: ["Python"],

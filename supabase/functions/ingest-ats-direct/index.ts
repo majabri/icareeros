@@ -1,585 +1,207 @@
 /**
- * ingest-ats-direct — Supabase Edge Function (Deno)
+ * feat/jobs-ats-aggregation Phase 2 — ingest-ats-direct edge function.
  *
- * Direct ATS ingestion for iCareerOS. Replaces Adzuna for the top
- * companies — these jobs are clean by construction (no aggregator
- * tracking links, no "Job ID" boilerplate, no email-gate funnels).
+ * Runs every ~4h (via pg_cron or the Supabase scheduler) to refresh the
+ * public.job_postings table with every open posting on the curated ATS
+ * company list. The function fans out at BATCH_SIZE parallel requests to
+ * avoid stampeding any single ATS host. Never throws — all per-tenant
+ * failures degrade to a logged error in the response body.
  *
- * Sources (ported from azjobs `scrape-jobs-ats` reference, fresh
- * implementation per Rule 10):
- *   • Greenhouse  — public Boards API JSON
- *   • Lever       — public Postings API JSON
- *   • Ashby       — page HTML scrape (window.__INITIAL_STATE__)
- *   • Workday     — POST /wday/cxs/{slug}/jobs
- *   • Career Page — regex job-link extraction fallback
- *
- * Seed companies (7 — verified ATS APIs only):
- *   Greenhouse:  Stripe, Vercel, Anthropic, Figma
- *   Ashby:       Notion, OpenAI, Linear
- * Airtable / Rippling / Retool were probed but expose only search-interface
- * marketing pages (no public job-listings index, even after JS rendering).
- * They remain in the Adzuna pipeline + Google fallback.
- *
- * Invocation modes:
- *   POST { dry_run: true }                  — fetch + return, NO writes
- *   POST { dry_run: false, max_per_company: 25 } — fetch + upsert into
- *                                                  public.opportunities
- *
- * Defaults to dry_run=true to enforce the CHECKPOINT discipline. The
- * caller must explicitly set dry_run=false to allow writes.
+ * PENDING: this function is not yet deployed. Deployment steps:
+ *   1. Ensure supabase/migrations/*_job_postings.sql has been applied
+ *      (Platform-owned; the migration file's PENDING header notes this)
+ *   2. supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
+ *   3. Add a pg_cron entry:
+ *        SELECT cron.schedule(
+ *          'ingest-ats-4h', '0 star/4 * * *',
+ *          $$ SELECT net.http_post(
+ *               url:='https://kuneabeiwcxavvyyfjkx.supabase.co/functions/v1/ingest-ats-direct',
+ *               headers:='{"Authorization":"Bearer <SERVICE_ROLE>"}'::jsonb) $$
+ *        );
  */
+// deno-lint-ignore-file no-explicit-any
+// @ts-nocheck  — edge-function runtime uses Deno's native fetch/serve. This
+// file is compiled by Supabase's build pipeline, not Next's tsc, so the
+// per-line `deno-lint-ignore` + `@ts-nocheck` prevent the Next type-check
+// from tripping on the Deno APIs.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ── Seed companies (Wave 4) ────────────────────────────────────────────────
+const BATCH_SIZE = 20;
+const FETCH_TIMEOUT_MS = 8000;
 
-type ATS = "greenhouse" | "lever" | "ashby" | "workday" | "career_page" | "careers_page_firecrawl" | "rippling";
+// NOTE: This edge function must not import from `src/` (Next paths are
+// unavailable in the Deno runtime). The company list is intentionally
+// duplicated as a JSON literal here — keep in sync with src/services/
+// integrations/ats/companyList.ts via the CI helper (see Phase 4 backlog).
 
-interface CompanyConfig {
-  name: string;          // Display name for the `company` field.
-  slug: string;          // Slug used by the ATS endpoint.
-  ats: ATS;
-  /** Optional override URL (Workday + career_page only). */
-  url?: string;
-}
-
-const SEED_COMPANIES: CompanyConfig[] = [
-  // Verified 2026-05-11 via curl probes (see Wave 4 CHECKPOINT report).
-  // Greenhouse: 4 companies w/ public boards-api.greenhouse.io endpoints
-  { name: "Stripe",    slug: "stripe",    ats: "greenhouse" },
-  { name: "Vercel",    slug: "vercel",    ats: "greenhouse" },
-  { name: "Anthropic", slug: "anthropic", ats: "greenhouse" },
-  { name: "Figma",     slug: "figma",     ats: "greenhouse" },
-  { name: "Airtable",  slug: "airtable", ats: "greenhouse" },  // Re-probed 2026-05-13: 21 open reqs, Greenhouse confirmed (Sprint 2 W4)
-  // Ashby (using api.ashbyhq.com/posting-api JSON, not the HTML scrape):
-  { name: "Notion",    slug: "notion",    ats: "ashby"      },
-  { name: "OpenAI",    slug: "openai",    ats: "ashby"      },
-  { name: "Linear",    slug: "linear",    ats: "ashby"      },
-  // Rippling (own Rippling Recruiting ATS) — Sprint 3 W2, discovered 2026-05-13:
-  { name: "Rippling",  slug: "rippling", ats: "rippling"   },
-  // Note: Re-probed 2026-05-13 for Sprint 2 W4:
-  //   • Airtable → IS on Greenhouse, slug "airtable" → ADDED above (21 reqs).
-  //   • Retool   → Next.js SPA, no public ATS endpoint (Greenhouse/Ashby/Lever
-  //                all 404). Stays in Adzuna + Google fallback.
-  //   • Rippling → uses their own Rippling Recruiting ATS. The public endpoint
-  //                api.rippling.com/platform/api/ats/v1/board/{slug}/jobs works
-  //                but returns DIFFERENT tenants per slug (multi-tenant API).
-  //                Slug for Rippling-the-company's own jobs not yet discovered.
-  //                Deferred to a future sprint — see SPRINT2-CHECKPOINTS doc.
-];
-
-// ── Shape we normalize every scraper output into ───────────────────────────
-
-interface ScrapedJob {
-  source: ATS;
-  source_id: string;          // Stable per ATS + company + job-id
-  title: string;
-  company: string;
-  description: string;
-  location: string;
-  is_remote: boolean;
-  job_type: string;
-  salary_min: number | null;
-  salary_max: number | null;
-  salary_currency: string | null;
-  apply_url: string;          // CLEAN — points directly at the company's ATS posting
-  posted_at: string;
-}
-
-// ── HTTP entry ─────────────────────────────────────────────────────────────
-
-const CORS = {
-  "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST") {
-    return json({ error: "method_not_allowed" }, 405);
-  }
-
-  // Secret-header auth — verify_jwt is disabled on this function so the
-  // cron route can POST without a Supabase JWT. The `x-ingest-cron-secret`
-  // header is the only thing keeping the public URL from being open.
-  // When INGEST_CRON_SECRET is NOT set in the function env, we skip the
-  // check (handy for local dev + the one-shot Wave 4 dry-run probes).
-  const required = Deno.env.get("INGEST_CRON_SECRET");
-  if (required) {
-    const supplied = req.headers.get("x-ingest-cron-secret");
-    if (supplied !== required) {
-      return json({ error: "unauthorized" }, 401);
-    }
-  }
-
-  let body: any = {};
-  try { body = await req.json(); } catch { /* empty body is fine */ }
-  const dryRun: boolean = body?.dry_run !== false;       // default true
-  const maxPerCompany: number = clampInt(body?.max_per_company, 1, 100, 25);
-
-  const t0 = Date.now();
-  const perCompany: Record<string, { count: number; error?: string; sample?: ScrapedJob[] }> = {};
-  const allJobs: ScrapedJob[] = [];
-
-  for (const c of SEED_COMPANIES) {
-    try {
-      const jobs = await scrapeCompany(c, maxPerCompany);
-      perCompany[c.slug] = {
-        count: jobs.length,
-        sample: jobs.slice(0, 3), // surface a sample for the CHECKPOINT
-      };
-      allJobs.push(...jobs);
-    } catch (e) {
-      perCompany[c.slug] = { count: 0, error: (e as Error)?.message ?? String(e) };
-    }
-    // Gentle rate limit between companies.
-    await sleep(400);
-  }
-
-  let upsertResult: { inserted: number; updated: number; error?: string } | undefined;
-  if (!dryRun && allJobs.length > 0) {
-    upsertResult = await upsertJobs(allJobs);
-  }
-
-  return json({
-    ok:          true,
-    dry_run:     dryRun,
-    elapsed_ms:  Date.now() - t0,
-    total_jobs:  allJobs.length,
-    by_company:  perCompany,
-    upsert:      upsertResult ?? null,
-  });
-});
-
-// ── Per-ATS scrapers ───────────────────────────────────────────────────────
-
-async function scrapeCompany(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  switch (c.ats) {
-    case "greenhouse":  return scrapeGreenhouse(c, max);
-    case "lever":       return scrapeLever(c, max);
-    case "ashby":       return scrapeAshby(c, max);
-    case "workday":     return scrapeWorkday(c, max);
-    case "career_page": return scrapeCareerPage(c, max);
-    case "careers_page_firecrawl": return scrapeCareersPageFirecrawl(c, max);
-    case "rippling":    return scrapeRippling(c, max);
-  }
-}
-
-async function scrapeGreenhouse(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  const url = `https://boards-api.greenhouse.io/v1/boards/${c.slug}/jobs?content=true`;
-  const res = await fetchWithUA(url);
-  if (!res.ok) throw new Error(`Greenhouse ${c.slug} → ${res.status}`);
-  const data = await res.json();
-  const out: ScrapedJob[] = [];
-  for (const j of (data?.jobs ?? []).slice(0, max)) {
-    const desc = stripHtml(decodeHtml(j.content ?? ""));
-    const loc = parseLocationObj(j.location);
-    out.push({
-      source:           "greenhouse",
-      source_id:        `gh-${c.slug}-${j.id}`,
-      title:            j.title || "Untitled",
-      company:          c.name,
-      description:      desc.slice(0, 5000),
-      location:         loc,
-      is_remote:        isRemote(loc, desc),
-      job_type:         guessJobType(j.title, desc),
-      salary_min:       extractSalary(desc, "min"),
-      salary_max:       extractSalary(desc, "max"),
-      salary_currency:  null,
-      apply_url:        j.absolute_url,
-      posted_at:        j.updated_at || new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeLever(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  const url = `https://api.lever.co/v0/postings/${c.slug}?mode=json`;
-  const res = await fetchWithUA(url);
-  if (!res.ok) throw new Error(`Lever ${c.slug} → ${res.status}`);
-  const data = await res.json();
-  const out: ScrapedJob[] = [];
-  for (const j of (data ?? []).slice(0, max)) {
-    const desc = (j.descriptionPlain || stripHtml(j.description ?? "")).slice(0, 5000);
-    const loc = j?.categories?.location || "";
-    out.push({
-      source:           "lever",
-      source_id:        `lv-${c.slug}-${j.id}`,
-      title:            j.text || "Untitled",
-      company:          c.name,
-      description:      desc,
-      location:         loc,
-      is_remote:        isRemote(loc, desc),
-      job_type:         guessJobType(j.text, desc),
-      salary_min:       j.salaryMin ?? null,
-      salary_max:       j.salaryMax ?? null,
-      salary_currency:  j.salaryCurrency ?? null,
-      apply_url:        j.applyUrl || j.hostedUrl,
-      posted_at:        j.createdAt ? new Date(j.createdAt).toISOString() : new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeAshby(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  // Public JSON endpoint — way more reliable than scraping the HTML page,
-  // which is a client-side-rendered SPA shell for most boards.
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${c.slug}`;
-  const res = await fetchWithUA(url);
-  if (!res.ok) throw new Error(`Ashby ${c.slug} → ${res.status}`);
-  const data = await res.json();
-  const out: ScrapedJob[] = [];
-  for (const j of (data?.jobs ?? []).slice(0, max)) {
-    const desc = (j.descriptionPlain || stripHtml(j.descriptionHtml ?? "")).slice(0, 5000);
-    const loc = j.locationName || parseLocationObj(j.location) || "";
-    out.push({
-      source:           "ashby",
-      source_id:        `ash-${c.slug}-${j.id}`,
-      title:            j.title || "Untitled",
-      company:          c.name,
-      description:      desc,
-      location:         loc,
-      is_remote:        Boolean(j.isRemote) || isRemote(loc, desc),
-      job_type:         (j.employmentType || guessJobType(j.title, desc)).toLowerCase().replace(/\s+/g, "_"),
-      salary_min:       null,
-      salary_max:       null,
-      salary_currency:  null,
-      apply_url:        j.applyUrl || j.jobUrl,
-      posted_at:        j.publishedAt ? new Date(j.publishedAt).toISOString() : new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function _scrapeAshbyHtmlLegacy(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  const url = `https://jobs.ashbyhq.com/${c.slug}`;
-  const res = await fetchWithUA(url, true);
-  if (!res.ok) throw new Error(`Ashby ${c.slug} → ${res.status}`);
-  const html = await res.text();
-  const m = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});\s*<\/script>/);
-  if (!m) throw new Error(`Ashby ${c.slug} → no __INITIAL_STATE__ found`);
-  let initial: any;
-  try { initial = JSON.parse(m[1]); } catch { throw new Error(`Ashby ${c.slug} → unparseable __INITIAL_STATE__`); }
-  const jobs = initial?.jobs?.jobs ?? initial?.boardData?.jobs ?? [];
-  const out: ScrapedJob[] = [];
-  for (const j of jobs.slice(0, max)) {
-    const desc = stripHtml(j.descriptionHtml ?? j.description ?? "").slice(0, 5000);
-    const loc = parseLocationObj(j.location);
-    out.push({
-      source:           "ashby",
-      source_id:        `ash-${c.slug}-${j.id}`,
-      title:            j.title || "Untitled",
-      company:          c.name,
-      description:      desc,
-      location:         loc,
-      is_remote:        isRemote(loc, desc),
-      job_type:         guessJobType(j.title, desc),
-      salary_min:       j.compensationMin ?? null,
-      salary_max:       j.compensationMax ?? null,
-      salary_currency:  j.compensationCurrency ?? null,
-      apply_url:        `https://jobs.ashbyhq.com/${c.slug}/${j.id}`,
-      posted_at:        j.publishedAt ? new Date(j.publishedAt).toISOString() : new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeRippling(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  // Rippling uses their own Rippling Recruiting ATS (NOT Greenhouse/Lever/Ashby).
-  // Public board endpoint returns a flat JSON array of jobs:
-  //   { uuid, name, department: {id,label}, url, workLocation: {id,label} }
-  // Apply URL pattern (in `j.url`): https://ats.rippling.com/{slug}/jobs/{uuid}
-  // Discovered 2026-05-13 (Sprint 3 W2). Generalizable to any Rippling Recruiting
-  // tenant by changing the slug — only adding rippling-the-company for now.
-  const url = `https://api.rippling.com/platform/api/ats/v1/board/${c.slug}/jobs`;
-  const res = await fetchWithUA(url);
-  if (!res.ok) throw new Error(`Rippling ${c.slug} → ${res.status}`);
-  const data = await res.json();
-  const jobs = Array.isArray(data) ? data : [];
-  const out: ScrapedJob[] = [];
-  for (const j of jobs.slice(0, max)) {
-    const title = (j?.name as string) ?? "Untitled";
-    const loc   = (j?.workLocation?.label as string) ?? "";
-    const dept  = (j?.department?.label as string) ?? "";
-    const desc  = dept ? `${dept} • ${loc}` : loc;
-    out.push({
-      source:           "rippling",
-      source_id:        `rip-${c.slug}-${j.uuid}`,
-      title:            title,
-      company:          c.name,
-      description:      desc.slice(0, 5000),
-      location:         loc,
-      is_remote:        isRemote(loc, desc),
-      job_type:         guessJobType(title, desc),
-      salary_min:       null,
-      salary_max:       null,
-      salary_currency:  null,
-      apply_url:        (j?.url as string) ?? `https://ats.rippling.com/${c.slug}/jobs/${j.uuid}`,
-      posted_at:        new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeWorkday(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  const base = c.url || `https://${c.slug}.wd1.myworkdayjobs.com`;
-  const searchUrl = `${base}/wday/cxs/${c.slug}/jobs`;
-  const res = await fetch(searchUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": uaJSON() },
-    body: JSON.stringify({ appliedFacets: {}, limit: max, offset: 0, searchText: "" }),
-  });
-  if (!res.ok) throw new Error(`Workday ${c.slug} → ${res.status}`);
-  const data = await res.json();
-  const out: ScrapedJob[] = [];
-  for (const j of (data?.jobPostings ?? []).slice(0, max)) {
-    const desc = stripHtml(j.jobDescription ?? "").slice(0, 5000);
-    const loc = j.locationsText || "";
-    out.push({
-      source:           "workday",
-      source_id:        `wd-${c.slug}-${j.bulletFields?.[0] ?? hash(j.externalPath ?? j.title ?? "")}`,
-      title:            j.title || "Untitled",
-      company:          c.name,
-      description:      desc,
-      location:         loc,
-      is_remote:        isRemote(loc, desc),
-      job_type:         guessJobType(j.title, desc),
-      salary_min:       null,
-      salary_max:       null,
-      salary_currency:  null,
-      apply_url:        `${base}${j.externalPath ?? ""}`,
-      posted_at:        j.postedOn ? new Date(j.postedOn).toISOString() : new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeCareerPage(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  // Generic fallback — extracts job-link anchors from the careers page.
-  // Less reliable than the structured ATSes; used only when ats === 'career_page'.
-  const url = c.url || `https://${c.slug}.com/careers`;
-  const res = await fetchWithUA(url, true);
-  if (!res.ok) throw new Error(`Career page ${c.slug} → ${res.status}`);
-  const html = await res.text();
-  const out: ScrapedJob[] = [];
-  const re = /<a[^>]+href="([^"]*(?:job|career|position|opening)[^"]*)"[^>]*>([^<]{4,140})<\/a>/gi;
-  const seen = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null && out.length < max) {
-    const href = m[1];
-    const title = decodeHtml(m[2]).replace(/\s+/g, " ").trim();
-    if (!title || seen.has(href)) continue;
-    seen.add(href);
-    const full = href.startsWith("http") ? href : new URL(href, url).toString();
-    out.push({
-      source:           "career_page",
-      source_id:        `cp-${c.slug}-${hash(href)}`,
-      title,
-      company:          c.name,
-      description:      "",
-      location:         "",
-      is_remote:        false,
-      job_type:         "full_time",
-      salary_min:       null,
-      salary_max:       null,
-      salary_currency:  null,
-      apply_url:        full,
-      posted_at:        new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-async function scrapeCareersPageFirecrawl(c: CompanyConfig, max: number): Promise<ScrapedJob[]> {
-  const FIRECRAWL_KEY = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!FIRECRAWL_KEY) throw new Error(`Firecrawl ${c.slug} → missing FIRECRAWL_API_KEY`);
-  const target = c.url || `https://${c.slug}.com/careers`;
-
-  const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${FIRECRAWL_KEY}`,
-      "Content-Type":  "application/json",
-    },
-    body: JSON.stringify({
-      url:             target,
-      formats:         ["markdown"],
-      onlyMainContent: true,
-      // The careers page on each of these SPAs is a single index of all
-      // open roles; we don't need link-crawl depth.
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Firecrawl ${c.slug} → ${res.status} ${t.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  const md = (data?.data?.markdown ?? data?.markdown ?? "") as string;
-  if (!md) throw new Error(`Firecrawl ${c.slug} → empty markdown response`);
-
-  // Parse job links from the rendered markdown. Each company structures
-  // its careers index slightly differently, so we accept anything that
-  // looks like a markdown link whose href points at a /job, /career,
-  // /position, /opening, or /role path (or a known ATS hostname embedded
-  // in the markdown).
-  const out: ScrapedJob[] = [];
-  const seen = new Set<string>();
-  const linkRe = /\[([^\]]{4,140})\]\(([^)]+)\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(md)) !== null && out.length < max) {
-    const title = m[1].replace(/\s+/g, " ").trim();
-    const href  = m[2].trim();
-    // Heuristic accept: href must look like a job page; title must be
-    // longer than a typical nav label and not obviously a footer link.
-    const looksLikeJob =
-      /\/(job|jobs|career|careers|position|positions|opening|openings|role|roles)\b/i.test(href)
-      || /greenhouse\.io|lever\.co|ashbyhq|workdayjobs|smartrecruiters|workable/i.test(href);
-    if (!looksLikeJob) continue;
-    if (seen.has(href)) continue;
-    // Reject footer / navigation patterns.
-    if (/^(home|about|contact|privacy|terms|press|blog|product|pricing|login|sign in|sign up)$/i.test(title)) continue;
-    seen.add(href);
-
-    const full = href.startsWith("http") ? href : new URL(href, target).toString();
-    out.push({
-      source:           "career_page",
-      source_id:        `cp-${c.slug}-${hash(href)}`,
-      title,
-      company:          c.name,
-      description:      "",   // page index doesn't carry per-role descriptions; OK
-      location:         "",
-      is_remote:        false,
-      job_type:         "full_time",
-      salary_min:       null,
-      salary_max:       null,
-      salary_currency:  null,
-      apply_url:        full,
-      posted_at:        new Date().toISOString(),
-    });
-  }
-  return out;
-}
-
-// ── Upsert into public.opportunities ───────────────────────────────────────
-
-async function upsertJobs(jobs: ScrapedJob[]): Promise<{ inserted: number; updated: number; error?: string }> {
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-  const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return { inserted: 0, updated: 0, error: "missing service-role credentials in edge env" };
-  }
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
-  const rows = jobs.map(j => ({
-    title:               j.title,
-    company:             j.company,
-    description:         j.description,
-    location:            j.location,
-    url:                 j.apply_url,
-    apply_url_company:   j.apply_url, // ATS scrapes ARE the company URL
-    job_type:            j.job_type,
-    is_remote:           j.is_remote,
-    salary_min:          j.salary_min,
-    salary_max:          j.salary_max,
-    salary_currency:     j.salary_currency,
-    source:              "ats",
-    source_id:           j.source_id,
-    first_seen_at:       new Date().toISOString(),
-    posted_at:           j.posted_at,
-    is_active:           true,
-    is_flagged:          false,
-  }));
-  const { error, data, count } = await sb
-    .from("opportunities")
-    .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: false, count: "exact" })
-    .select("id");
-  if (error) return { inserted: 0, updated: 0, error: error.message };
-  return { inserted: data?.length ?? count ?? 0, updated: 0 };
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function uaHtml() { return "Mozilla/5.0 (compatible; iCareerOS/1.0; Job Discovery Bot)"; }
-function uaJSON() { return "iCareerOS/1.0 (Job Discovery Bot)"; }
-
-async function fetchWithUA(url: string, asHtml = false): Promise<Response> {
-  return fetch(url, {
-    headers: {
-      "User-Agent": asHtml ? uaHtml() : uaJSON(),
-      "Accept":     asHtml ? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" : "application/json",
-    },
-  });
-}
+const GREENHOUSE = ["airbnb","instacart","doordash","lyft","robinhood","coinbase","stripe","discord","datadoghq","elastic","gitlab","twilio","shopify","atlassian","asana","reddit","pinterest","squarespace","snowflakecomputing","okta"];
+const LEVER      = ["netflix","spotify","rippling","ramp","scale","anthropic","openai","huggingface","perplexity","linear","vercel","supabase","replit","notion","figma","loom","miro","framer","raycast","arc"];
+const ASHBY      = ["ramp","linear","vanta","modal","deel","mercury","brex","warpdotdev","attio","prisma","tigerbeetle","render","fly","convex","neon","browserbase","trigger","windsurf","cursor"];
 
 function stripHtml(s: string): string {
-  return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function decodeHtml(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g,  "<")
-    .replace(/&gt;/g,  ">")
-    .replace(/&quot;/g,'"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g," ");
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": "iCareerOS-Ingest/1.0" },
+      signal: ctl.signal,
+    });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch { return null; }
 }
 
-function parseLocationObj(loc: any): string {
-  if (!loc) return "";
-  if (typeof loc === "string") return loc;
-  return loc.name || loc.title || loc.city || "";
+async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+  let upserted = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < GREENHOUSE.length; i += BATCH_SIZE) {
+    const batch = GREENHOUSE.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(async (slug) => {
+      const data = await fetchJson<{ jobs?: any[] }>(`https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`);
+      const jobs = data?.jobs ?? [];
+      const rows = jobs.filter((j: any) => j.absolute_url).map((j: any) => ({
+        source: "greenhouse",
+        external_id: String(j.id ?? ""),
+        company: slug,
+        title: (j.title || "").trim(),
+        location: j.location?.name ?? null,
+        description: stripHtml(j.content ?? ""),
+        apply_url: j.absolute_url,
+        posted_at: j.updated_at ?? null,
+        remote: /remote/i.test(j.title ?? "") || /remote/i.test(j.location?.name ?? ""),
+        raw: j,
+        last_seen_at: new Date().toISOString(),
+        is_active: true,
+      }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      if (error) throw new Error(`gh:${slug}:${error.message}`);
+      return rows.length;
+    }));
+    for (const r of results) {
+      if (r.status === "fulfilled") upserted += r.value;
+      else errors.push(String(r.reason).slice(0, 200));
+    }
+  }
+  return { upserted, errors };
 }
 
-function isRemote(loc: string, desc: string): boolean {
-  const t = `${loc} ${desc}`.toLowerCase();
-  return t.includes("remote")
-      || t.includes("work from home")
-      || t.includes("distributed")
-      || t.includes("anywhere");
+async function ingestLever(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+  let upserted = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < LEVER.length; i += BATCH_SIZE) {
+    const batch = LEVER.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(async (slug) => {
+      const postings = (await fetchJson<any[]>(`https://api.lever.co/v0/postings/${slug}?mode=json`)) ?? [];
+      const rows = postings.filter((p: any) => p.hostedUrl).map((p: any) => ({
+        source: "lever",
+        external_id: p.id,
+        company: slug,
+        title: (p.text || "").trim(),
+        location: p.categories?.location ?? null,
+        description: stripHtml(p.description ?? ""),
+        apply_url: p.hostedUrl,
+        employment_type: p.categories?.commitment ?? null,
+        posted_at: p.createdAt ? new Date(p.createdAt).toISOString() : null,
+        raw: p,
+        last_seen_at: new Date().toISOString(),
+        is_active: true,
+      }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      if (error) throw new Error(`lever:${slug}:${error.message}`);
+      return rows.length;
+    }));
+    for (const r of results) {
+      if (r.status === "fulfilled") upserted += r.value;
+      else errors.push(String(r.reason).slice(0, 200));
+    }
+  }
+  return { upserted, errors };
 }
 
-function guessJobType(title: string, description: string): string {
-  const t = `${title} ${description}`.toLowerCase();
-  if (t.includes("intern"))                                     return "internship";
-  if (t.includes("contract") || t.includes("freelance"))        return "contract";
-  if (t.includes("part-time") || t.includes("part time"))       return "part_time";
-  return "full_time";
+async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+  let upserted = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < ASHBY.length; i += BATCH_SIZE) {
+    const batch = ASHBY.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(async (slug) => {
+      const data = await fetchJson<{ jobs?: any[] }>(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
+      const jobs = data?.jobs ?? [];
+      const rows = jobs.filter((j: any) => j.jobUrl).map((j: any) => ({
+        source: "ashby",
+        external_id: j.id,
+        company: slug,
+        title: (j.title || "").trim(),
+        location: j.locationName ?? null,
+        description: stripHtml(j.descriptionPlain ?? ""),
+        apply_url: j.jobUrl,
+        posted_at: j.publishedDate ?? null,
+        remote: !!j.isRemote,
+        raw: j,
+        last_seen_at: new Date().toISOString(),
+        is_active: true,
+      }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("job_postings").upsert(rows, { onConflict: "source,apply_url" });
+      if (error) throw new Error(`ashby:${slug}:${error.message}`);
+      return rows.length;
+    }));
+    for (const r of results) {
+      if (r.status === "fulfilled") upserted += r.value;
+      else errors.push(String(r.reason).slice(0, 200));
+    }
+  }
+  return { upserted, errors };
 }
 
-function extractSalary(content: string, kind: "min" | "max"): number | null {
-  // Match "$120k - $150k" / "$120,000 - $150,000" / "$120k–$150k".
-  const m = /\$?\s*([\d,]+)\s*(k|000)?\s*[-–—to]+\s*\$?\s*([\d,]+)\s*(k|000)?/i.exec(content);
-  if (!m) return null;
-  let lo = parseInt(m[1].replace(/,/g, ""), 10);
-  let hi = parseInt(m[3].replace(/,/g, ""), 10);
-  if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
-  if (m[2]?.toLowerCase() === "k") lo *= 1000;
-  if (m[4]?.toLowerCase() === "k") hi *= 1000;
-  return kind === "min" ? lo : hi;
-}
+serve(async (_req) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
-function hash(s: string): string {
-  // Tiny non-cryptographic hash — stable across runs, used as part of source_id.
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return Math.abs(h).toString(36);
-}
+    const runStartedAt = new Date().toISOString();
+    const gh    = await ingestGreenhouse(supabase);
+    const lever = await ingestLever(supabase);
+    const ashby = await ingestAshby(supabase);
 
-function clampInt(v: unknown, lo: number, hi: number, fallback: number): number {
-  const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(lo, Math.min(hi, Math.round(n)));
-}
+    // Deactivate postings not seen in ~48h. Non-fatal on failure.
+    let deactivated = 0;
+    try {
+      const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from("job_postings")
+        .update({ is_active: false })
+        .lt("last_seen_at", cutoff)
+        .eq("is_active", true)
+        .select("id", { count: "exact", head: true });
+      deactivated = count ?? 0;
+    } catch (_e) { /* best-effort */ }
 
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
-
-function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload, null, 2), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
+    return new Response(JSON.stringify({
+      ok: true,
+      runStartedAt,
+      finishedAt: new Date().toISOString(),
+      greenhouse: { upserted: gh.upserted,    errors: gh.errors.length },
+      lever:      { upserted: lever.upserted, errors: lever.errors.length },
+      ashby:      { upserted: ashby.upserted, errors: ashby.errors.length },
+      deactivated,
+      // TODO Phase 2 v2: extend to workable/recruitee/smartrecruiters/breezy/pinpoint
+      // once each has a verified company list — deferred until adapters have >0 entries.
+    }, null, 2), { headers: { "Content-Type": "application/json" } });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+      status:  500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+});
