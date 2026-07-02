@@ -719,7 +719,7 @@ function LastUpdatedRow({ lastUpdatedAt, nowMs, loading, onRefresh }: LastUpdate
  *   48h+                       → "X days ago"
  * Exported for potential future testing, otherwise module-local.
  */
-export function formatRelativeAge(ageMs: number): string {
+function formatRelativeAge(ageMs: number): string {
   const minMs = 60 * 1000;
   const hourMs = 60 * minMs;
   const dayMs = 24 * hourMs;
