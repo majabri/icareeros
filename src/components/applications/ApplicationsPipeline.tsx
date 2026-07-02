@@ -13,6 +13,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { SmartApplyPanel, type SmartApplyJob } from "@/components/opportunities/SmartApplyPanel";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AddApplicationForm } from "./AddApplicationForm";
 import {
@@ -70,6 +71,8 @@ export function ApplicationsPipeline() {
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
   const [sort,        setSort]        = useState<SortKey>("applied_at_desc");
   const [showForm,    setShowForm]    = useState(false);
+  // feat/jobs-smart-apply — Smart Apply for pipeline rows not yet applied
+  const [smartApplyJob, setSmartApplyJob] = useState<SmartApplyJob | null>(null);
   const [initialPayload, setInitialPayload] = useState<IncomingTrackPayload | null>(null);
   // Brief B3 Task 15 — view toggle.
   const [viewMode,    setViewMode]    = useState<"list" | "kanban">(
@@ -418,6 +421,22 @@ export function ApplicationsPipeline() {
                       >
                         {expandedRowId === row.id ? "Hide activity" : "Activity"}
                       </button>
+                      {row.status !== "applied" && row.status !== "interviewing" && row.status !== "offer" && row.status !== "accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => setSmartApplyJob({
+                            title:          row.job_title,
+                            company:        row.company,
+                            description:    row.notes ?? "",
+                            url:            row.job_url ?? "",
+                            opportunity_id: row.opportunity_id ?? null,
+                          })}
+                          className="text-xs font-medium text-brand-700 hover:text-brand-800"
+                          data-testid={`smart-apply-${row.id}`}
+                        >
+                          ⚡ Smart Apply
+                        </button>
+                      )}
                       <button
                         onClick={() => void handleDelete(row.id)}
                         className="text-xs text-gray-400 hover:text-red-600"
@@ -492,6 +511,7 @@ export function ApplicationsPipeline() {
           </div>
         </div>
       )}
+      {smartApplyJob && <SmartApplyPanel job={smartApplyJob} onClose={() => setSmartApplyJob(null)} />}
     </div>
   );
 }

@@ -45,6 +45,9 @@ interface OpportunityCardProps {
    * read a posting — only the Apply button goes external.
    */
   onSelect?: (opp: OpportunityResult) => void;
+  /** feat/jobs-smart-apply — when set, the Apply button opens the parent's
+   *  SmartApplyPanel instead of the legacy confirm-and-launch modal. */
+  onSmartApply?: (opp: OpportunityResult) => void;
 }
 
 const FIT_COLORS: Record<string, string> = {
@@ -78,7 +81,7 @@ function formatSalary(
   return `Up to ${fmt(max!)}`;
 }
 
-export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity: opp, cycleId, onSelect, onSmartApply }: OpportunityCardProps) {
   const router = useRouter();
   const [showOutreach,     setShowOutreach]     = useState(false);
   const [showCoverLetter,  setShowCoverLetter]  = useState(false);
@@ -269,11 +272,11 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect }: Opportu
                 handles the confirm + auto-save to Pipeline. */}
             <button
               type="button"
-              onClick={() => setShowApplyConfirm(true)}
+              onClick={() => onSmartApply ? onSmartApply(opp) : setShowApplyConfirm(true)}
               className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition-colors"
-              title={chasedUrl ? `Apply at ${companyName}` : `Find ${companyName}'s application via Google`}
+              title={onSmartApply ? "Open Smart Apply" : (chasedUrl ? `Apply at ${companyName}` : `Find ${companyName}'s application via Google`)}
             >
-              {resolveApplyTarget(opp).label}
+              {onSmartApply ? "⚡ Smart Apply" : resolveApplyTarget(opp).label}
             </button>
           </div>
         </div>

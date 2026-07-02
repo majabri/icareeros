@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { SmartApplyPanel, type SmartApplyJob } from "@/components/opportunities/SmartApplyPanel";
 import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
 import { JobDetailDrawer } from "@/components/jobs/JobDetailDrawer";
@@ -57,6 +58,8 @@ export default function JobsPage() {
   const [sourcesInfoOpen, setSourcesInfoOpen] = useState(false);
   // feat/jobs-search-db (Task 4) — where did results come from?
   const [searchOrigin, setSearchOrigin] = useState<"database" | "live" | "mixed" | null>(null);
+  // feat/jobs-smart-apply — slide-in Smart Apply panel state
+  const [smartApplyJob, setSmartApplyJob] = useState<SmartApplyJob | null>(null);
   // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
   const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
   const [filteredOpen,   setFilteredOpen]   = useState(false);
@@ -487,7 +490,19 @@ export default function JobsPage() {
           </div>
           <div className="space-y-3">
             {decoratedResults.map((opp, i) => (
-              <OpportunityCard key={opp.id ?? `${opp.url}-${i}`} opportunity={opp} cycleId={cycleId} onSelect={openJob} />
+              <OpportunityCard
+                key={opp.id ?? `${opp.url}-${i}`}
+                opportunity={opp}
+                cycleId={cycleId}
+                onSelect={openJob}
+                onSmartApply={(o) => setSmartApplyJob({
+                  title:          o.title,
+                  company:        o.company,
+                  description:    o.description,
+                  url:            o.apply_url_company ?? o.url,
+                  opportunity_id: (typeof o.id === "string" ? o.id : null),
+                })}
+              />
             ))}
           </div>
         </>
@@ -503,6 +518,9 @@ export default function JobsPage() {
       {/* Wave 2 — in-platform Job Detail Drawer. Renders only when
           selectedJob is set; the drawer manages its own scrim. */}
       <JobDetailDrawer job={selectedJob} onClose={closeJob} cycleId={cycleId} />
+
+      {/* feat/jobs-smart-apply — slide-in Smart Apply panel */}
+      {smartApplyJob && <SmartApplyPanel job={smartApplyJob} onClose={() => setSmartApplyJob(null)} cycleId={cycleId} />}
 
       {/* feat/jobs-ats-aggregation Phase 3 — Sources info popover. Simple
           light-weight modal explaining where opportunities come from. */}
