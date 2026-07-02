@@ -83,6 +83,7 @@ const STAGES: StageSection[] = [
       { href: "/evaluate",          label: "Evaluate",             icon: "profile" },
       { href: "/evaluate/goal",     label: "Career Goal Fit",      icon: "target"  },
       { href: "/evaluate/job-fit",  label: "Job Application Fit",  icon: "resume"  },
+      { href: "/resume/generate",   label: "Tailor Resume",        icon: "resume"  },
     ],
   },
   {

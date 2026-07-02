@@ -197,6 +197,10 @@ export default function ResumeAdvisorPage() {
   // Job source
   const [jobSource, setJobSource] = useState<JobSource>("paste");
   const [jobDescription, setJobDescription] = useState("");
+  // feat/jobs-smart-apply Feature 3 — lazy why-these-experiences rationale
+  const [whyExperiences, setWhyExperiences] = useState<string | null>(null);
+  const [whyLoading, setWhyLoading] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const [jobUrl, setJobUrl] = useState("");
 
   // 2026-05-14 — Job URL fetch state. When jobSource === "url" we resolve
@@ -493,6 +497,29 @@ export default function ResumeAdvisorPage() {
       if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Fit check failed (HTTP ${res.status})`);
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       setResult(data as FitCheckResult);
+      // Feature 3 — lazy background fetch for the "why these experiences"
+      // rationale. Non-blocking; failure is silent (bar just doesn't render).
+      setWhyExperiences(null); setWhyLoading(true);
+      void (async () => {
+        try {
+          const wRes = await fetch("/api/resume/generate", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jobTitle:       "the target role",
+              targetCompany:  "the target company",
+              jobDescription: jobText,
+            }),
+          });
+          if (wRes.ok) {
+            const w = await wRes.json();
+            if (w && typeof w.whyTheseProjects === "string" && w.whyTheseProjects.length > 20) {
+              setWhyExperiences(w.whyTheseProjects);
+            }
+          }
+        } catch { /* silent */ }
+        finally { setWhyLoading(false); }
+      })();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fit check failed");
     } finally {
@@ -1135,6 +1162,23 @@ export default function ResumeAdvisorPage() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* feat/jobs-smart-apply Feature 3 — Why these experiences match */}
+              {(whyExperiences || whyLoading) && (
+                <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setWhyOpen(v => !v)}
+                    className="flex w-full items-center justify-between text-left text-sm font-medium text-brand-900"
+                    aria-expanded={whyOpen}
+                  >
+                    <span>💡 Why these experiences match</span>
+                    <span aria-hidden>{whyLoading && !whyExperiences ? "Loading…" : (whyOpen ? "▾" : "▸")}</span>
+                  </button>
+                  {whyOpen && whyExperiences && <p className="mt-2 text-sm text-brand-900">{whyExperiences}</p>}
+                  {whyOpen && whyLoading && !whyExperiences && <p className="mt-2 text-xs text-brand-700">Analyzing your profile against the JD…</p>}
+                </section>
               )}
 
               {/* Recommendations with "Add to target skills" buttons (item #4) */}
