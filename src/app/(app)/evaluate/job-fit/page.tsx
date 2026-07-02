@@ -316,6 +316,11 @@ export default function ResumeAdvisorPage() {
           location: j.location || "",
           url:      j.url      || "",
         });
+        // fix/jobs-ux-feedback Fix 5 — auto-run analysis when JD arrives
+        // via the job-card handoff. A saved resume version is typically
+        // pre-selected; if not, handleCheck surfaces the missing-resume
+        // error instead of the user having to click Analyze themselves.
+        setTimeout(() => { void handleCheck(); }, 300);
       }
       sessionStorage.removeItem("resumeAdvisor:incomingJob");
     } catch { /* malformed payload — ignore */ }

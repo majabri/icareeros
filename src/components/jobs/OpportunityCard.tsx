@@ -104,6 +104,20 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect, onSmartAp
     router.push("/evaluate/job-fit");
   }
 
+  function handleTailorResume() {
+    if (typeof window === "undefined") return;
+    // fix/jobs-ux-feedback Fix 6 — pre-populate /resume/generate with
+    // the job data via sessionStorage, then navigate.
+    try {
+      sessionStorage.setItem("tailorResume:incomingJob", JSON.stringify({
+        title:       opp.title       || "",
+        company:     opp.company     || "",
+        description: opp.description || "",
+      }));
+    } catch { /* private-mode failure — non-fatal */ }
+    router.push("/resume/generate?from=job-card");
+  }
+
   function handleTrack() {
     if (typeof window === "undefined") return;
     writeIncomingTrack({
@@ -226,6 +240,17 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect, onSmartAp
               title="Send this job description to Resume Advisor for a full fit analysis"
             >
               🎯 Analyze fit
+            </button>
+            {/* fix/jobs-ux-feedback Fix 6 — direct link to /resume/generate
+                pre-populated with this job. */}
+            <button
+              onClick={handleTailorResume}
+              className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs
+                         font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+              aria-label={`Tailor your resume for ${opp.title} at ${opp.company}`}
+              title="Open Tailor Resume with this job pre-loaded"
+            >
+              📝 Tailor Resume
             </button>
             {/* Cover Letter button — only show if opportunity has an id */}
             {opp.id && (

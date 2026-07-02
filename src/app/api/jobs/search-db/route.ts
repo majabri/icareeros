@@ -29,6 +29,7 @@ import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { searchOpportunities } from "@/services/integrations/opportunityAggregator";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
 import { applyQualityGate } from "@/services/integrations/qualityGate";
+import { isValidApplyUrl } from "@/services/integrations/applyUrlValidator";
 
 const MIN_DB_RESULTS = 5;    // fall back to live below this
 const DEFAULT_LIMIT  = 50;
@@ -140,8 +141,9 @@ export async function POST(req: NextRequest) {
     return liveFallback(query, location, remote, limit);
   }
 
-  const rawRows = (data ?? []) as AtsJobRow[];
-  // Quality gate — same rule set as the live aggregator uses
+  // fix/jobs-ux-feedback Fix 3 — pre-filter company-level career-page
+  // URLs before the quality gate.
+  const rawRows = ((data ?? []) as AtsJobRow[]).filter(r => isValidApplyUrl(r.apply_url));
   const dbOpps: OpportunityResult[] = [];
   for (const row of rawRows) {
     const opp = rowToOpportunity(row);
