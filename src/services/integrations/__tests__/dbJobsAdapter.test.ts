@@ -98,9 +98,9 @@ describe("searchFromDatabase", () => {
 
   it("returns opportunities with per-source counts across greenhouse/lever/ashby", async () => {
     const rows = [
-      { id: "1", source: "greenhouse", company: "Stripe",  title: "Engineer",   location: "Remote",     description: "d", apply_url: "https://x/1", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: true,  posted_at: "2026-07-01", last_seen_at: "2026-07-01T01:00Z" },
-      { id: "2", source: "lever",      company: "Netflix", title: "Engineer",   location: "LA",         description: "d", apply_url: "https://x/2", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: false, posted_at: "2026-07-01", last_seen_at: "2026-07-01T02:00Z" },
-      { id: "3", source: "ashby",      company: "Ramp",    title: "SRE",        location: "NY",         description: "d", apply_url: "https://x/3", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: false, posted_at: "2026-07-01", last_seen_at: "2026-07-01T03:00Z" },
+      { id: "1", source: "greenhouse", company: "Stripe",  title: "Engineer",   location: "Remote",     description: "d", apply_url: "https://x.com/company/jobs/1", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: true,  posted_at: "2026-07-01", last_seen_at: "2026-07-01T01:00Z" },
+      { id: "2", source: "lever",      company: "Netflix", title: "Engineer",   location: "LA",         description: "d", apply_url: "https://x.com/company/jobs/2", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: false, posted_at: "2026-07-01", last_seen_at: "2026-07-01T02:00Z" },
+      { id: "3", source: "ashby",      company: "Ramp",    title: "SRE",        location: "NY",         description: "d", apply_url: "https://x.com/company/jobs/3", salary_min: null, salary_max: null, salary_currency: null, employment_type: null, remote: false, posted_at: "2026-07-01", last_seen_at: "2026-07-01T03:00Z" },
     ];
     const { createClient } = await import("@/lib/supabase");
     (createClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(

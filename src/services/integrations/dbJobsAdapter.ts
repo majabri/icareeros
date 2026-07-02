@@ -17,6 +17,7 @@
 
 import { createClient } from "@/lib/supabase";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
+import { isValidApplyUrl } from "./applyUrlValidator";
 
 export interface DatabaseSearchResult {
   opportunities: OpportunityResult[];
@@ -125,7 +126,11 @@ export async function searchFromDatabase(
 
     if (matched.length === 0) return empty;
 
-    const opportunities = matched.map(rowToOpportunity);
+    // fix/jobs-ux-feedback Fix 3 — filter rows whose apply_url looks
+    // like a company-level career page rather than a specific posting.
+    const opportunities = matched
+      .filter(r => isValidApplyUrl(r.apply_url))
+      .map(rowToOpportunity);
     const perSource: Record<string, number> = {};
     let freshestAt: string | null = null;
     for (const r of matched) {

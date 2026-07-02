@@ -60,6 +60,9 @@ export default function JobsPage() {
   const [searchOrigin, setSearchOrigin] = useState<"database" | "live" | "mixed" | null>(null);
   // feat/jobs-smart-apply — slide-in Smart Apply panel state
   const [smartApplyJob, setSmartApplyJob] = useState<SmartApplyJob | null>(null);
+  // fix/jobs-ux-feedback Fix 2 — auto-prefill search query from target_roles
+  const [targetRoleQuery, setTargetRoleQuery] = useState<string>("");
+  const [editingQuery, setEditingQuery] = useState(false);
   // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
   const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
   const [filteredOpen,   setFilteredOpen]   = useState(false);
@@ -98,6 +101,29 @@ export default function JobsPage() {
         const cycle = await getActiveCycle(user.id);
         if (cycle) setCycleId(cycle.id);
       } catch { /* fit scoring still works via user_profiles fallback */ }
+    })();
+  }, []);
+
+  // fix/jobs-ux-feedback Fix 2 — pre-fill search query from user's first
+  // target_role in career_profiles. Runs once on mount. Falls back to
+  // empty query (existing "show all" behaviour) when target_roles is empty.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("career_profiles")
+          .select("target_roles")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const roles = (data?.target_roles ?? []) as string[];
+        if (roles.length > 0 && roles[0].trim().length > 0) {
+          setTargetRoleQuery(roles[0]);
+          setManual(prev => ({ ...prev, what: roles[0] }));
+        }
+      } catch { /* silent — falls back to empty query */ }
     })();
   }, []);
 

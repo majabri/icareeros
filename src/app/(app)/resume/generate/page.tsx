@@ -3,7 +3,7 @@
  * /resume/generate — Tailored Resume Generator page.
  * feat/jobs-smart-apply Feature 1 client UI.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { GeneratedResume } from "@/app/api/resume/generate/route";
@@ -20,6 +20,22 @@ export default function TailorResumePage() {
   const [result,   setResult]   = useState<GeneratedResume | null>(null);
   const [showWhy,  setShowWhy]  = useState(false);
   const [saveMsg,  setSaveMsg]  = useState<string | null>(null);
+
+  // fix/jobs-ux-feedback Fix 6 — consume the job-card handoff. Reads
+  // tailorResume:incomingJob from sessionStorage and pre-populates the
+  // form so the user can immediately click Generate.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("tailorResume:incomingJob");
+      if (!raw) return;
+      const j = JSON.parse(raw) as { title?: string; company?: string; description?: string };
+      if (j.title)       setJobTitle(j.title);
+      if (j.company)     setTargetCompany(j.company);
+      if (j.description) setJobDescription(j.description);
+      sessionStorage.removeItem("tailorResume:incomingJob");
+    } catch { /* malformed — ignore */ }
+  }, []);
 
   async function handleGenerate() {
     if (!jobTitle.trim() || !targetCompany.trim() || !jobDescription.trim()) {

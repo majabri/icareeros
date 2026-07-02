@@ -203,15 +203,19 @@ function CycleManagementPanel({
   const [busy, setBusy]           = useState<string | null>(null);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div
+      className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden border-l-4"
+      style={{ borderLeftColor: "#00B8A9" }}
+      data-testid="cycle-management-panel"
+    >
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
         aria-expanded={open}
       >
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Your active cycles ({cycles.length})
+        <span className="text-sm font-semibold text-gray-900">
+          Your active cycles <span className="text-gray-400 font-normal">({cycles.length})</span>
         </span>
         <span className="text-sm text-gray-400" aria-hidden>{open ? "▾" : "▸"}</span>
       </button>
@@ -877,6 +881,23 @@ export function CareerOsDashboard() {
               <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700 shrink-0">
                 Active
               </span>
+            </div>
+            {/* fix/jobs-ux-feedback Fix 1b — inline cycle-switcher hint under
+                the ring. Clicking scrolls to CycleManagementPanel above. */}
+            <div className="text-[11px] text-gray-500">
+              Cycle #{cycle.cycle_number} of {activeCycles.length} active
+              {activeCycles.length > 1 && (
+                <>
+                  {" — "}
+                  <button
+                    type="button"
+                    onClick={() => document.querySelector('[data-testid="cycle-management-panel"]')?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="text-brand-700 underline underline-offset-2 hover:text-brand-800"
+                  >
+                    Switch cycle
+                  </button>
+                </>
+              )}
             </div>
             <div>
               <div className="h-1.5 w-full rounded-full bg-gray-100">
