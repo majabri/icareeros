@@ -255,6 +255,8 @@ export async function POST(req: Request) {
           filters: paramsToFilters(what),
           limit:   40,                  // ~ 4 sources × 10
           offset:  0,
+          // feat/jobs-opportunity-scoring — profile-aware rerank
+          userId:  authedUserId,
         }).catch((e) => {
           console.warn(`[/api/jobs/search] variant "${what}" failed:`, e instanceof Error ? e.message : e);
           return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };

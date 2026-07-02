@@ -30,6 +30,8 @@ import { searchOpportunities } from "@/services/integrations/opportunityAggregat
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
 import { applyQualityGate } from "@/services/integrations/qualityGate";
 import { isValidApplyUrl } from "@/services/integrations/applyUrlValidator";
+import { extractUserProfile } from "@/services/scoring/profileExtractor";
+import { scoreOpportunityAgainstProfile, type ProfileFitScore } from "@/services/scoring/profileScorer";
 
 const MIN_DB_RESULTS = 5;    // fall back to live below this
 const DEFAULT_LIMIT  = 50;
@@ -161,14 +163,30 @@ export async function POST(req: NextRequest) {
     perSource[row.source] = (perSource[row.source] ?? 0) + 1;
   }
 
+  // feat/jobs-opportunity-scoring Task 3 — profile-aware scoring +
+  // rank + filter. Extract the user's profile ONCE per request, score
+  // every job, sort descending by profileFitScore.total, filter clearly
+  // irrelevant hits (total < 20). Skips gracefully when no profile.
+  const profile = await extractUserProfile(supabase, user.id);
+  let profileScored: Array<OpportunityResult & { profileFitScore?: ProfileFitScore }> = dbOpps;
+  if (profile) {
+    profileScored = dbOpps.map(opp => {
+      const pfs = scoreOpportunityAgainstProfile(opp, profile);
+      return { ...opp, profileFitScore: pfs, fit_score: pfs.total };
+    });
+    profileScored = profileScored
+      .filter(o => (o.profileFitScore?.total ?? 0) >= 20)
+      .sort((a, b) => (b.profileFitScore?.total ?? 0) - (a.profileFitScore?.total ?? 0));
+  }
+
   // 2) If fewer than MIN_DB_RESULTS survived the gate, supplement with a
   //    live aggregator search. Dedupe by apply_url so a DB hit + live hit
   //    for the same posting merges to one row (DB wins because it's ordered
   //    first).
-  if (dbOpps.length < MIN_DB_RESULTS) {
+  if (profileScored.length < MIN_DB_RESULTS) {
     const live = await runLiveAggregator(query, location, remote, limit);
-    const seen = new Set(dbOpps.map(o => (o.url || "").toLowerCase()));
-    const merged: OpportunityResult[] = [...dbOpps];
+    const seen = new Set(profileScored.map(o => (o.url || "").toLowerCase()));
+    const merged: OpportunityResult[] = [...profileScored];
     for (const opp of live) {
       const key = (opp.url || "").toLowerCase();
       if (!key || seen.has(key)) continue;
@@ -178,20 +196,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       opportunities: merged,
       total:         merged.length,
-      source:        dbOpps.length > 0 ? "mixed" : "live",
+      source:        profileScored.length > 0 ? "mixed" : "live",
       sources:       perSource,
       fromCache:     false,
       freshestAt,
+      profileScored: !!profile,
     });
   }
 
   return NextResponse.json({
-    opportunities: dbOpps,
-    total:         count ?? dbOpps.length,
+    opportunities: profileScored,
+    total:         count ?? profileScored.length,
     source:        "database",
     sources:       perSource,
     fromCache:     true,
     freshestAt,
+    profileScored: !!profile,
   });
 }
 

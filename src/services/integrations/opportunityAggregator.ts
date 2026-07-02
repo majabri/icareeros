@@ -35,6 +35,9 @@ import {
 } from "./seniorityInference";
 import { createClient }   from "@/lib/supabase";
 import type { OpportunityResult, OpportunitySearchFilters } from "@/services/opportunityTypes";
+// feat/jobs-opportunity-scoring Task 4 — optional profile-aware rerank
+import { extractUserProfile } from "@/services/scoring/profileExtractor";
+import { scoreOpportunityAgainstProfile } from "@/services/scoring/profileScorer";
 
 export type SearchSource = "all" | "linkedin" | "indeed" | "database" | "adzuna" | "ats" | "hackernews" | "curated_ats";
 
@@ -43,6 +46,9 @@ export interface AggregatedSearchOptions {
   sources?: SearchSource[];
   limit?: number;
   offset?: number;
+  /** feat/jobs-opportunity-scoring — when set, results get a profile-
+   *  aware fit score and are reranked by that score before returning. */
+  userId?: string;
 }
 
 export interface AggregatedSearchResult {
@@ -126,6 +132,7 @@ export async function searchOpportunities(
     sources = ["all"],
     limit = 40,
     offset = 0,
+    userId,
   } = options;
 
   const includeAll      = sources.includes("all");
@@ -251,8 +258,28 @@ export async function searchOpportunities(
     quality_score: opp.quality_score !== undefined ? opp.quality_score : Math.round(seniorityFit * 100),
   }));
 
+  // feat/jobs-opportunity-scoring Task 4 — profile-aware rerank. Runs
+  // only when userId is provided by the caller. Extracts the profile
+  // once, scores every opp, sorts by profileFitScore.total desc,
+  // filters out obvious non-matches (< 20). Skipped gracefully when
+  // the user has no career_profiles row.
+  let ranked = enriched;
+  if (userId) {
+    try {
+      const supabase = createClient();
+      const profile = await extractUserProfile(supabase, userId);
+      if (profile) {
+        ranked = enriched.map(opp => {
+          const pfs = scoreOpportunityAgainstProfile(opp, profile);
+          return { ...opp, fit_score: pfs.total };
+        }).filter(o => (o.fit_score ?? 0) >= 20)
+          .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0));
+      }
+    } catch { /* silent — fall through to unranked enriched */ }
+  }
+
   return {
-    opportunities: enriched.slice(0, limit),
+    opportunities: ranked.slice(0, limit),
     total:         enriched.length,
     sources: {
       ...(linkedInRes ? { linkedin: { count: linkedInRes.opportunities.length, fallback: linkedInRes.fallback } } : {}),
