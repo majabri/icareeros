@@ -255,6 +255,8 @@ QUALITY
         filters: planParamsToFilters(p),
         limit:   40,   // ~4 sources × 10 per plan
         offset:  0,
+        // feat/jobs-opportunity-scoring — profile-aware rerank
+        userId:  user.id,
       }).catch(e => {
         console.warn("[jobs/agent] one plan failed:", e instanceof Error ? e.message : e);
         return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };
