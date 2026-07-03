@@ -37,6 +37,7 @@ interface AtsJobRow {
   location:         string | null;
   description:      string | null;
   apply_url:        string;
+  direct_apply_url: string | null;
   salary_min:       number | null;
   salary_max:       number | null;
   salary_currency:  string | null;
@@ -55,7 +56,9 @@ function rowToOpportunity(row: AtsJobRow): OpportunityResult {
     location:        row.location ?? "",
     type:            row.employment_type ?? "",
     description:     row.description ?? "",
-    url:             row.apply_url,
+    // feat/jobs-enrichment — prefer the resolved direct URL when the
+    // enrichment pipeline has populated it. Falls back to raw apply_url.
+    url:             row.direct_apply_url ?? row.apply_url,
     matchReason:     "",
     salary_min:      row.salary_min,
     salary_max:      row.salary_max,
@@ -79,7 +82,7 @@ export async function searchFromDatabase(
     const supabase = createClient();
     let q = supabase
       .from("ats_jobs")
-      .select("id, source, external_id, company, title, location, description, apply_url, salary_min, salary_max, salary_currency, department, employment_type, remote, posted_at, last_seen_at")
+      .select("id, source, external_id, company, title, location, description, apply_url, direct_apply_url, salary_min, salary_max, salary_currency, department, employment_type, remote, posted_at, last_seen_at")
       .eq("is_active", true)
       .order("posted_at", { ascending: false, nullsFirst: false })
       .limit(Math.min(200, Math.max(1, limit)));
@@ -111,7 +114,7 @@ export async function searchFromDatabase(
       const supabase2 = createClient();
       const { data: descRows } = await supabase2
         .from("ats_jobs")
-        .select("id, source, external_id, company, title, location, description, apply_url, salary_min, salary_max, salary_currency, department, employment_type, remote, posted_at, last_seen_at")
+        .select("id, source, external_id, company, title, location, description, apply_url, direct_apply_url, salary_min, salary_max, salary_currency, department, employment_type, remote, posted_at, last_seen_at")
         .eq("is_active", true)
         .ilike("description", `%${query}%`)
         .order("posted_at", { ascending: false, nullsFirst: false })
