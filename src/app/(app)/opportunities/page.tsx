@@ -73,6 +73,10 @@ export default function JobsPage() {
   const [refineKeyword, setRefineKeyword] = useState<string>("");
   // feat/jobs-for-you-curator Task 7 — 3-tier curator result cache.
   interface CuratorTier { url?: string | null; [k: string]: unknown }
+  // fix/jobs-curator-relaxation Fix 2 — fallback flag: when curator
+  // returns totalCandidates=0 we fall through to /api/jobs/search-db
+  // and show a small note explaining the broader result set.
+  const [forYouFallback, setForYouFallback] = useState<boolean>(false);
   const [curatorResult, setCuratorResult] = useState<null | {
     strongMatch: CuratorTier[];
     worthConsidering: CuratorTier[];
@@ -176,6 +180,7 @@ export default function JobsPage() {
     setSources({});
     setFiltered({ count: 0, reasons: [] });
     setCuratorResult(null);
+    setForYouFallback(false);
 
     try {
       // feat/jobs-search-db (Task 4) — try /api/jobs/search-db first in auto
@@ -198,17 +203,26 @@ export default function JobsPage() {
           if (curRes && curRes.ok) {
             const cd = await curRes.json().catch(() => null);
             if (cd && Array.isArray(cd.strongMatch)) {
-              setCuratorResult(cd);
-              // Also populate the flat results list (union of tiers) so
-              // downstream components (drawer, cycleId) keep working.
+              // fix/jobs-curator-relaxation Fix 2 — when curator produced
+              // ZERO candidates, do NOT render 3 empty tier sections. Fall
+              // through to /api/jobs/search-db below with a fallback flag
+              // so the UI can show a small explanatory note.
               const flat = [...cd.strongMatch, ...cd.worthConsidering, ...cd.stretch] as OpportunityResult[];
-              setResults(flat);
-              setTotal(cd.totalCandidates ?? flat.length);
-              setLastUpdatedAt(new Date());
-              setNowTick(Date.now());
-              setSearchOrigin("database");
-              setLoading(false);
-              return;
+              if ((cd.totalCandidates ?? 0) === 0 || flat.length === 0) {
+                setForYouFallback(true);
+                setCuratorResult(null);
+                // fall through to the search-db path below
+              } else {
+                setForYouFallback(false);
+                setCuratorResult(cd);
+                setResults(flat);
+                setTotal(cd.totalCandidates ?? flat.length);
+                setLastUpdatedAt(new Date());
+                setNowTick(Date.now());
+                setSearchOrigin("database");
+                setLoading(false);
+                return;
+              }
             }
           }
           // curator failed — fall through to legacy search-db path
@@ -714,6 +728,14 @@ export default function JobsPage() {
               );
             })()}
           </div>
+          {/* fix/jobs-curator-relaxation Fix 2 — fallback note when curator
+              returned zero candidates and we fell through to search-db. */}
+          {forYouFallback && mode === "auto" && !refineKeyword.trim() && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              Showing broader results — we&apos;re expanding our database of
+              executive security roles. Refine with the Search tab for more control.
+            </div>
+          )}
           {/* feat/jobs-for-you-curator Task 7 — 3-tier rendering when the
               curator produced tiered output. Falls back to flat sorted list. */}
           {curatorResult && mode === "auto" && !refineKeyword.trim() ? (

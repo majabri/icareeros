@@ -52,12 +52,29 @@ function toOpp(row: AtsJobRow): OpportunityResult {
   };
 }
 
-const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
-const rolesFrag = (roles: string[]) =>
-  roles.map(r => {
-    const tokens = tokensOf(r);
-    return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
-  }).join(" | ");
+/**
+ * fix/jobs-curator-relaxation Fix 1 — quoted-phrase OR string that
+ * websearch_to_tsquery natively understands.
+ *
+ *   Input:  ["Director of Security", "CISO", "Head of Security"]
+ *   Output: '"director of security" OR "ciso" OR "head of security"'
+ *
+ * Postgres websearch mode handles stemming + word-order variations, so
+ * "director of security" also matches "Security Director" and "Directors
+ * of Security". Single-token roles are left unquoted so they lemmatise.
+ */
+function toWebsearchQuery(roles: string[]): string {
+  return roles
+    .map(r => r.trim().toLowerCase())
+    .filter(Boolean)
+    .map(r => {
+      const isSingleToken = !/\s/.test(r);
+      // Escape any embedded double quotes defensively
+      const safe = r.replace(/"/g, '');
+      return isSingleToken ? safe : `"${safe}"`;
+    })
+    .join(" OR ");
+}
 
 export async function queryExactRoleMatches(
   supabase:    SupabaseClient,
@@ -65,12 +82,12 @@ export async function queryExactRoleMatches(
   limit = 40,
 ): Promise<OpportunityResult[]> {
   if (targetRoles.length === 0) return [];
-  const ts = rolesFrag(targetRoles);
+  const ts = toWebsearchQuery(targetRoles);
   const { data } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
-    .textSearch("title", ts, { type: "plain", config: "english" })
+    .textSearch("title", ts, { type: "websearch", config: "english" })
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
   return (data ?? []).map(r => toOpp(r as AtsJobRow));
@@ -82,12 +99,12 @@ export async function queryAdjacentTitles(
   limit = 40,
 ): Promise<OpportunityResult[]> {
   if (expandedRoles.length === 0) return [];
-  const ts = rolesFrag(expandedRoles);
+  const ts = toWebsearchQuery(expandedRoles);
   const { data } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
-    .textSearch("title", ts, { type: "plain", config: "english" })
+    .textSearch("title", ts, { type: "websearch", config: "english" })
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
   return (data ?? []).map(r => toOpp(r as AtsJobRow));
@@ -107,12 +124,12 @@ export async function querySkillBasedMatches(
 
   // OR the skills at the title level. Multi-word skills become
   // (word & word) fragments; single words stand alone.
-  const ts = rolesFrag(cleaned);
+  const ts = toWebsearchQuery(cleaned);
   const { data } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
-    .textSearch("title", ts, { type: "plain", config: "english" })
+    .textSearch("title", ts, { type: "websearch", config: "english" })
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
   return (data ?? []).map(r => toOpp(r as AtsJobRow));

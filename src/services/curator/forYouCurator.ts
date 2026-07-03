@@ -147,16 +147,21 @@ export async function curateForYou(
 function classifyIntoTiers(scored: ScoredOpportunity[]) {
   const takenUrls = new Set<string>();
 
+  // fix/jobs-curator-relaxation Fix 4 — lowered thresholds so a small
+  // ats_jobs corpus with mostly-adjacent matches still populates tiers.
+  //   Strong Match:      fit >= 65 (was 75), still requires queryOrigin='exact'
+  //   Worth Considering: fit in [45, 65) (was [55, 75))
+  //   Stretch:           fit >= 30 (was 40)
   const strongMatch = scored.filter(s => {
     const senFits = (s as ScoredOpportunity & { _senFits?: boolean })._senFits !== false;
-    return s.queryOrigin === "exact" && (s.fit_score ?? 0) >= 75 && senFits;
+    return s.queryOrigin === "exact" && (s.fit_score ?? 0) >= 65 && senFits;
   }).sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)).slice(0, 20);
   strongMatch.forEach(s => s.url && takenUrls.add(s.url));
 
   const worthConsidering = scored.filter(s => {
     if (s.url && takenUrls.has(s.url)) return false;
     const fs = s.fit_score ?? 0;
-    return fs >= 55 && fs < 75;
+    return fs >= 45 && fs < 65;
   }).sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)).slice(0, 15);
   worthConsidering.forEach(s => s.url && takenUrls.add(s.url));
 
@@ -165,7 +170,7 @@ function classifyIntoTiers(scored: ScoredOpportunity[]) {
     const fs = s.fit_score ?? 0;
     const roleSig = s.profileFitScore?.signals.targetRoleSignal;
     const roleFits = roleSig === "adjacent" || roleSig === "stretch" || roleSig === "exact";
-    return fs >= 40 && roleFits;
+    return fs >= 30 && roleFits;
   }).sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)).slice(0, 10);
 
   return { strongMatch, worthConsidering, stretch };
