@@ -82,7 +82,8 @@ export async function queryExactRoleMatches(
   limit = 40,
 ): Promise<OpportunityResult[]> {
   if (targetRoles.length === 0) return [];
-  const ts = toWebsearchQuery(targetRoles);
+  const cappedTargets = targetRoles.slice(0, 8);
+  const ts = toWebsearchQuery(cappedTargets);
   const { data } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
@@ -99,7 +100,11 @@ export async function queryAdjacentTitles(
   limit = 40,
 ): Promise<OpportunityResult[]> {
   if (expandedRoles.length === 0) return [];
-  const ts = toWebsearchQuery(expandedRoles);
+  // hotfix/curator-cap-expanded-roles — cap at 15 phrases. websearch_to_tsquery
+  // hangs on 100+ ORed phrases in prod. Family expansion still runs (families
+  // remain intact); we just cap the query surface.
+  const cappedRoles = expandedRoles.slice(0, 15);
+  const ts = toWebsearchQuery(cappedRoles);
   const { data } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
