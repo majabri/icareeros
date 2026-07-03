@@ -50,6 +50,8 @@ interface OpportunityCardProps {
   onSmartApply?: (opp: OpportunityResult) => void;
 }
 
+// fix/jobs-multi-target-roles Requirement B — prominent, color-coded score.
+// Renders for every card, including 0 (never null when userProfile present).
 const FIT_COLORS: Record<string, string> = {
   high:   "bg-green-100 text-green-700",
   medium: "bg-amber-100 text-amber-700",
@@ -57,12 +59,33 @@ const FIT_COLORS: Record<string, string> = {
 };
 
 function fitLabel(score: number | null | undefined): { label: string; color: string } | null {
-  // No fit score yet → render nothing instead of the vestigial "No score" badge.
-  // Response/Decision badges (rendered separately below) carry their own state.
-  if (!score) return null;
+  if (score === null || score === undefined) return null;
   if (score >= 75) return { label: `${score}% match`, color: FIT_COLORS.high };
   if (score >= 50) return { label: `${score}% match`, color: FIT_COLORS.medium };
   return { label: `${score}% match`, color: FIT_COLORS.low };
+}
+
+// Requirement B — color-coded ranges for the prominent numeric badge.
+// ≥80 teal · 60-79 gold · 40-59 coral · <40 slate
+function fitBadgeColor(score: number): string {
+  if (score >= 80) return "#00B8A9"; // brand teal
+  if (score >= 60) return "#F5A623"; // gold
+  if (score >= 40) return "#FF6B6B"; // coral
+  return "#7B9AC0";                  // slate blue
+}
+
+// Requirement B — 3px progress bar for the breakdown strip
+function FitBar({ label, value }: { label: string; value: number }) {
+  const v = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="text-[10px] text-gray-500 w-14 text-right leading-none">{label}</div>
+      <div className="flex-1 h-[3px] bg-gray-100 rounded overflow-hidden">
+        <div className="h-full bg-brand-500" style={{ width: `${v}%` }} />
+      </div>
+      <div className="text-[10px] text-gray-600 w-6 text-right tabular-nums leading-none">{v}</div>
+    </div>
+  );
 }
 
 function formatSalary(
@@ -164,7 +187,49 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect, onSmartAp
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            {fit && (
+            {/* Requirement B — prominent numeric fit-score badge with hover expand */}
+            {typeof opp.fit_score === "number" && (
+              <div
+                className="group/fit relative flex flex-col items-end gap-1"
+                title={
+                  opp.fit_breakdown?.targetRoleBestMatch
+                    ? `Best target-role match: ${opp.fit_breakdown.targetRoleBestMatch}`
+                    : undefined
+                }
+              >
+                <div
+                  className="text-2xl font-bold leading-none"
+                  style={{ color: fitBadgeColor(opp.fit_score) }}
+                  aria-label={`Fit score ${opp.fit_score} out of 100`}
+                >
+                  {opp.fit_score}%
+                </div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 -mt-0.5">Fit Score</div>
+                {opp.fit_breakdown && (
+                  <div className="w-32 space-y-1 mt-1">
+                    <FitBar label="Role"     value={opp.fit_breakdown.targetRole} />
+                    <FitBar label="Skills"   value={opp.fit_breakdown.skills} />
+                    <FitBar label="Seniority" value={opp.fit_breakdown.seniority} />
+                    {/* Expand-on-hover: full breakdown */}
+                    <div className="hidden group-hover/fit:block pt-1 mt-1 border-t border-gray-100 space-y-1">
+                      {typeof opp.fit_breakdown.experience === "number" && (
+                        <FitBar label="Experience" value={opp.fit_breakdown.experience} />
+                      )}
+                      {typeof opp.fit_breakdown.keywords === "number" && (
+                        <FitBar label="Keywords" value={opp.fit_breakdown.keywords} />
+                      )}
+                      {opp.fit_breakdown.targetRoleBestMatch && (
+                        <div className="text-[10px] text-gray-500 leading-tight">
+                          Best match: <span className="text-gray-700 font-medium">{opp.fit_breakdown.targetRoleBestMatch}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Fallback text pill retained when we have no numeric fit_score (guest / no profile) */}
+            {typeof opp.fit_score !== "number" && fit && (
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fit.color}`}>
                 {fit.label}
               </span>

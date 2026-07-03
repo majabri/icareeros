@@ -33,6 +33,19 @@ import { isValidApplyUrl } from "@/services/integrations/applyUrlValidator";
 import { extractUserProfile } from "@/services/scoring/profileExtractor";
 import { scoreOpportunityAgainstProfile, type ProfileFitScore } from "@/services/scoring/profileScorer";
 
+
+// fix/jobs-multi-target-roles Requirement B — flatten ProfileFitScore
+// into the compact fit_breakdown shape rendered by OpportunityCard.
+function pfsToBreakdown(pfs: ProfileFitScore) {
+  return {
+    targetRole:          pfs.breakdown.targetRoleMatch,
+    skills:              pfs.breakdown.skillsMatch,
+    seniority:           pfs.breakdown.seniorityMatch,
+    experience:          pfs.breakdown.experienceMatch,
+    keywords:            pfs.breakdown.keywordDensity,
+    targetRoleBestMatch: pfs.signals.targetRoleBestMatch,
+  } as const;
+}
 const MIN_DB_RESULTS = 5;    // fall back to live below this
 const DEFAULT_LIMIT  = 50;
 const MAX_LIMIT      = 100;
@@ -131,7 +144,22 @@ export async function POST(req: NextRequest) {
     .order("posted_at", { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
-  if (query)        q = q.textSearch("title", query, { type: "websearch", config: "english" });
+  // fix/jobs-multi-target-roles Task 1 — multi-role OR queries. When
+  // the client sends "Director of Security OR CISO OR BISO", build a
+  // proper tsquery (`(director&security) | (ciso) | (biso)`) rather
+  // than let websearch_to_tsquery try to interpret the OR keyword.
+  if (query) {
+    const roles = query.split(/\s+OR\s+/i).map(s => s.trim()).filter(Boolean);
+    if (roles.length > 1) {
+      const tsquery = roles.map(r => {
+        const tokens = r.split(/\s+/).filter(Boolean);
+        return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
+      }).join(" | ");
+      q = q.textSearch("title", tsquery, { type: "plain", config: "english" });
+    } else {
+      q = q.textSearch("title", query, { type: "websearch", config: "english" });
+    }
+  }
   if (location && location.toLowerCase() !== "remote") q = q.ilike("location", `%${location}%`);
   if (remote || location.toLowerCase() === "remote")   q = q.eq("remote", true);
   if (sources && sources.length > 0)                   q = q.in("source", sources);
@@ -172,7 +200,7 @@ export async function POST(req: NextRequest) {
   if (profile) {
     profileScored = dbOpps.map(opp => {
       const pfs = scoreOpportunityAgainstProfile(opp, profile);
-      return { ...opp, profileFitScore: pfs, fit_score: pfs.total };
+      return { ...opp, profileFitScore: pfs, fit_score: pfs.total, fit_breakdown: pfsToBreakdown(pfs) };
     });
     profileScored = profileScored
       .filter(o => (o.profileFitScore?.total ?? 0) >= 20)
@@ -186,12 +214,30 @@ export async function POST(req: NextRequest) {
   if (profileScored.length < MIN_DB_RESULTS) {
     const live = await runLiveAggregator(query, location, remote, limit);
     const seen = new Set(profileScored.map(o => (o.url || "").toLowerCase()));
-    const merged: OpportunityResult[] = [...profileScored];
+    const merged: Array<OpportunityResult & { profileFitScore?: ProfileFitScore }> = [...profileScored];
     for (const opp of live) {
       const key = (opp.url || "").toLowerCase();
       if (!key || seen.has(key)) continue;
       seen.add(key);
-      merged.push(opp);
+      // fix/jobs-multi-target-roles Requirement A — score EVERY live-fallback
+      // opp against the profile too. Live-aggregator entries arrive without
+      // fit_score, but we already have the profile in scope.
+      if (profile) {
+        let pfs: ProfileFitScore | null = null;
+        try { pfs = scoreOpportunityAgainstProfile(opp, profile); } catch {}
+        merged.push({
+          ...opp,
+          fit_score:       pfs?.total ?? 0,
+          profileFitScore: pfs ?? undefined,
+          fit_breakdown:   pfs ? pfsToBreakdown(pfs) : null,
+        });
+      } else {
+        merged.push(opp);
+      }
+    }
+    // Re-sort merged by fit_score DESC so scored items float to the top
+    if (profile) {
+      merged.sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0));
     }
     return NextResponse.json({
       opportunities: merged,

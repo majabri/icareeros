@@ -263,6 +263,11 @@ export async function searchOpportunities(
   // once, scores every opp, sorts by profileFitScore.total desc,
   // filters out obvious non-matches (< 20). Skipped gracefully when
   // the user has no career_profiles row.
+  //
+  // fix/jobs-multi-target-roles Requirement A — every opportunity must
+  // carry a fit_score when a profile exists. If scoring throws for a
+  // specific opp we DO NOT drop it or leave null; fall back to 0 so the
+  // UI can render the badge (poor-fit slate blue) instead of nothing.
   let ranked = enriched;
   if (userId) {
     try {
@@ -270,8 +275,24 @@ export async function searchOpportunities(
       const profile = await extractUserProfile(supabase, userId);
       if (profile) {
         ranked = enriched.map(opp => {
-          const pfs = scoreOpportunityAgainstProfile(opp, profile);
-          return { ...opp, fit_score: pfs.total };
+          let pfsTotal = 0;
+          let breakdown: {
+            targetRole: number; skills: number; seniority: number;
+            experience?: number; keywords?: number; targetRoleBestMatch?: string;
+          } | null = null;
+          try {
+            const pfs = scoreOpportunityAgainstProfile(opp, profile);
+            pfsTotal  = pfs.total;
+            breakdown = {
+              targetRole: pfs.breakdown.targetRoleMatch,
+              skills:     pfs.breakdown.skillsMatch,
+              seniority:  pfs.breakdown.seniorityMatch,
+              experience: pfs.breakdown.experienceMatch,
+              keywords:   pfs.breakdown.keywordDensity,
+              targetRoleBestMatch: pfs.signals.targetRoleBestMatch,
+            };
+          } catch { pfsTotal = 0; breakdown = null; }
+          return { ...opp, fit_score: pfsTotal, fit_breakdown: breakdown };
         }).filter(o => (o.fit_score ?? 0) >= 20)
           .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0));
       }
