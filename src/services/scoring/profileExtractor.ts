@@ -30,16 +30,32 @@ export async function extractUserProfile(
   if (cached && (now - cached.at) < TTL_MS) return cached.profile;
 
   try {
-    const { data } = await supabase
-      .from("career_profiles")
-      .select("target_roles, skills, summary, headline, work_experience")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!data) {
+    // fix/jobs-opportunity-quality-p0 — target_roles lives on user_profiles,
+    // not career_profiles. Fetch both in parallel and merge.
+    const [cpRes, upRes] = await Promise.all([
+      supabase
+        .from("career_profiles")
+        .select("skills, summary, headline, work_experience")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("user_profiles")
+        .select("target_roles")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+    const cp = (cpRes?.data ?? {}) as CareerProfileRow;
+    const up = (upRes?.data ?? null) as { target_roles?: string[] | null } | null;
+    // Return null only when BOTH sources are effectively empty. A user with
+    // target_roles but no career_profile row still gets a UserProfile.
+    if (!cpRes?.data && (!up || !up.target_roles || up.target_roles.length === 0)) {
       CACHE.set(userId, { at: now, profile: null });
       return null;
     }
-    const row = data as CareerProfileRow;
+    const row: CareerProfileRow = {
+      ...cp,
+      target_roles: (up?.target_roles ?? []) as string[],
+    };
     const profile = rowToProfile(row);
     CACHE.set(userId, { at: now, profile });
     return profile;

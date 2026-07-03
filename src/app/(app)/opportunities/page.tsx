@@ -104,24 +104,29 @@ export default function JobsPage() {
     })();
   }, []);
 
-  // fix/jobs-ux-feedback Fix 2 — pre-fill search query from user's first
-  // target_role in career_profiles. Runs once on mount. Falls back to
-  // empty query (existing "show all" behaviour) when target_roles is empty.
+  // fix/jobs-opportunity-quality-p0 — target_roles LIVES ON user_profiles,
+  // not career_profiles. Prior code queried the wrong table; Supabase
+  // returned a column-does-not-exist error, try/catch swallowed it, and
+  // the auto-search fell through with an empty query. Fix: query the
+  // correct table AND fall back to career_profiles.headline when
+  // target_roles is empty so we always send a meaningful search query.
   useEffect(() => {
     void (async () => {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase
-          .from("career_profiles")
-          .select("target_roles")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        const roles = (data?.target_roles ?? []) as string[];
-        if (roles.length > 0 && roles[0].trim().length > 0) {
-          setTargetRoleQuery(roles[0]);
-          setManual(prev => ({ ...prev, what: roles[0] }));
+        // target_roles lives on user_profiles
+        const [rolesRow, cpRow] = await Promise.all([
+          supabase.from("user_profiles").select("target_roles").eq("user_id", user.id).maybeSingle(),
+          supabase.from("career_profiles").select("headline").eq("user_id", user.id).maybeSingle(),
+        ]);
+        const roles = ((rolesRow?.data as { target_roles?: string[] } | null)?.target_roles ?? []) as string[];
+        const headline = ((cpRow?.data as { headline?: string } | null)?.headline ?? "").trim();
+        const initialQuery = (roles[0] && roles[0].trim()) || headline || "";
+        if (initialQuery) {
+          setTargetRoleQuery(initialQuery);
+          setManual(prev => ({ ...prev, what: initialQuery }));
         }
       } catch { /* silent — falls back to empty query */ }
     })();
@@ -146,10 +151,14 @@ export default function JobsPage() {
       let res: Response;
       let dbFirstUsed = false;
       if (m === "auto") {
+        // fix/jobs-opportunity-quality-p0 — send the resolved target-role
+        // query so search-db can textSearch against title. Falls back to
+        // empty query (unchanged behaviour) when the state hasn't been
+        // populated yet (e.g. cold mount before the effect above ran).
         const dbRes = await fetch("/api/jobs/search-db", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: "", limit: 50 }),
+          body: JSON.stringify({ query: targetRoleQuery || "", limit: 50 }),
         }).catch(() => null);
         const dbData = dbRes && dbRes.ok ? await dbRes.clone().json().catch(() => null) : null;
         if (dbRes && dbRes.ok && dbData && Array.isArray(dbData.opportunities) && dbData.opportunities.length >= 5) {

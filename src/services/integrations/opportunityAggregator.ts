@@ -355,9 +355,11 @@ function filtersToAdzunaParams(
 
 // ── Target seniority loader (Brief Task 7) ───────────────────────────────
 //
-// Read career_profiles.target_roles for the current user. Falls back to
-// "unknown" silently — the aggregator already runs unauthenticated paths
-// (e.g. health probes) so we must never throw here.
+// fix/jobs-opportunity-quality-p0 — target_roles lives on user_profiles,
+// NOT career_profiles. Previously queried the wrong table; Supabase
+// returned a column-does-not-exist error, try/catch swallowed it, and
+// this loader always returned "unknown" — meaning every job scored
+// against unknown seniority (neutral 50) instead of the actual level.
 async function loadTargetSeniority(): Promise<Seniority> {
   try {
     const supabase = createClient();
@@ -365,12 +367,12 @@ async function loadTargetSeniority(): Promise<Seniority> {
     if (!user) return "unknown";
 
     const { data } = await supabase
-      .from("career_profiles")
+      .from("user_profiles")
       .select("target_roles")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const raw = (data?.target_roles as string[] | null) ?? [];
+    const raw = ((data as { target_roles?: string[] | null } | null)?.target_roles ?? []) as string[];
     return inferTargetSeniority(raw);
   } catch {
     return "unknown";
