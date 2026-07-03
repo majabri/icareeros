@@ -42,3 +42,28 @@ describe("expandTargetRoles", () => {
     expect(Object.keys(ROLE_FAMILIES).length).toBeGreaterThanOrEqual(20);
   });
 });
+
+describe("Fix 3 — expanded security families", () => {
+  it("director_of_security includes new lead + operations variants", () => {
+    const { expanded, families } = expandTargetRoles(["Director of Security"]);
+    expect(families).toContain("director_of_security");
+    expect(expanded).toEqual(expect.arrayContaining([
+      "security lead", "security operations lead",
+      "information security director", "senior security manager",
+    ]));
+  });
+  it("ciso family includes vCISO + field CISO variants", () => {
+    const { expanded, families } = expandTargetRoles(["CISO"]);
+    expect(families).toContain("ciso");
+    expect(expanded).toEqual(expect.arrayContaining([
+      "vciso", "virtual ciso", "field ciso", "associate ciso",
+    ]));
+  });
+  it("security_architect is a new distinct family", () => {
+    const { families, expanded } = expandTargetRoles(["Security Architect"]);
+    expect(families).toContain("security_architect");
+    expect(expanded).toEqual(expect.arrayContaining([
+      "principal security architect", "enterprise security architect",
+    ]));
+  });
+});

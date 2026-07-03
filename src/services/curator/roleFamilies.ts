@@ -15,16 +15,33 @@ export const ROLE_FAMILIES: Record<string, string[]> = {
     "security director", "director cyber security", "director of infosec",
     "director of cybersecurity", "security program director",
     "senior director security", "senior director of security",
+    // fix/jobs-curator-relaxation Fix 3 — additional variations
+    "security lead", "lead security", "principal security",
+    "senior security manager", "sr security manager",
+    "information security lead", "security operations director",
+    "director of information security", "information security director",
+    "security operations lead",
   ],
   ciso: [
     "ciso", "chief information security officer", "chief security officer",
     "chief information security", "chief cybersecurity officer",
     "cso", "global ciso", "deputy ciso",
+    // fix/jobs-curator-relaxation Fix 3 — vCISO + adjacent exec titles
+    "ciso office", "ciso deputy", "associate ciso",
+    "field ciso", "virtual ciso", "vciso",
+    "security executive", "executive security", "security chief",
   ],
   biso: [
     "biso", "business information security officer",
     "business information security", "business security officer",
     "divisional ciso", "business unit ciso",
+  ],
+  // fix/jobs-curator-relaxation Fix 3 — new security architecture family
+  security_architect: [
+    "security architect", "principal security architect",
+    "lead security architect", "senior security architect",
+    "chief security architect", "staff security architect",
+    "enterprise security architect", "cybersecurity architect",
   ],
   vp_security: [
     "vp security", "vice president security", "vp information security",
