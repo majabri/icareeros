@@ -51,6 +51,16 @@ export interface OpportunityResult {
   trustScore?: number;
   trustLevel?: "trusted" | "caution" | "risky";
   strategy?: "apply_now" | "apply_fast" | "improve_first" | "skip";
+
+  // fix/jobs-multi-target-roles Requirement B — score breakdown surfaced on the card
+  fit_breakdown?: {
+    targetRole: number;      // 0..100
+    skills: number;          // 0..100
+    seniority: number;       // 0..100
+    experience?: number;     // 0..100
+    keywords?: number;       // 0..100
+    targetRoleBestMatch?: string; // which target role gave the best hit
+  } | null;
 }
 
 export interface OpportunitySearchFilters {

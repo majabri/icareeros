@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { SmartApplyPanel, type SmartApplyJob } from "@/components/opportunities/SmartApplyPanel";
 import { createClient } from "@/lib/supabase";
 import { OpportunityCard } from "@/components/jobs/OpportunityCard";
@@ -62,6 +63,16 @@ export default function JobsPage() {
   const [smartApplyJob, setSmartApplyJob] = useState<SmartApplyJob | null>(null);
   // fix/jobs-ux-feedback Fix 2 — auto-prefill search query from target_roles
   const [targetRoleQuery, setTargetRoleQuery] = useState<string>("");
+  // fix/jobs-multi-target-roles Task 4 — expose the resolved target-role
+  // list so the header label can render "Searching for N target roles: …"
+  const [targetRoles, setTargetRoles] = useState<string[]>([]);
+  // Task Requirement C — user-controlled sort (Fit Score default).
+  const [sortKey, setSortKey] = useState<"fit" | "recency" | "company" | "location">(
+    () => (typeof window !== "undefined" && (window.localStorage.getItem("opportunitiesSort") as "fit"|"recency"|"company"|"location"|null)) || "fit"
+  );
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("opportunitiesSort", sortKey);
+  }, [sortKey]);
   const [editingQuery, setEditingQuery] = useState(false);
   // 2026-06-20 — Brief Task 3: quality-gate filtered postings drawer.
   const [filtered,       setFiltered]       = useState<{ count: number; reasons: Array<{ title: string; company: string; reason: string }> }>({ count: 0, reasons: [] });
@@ -122,8 +133,15 @@ export default function JobsPage() {
           supabase.from("career_profiles").select("headline").eq("user_id", user.id).maybeSingle(),
         ]);
         const roles = ((rolesRow?.data as { target_roles?: string[] } | null)?.target_roles ?? []) as string[];
+        const cleanRoles = roles.map(r => (r ?? "").trim()).filter(Boolean);
+        setTargetRoles(cleanRoles);
         const headline = ((cpRow?.data as { headline?: string } | null)?.headline ?? "").trim();
-        const initialQuery = (roles[0] && roles[0].trim()) || headline || "";
+        // fix/jobs-multi-target-roles Task 1 — search across ALL target roles.
+        // We OR-join them so the server can build a compound tsquery. When
+        // no target roles are set, fall back to headline; else empty query.
+        const initialQuery = cleanRoles.length > 0
+          ? cleanRoles.join(" OR ")
+          : (headline || "");
         if (initialQuery) {
           setTargetRoleQuery(initialQuery);
           setManual(prev => ({ ...prev, what: initialQuery }));
@@ -311,6 +329,17 @@ export default function JobsPage() {
     };
   });
 
+  // fix/jobs-multi-target-roles Requirement C — user-controlled sort
+  const sortedResults = [...decoratedResults].sort((a, b) => {
+    switch (sortKey) {
+      case "fit":      return (b.fit_score ?? 0) - (a.fit_score ?? 0);
+      case "recency":  return (b.first_seen_at ?? "").localeCompare(a.first_seen_at ?? "");
+      case "company":  return (a.company ?? "").localeCompare(b.company ?? "");
+      case "location": return (a.location ?? "").localeCompare(b.location ?? "");
+      default:         return 0;
+    }
+  });
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
       <header>
@@ -320,6 +349,21 @@ export default function JobsPage() {
             ? "Curated for you."
             : "Search by keyword, location, and filters."}
         </p>
+        {/* fix/jobs-multi-target-roles Task 4 — multi-role search label */}
+        {mode === "auto" && targetRoles.length > 0 && (
+          <p className="mt-1 text-xs text-gray-600">
+            {targetRoles.length === 1 && (
+              <>Searching for your target role: <span className="font-medium text-brand-700">{targetRoles[0]}</span></>
+            )}
+            {targetRoles.length >= 2 && targetRoles.length <= 3 && (
+              <>Searching for your target roles: <span className="font-medium text-brand-700">{targetRoles.join(" · ")}</span></>
+            )}
+            {targetRoles.length >= 4 && (
+              <>Searching for {targetRoles.length} target roles: <span className="font-medium text-brand-700">{targetRoles.slice(0, 2).join(", ")}, +{targetRoles.length - 2} more</span></>
+            )}
+            {" "}<Link href="/careerprofile/preferences" className="text-brand-600 underline hover:text-brand-800">Edit target roles</Link>
+          </p>
+        )}
         <LastUpdatedRow
           lastUpdatedAt={lastUpdatedAt}
           nowMs={nowTick}
@@ -445,8 +489,28 @@ export default function JobsPage() {
       {/* Results */}
       {!loading && !error && results.length > 0 && (
         <>
+          {/* Requirement C — sort selector */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-sm text-gray-500">
+              <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              Sort by:
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as "fit"|"recency"|"company"|"location")}
+                className="rounded border border-gray-300 px-2 py-1 text-xs bg-white"
+                aria-label="Sort opportunities"
+              >
+                <option value="fit">Fit Score</option>
+                <option value="recency">Recency</option>
+                <option value="company">Company</option>
+                <option value="location">Location</option>
+              </select>
+            </label>
+          </div>
           <div className="text-sm text-gray-500">
-            <strong className="text-gray-900">{total.toLocaleString()}</strong> job{total === 1 ? "" : "s"} found
+            {"" /* keep placeholder for scoringFit / source-indicator line */}
             {scoringFit && <span className="ml-2 text-xs">· Ranking…</span>}
             {filtered.count > 0 && (
               <div className="mt-1">
@@ -524,7 +588,7 @@ export default function JobsPage() {
             })()}
           </div>
           <div className="space-y-3">
-            {decoratedResults.map((opp, i) => (
+            {sortedResults.map((opp, i) => (
               <OpportunityCard
                 key={opp.id ?? `${opp.url}-${i}`}
                 opportunity={opp}

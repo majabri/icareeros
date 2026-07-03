@@ -166,3 +166,85 @@ describe("inferSeniority", () => {
     expect(inferSeniority("Random blob")).toBe("unknown");
   });
 });
+
+// ── fix/jobs-multi-target-roles ────────────────────────────────────────────
+// Task 6 — regression coverage for multi-role query + score-on-every-card.
+
+describe("multi-target-roles: scoreTargetRoleMatch across multiple roles", () => {
+  it("returns the highest match across N target roles + surfaces bestMatch", () => {
+    const profile = makeProfile({
+      targetRoles: [
+        "Director of Security",
+        "BISO",
+        "CISO",
+        "Chief Security Officer",
+        "Chief Information Security Officer",
+      ],
+    });
+    // Job title matches CISO best (word-overlap 100)
+    const cisoJob = makeJob({ title: "CISO", description: "" });
+    const r = scoreTargetRoleMatch(cisoJob, profile);
+    expect(r.score).toBe(100);
+    expect(r.bestMatch).toBe("CISO");
+    expect(r.signal).toBe("exact");
+  });
+
+  it("returns 0 when none of the target roles overlap the job title", () => {
+    const profile = makeProfile({ targetRoles: ["Director of Security", "CISO"] });
+    const job = makeJob({ title: "Pastry Chef", description: "" });
+    const r = scoreTargetRoleMatch(job, profile);
+    expect(r.score).toBe(0);
+    expect(r.bestMatch).toBe("");
+    expect(r.signal).toBe("mismatch");
+  });
+});
+
+describe("multi-target-roles: inferSeniority coverage for exec titles", () => {
+  it("CISO / CSO / CTO / CFO / CEO / CIO / CMO / CPO / COO → executive", () => {
+    for (const t of ["CISO", "CSO", "CTO", "CFO", "CEO", "CIO", "CMO", "CPO", "COO"]) {
+      expect(inferSeniority(t)).toBe("executive");
+    }
+  });
+  it("BISO → director tier (per Amir 2026-07-03)", () => {
+    expect(inferSeniority("BISO")).toBe("director");
+    expect(inferSeniority("Business Information Security Officer")).toBe("director");
+  });
+  it("Chief / President / Executive keywords → executive", () => {
+    expect(inferSeniority("Chief Security Officer")).toBe("executive");
+    expect(inferSeniority("President of Engineering")).toBe("executive");
+    expect(inferSeniority("Executive Director")).toBe("executive");
+  });
+});
+
+describe("multi-target-roles: scoreOpportunityAgainstProfile with multi-role targetRoles", () => {
+  it("populates targetRoleBestMatch when any of the roles matches", () => {
+    const profile = makeProfile({
+      targetRoles: ["Director of Security", "CISO"],
+    });
+    const job = makeJob({ title: "CISO", description: "" });
+    const r = scoreOpportunityAgainstProfile(job, profile);
+    expect(r.signals.targetRoleBestMatch).toBe("CISO");
+    // targetRoleMatch is 35% of composite → strong contribution
+    expect(r.breakdown.targetRoleMatch).toBe(100);
+  });
+
+  it("regression — user with 5 target roles still scores >0 on any-of match", () => {
+    const profile = makeProfile({
+      targetRoles: [
+        "Director of Security",
+        "BISO",
+        "CISO",
+        "Chief Security Officer",
+        "Chief Information Security Officer",
+      ],
+    });
+    // Word-overlap between "Chief Security Officer" and title = 3/3 → 100
+    const job = makeJob({
+      title: "Chief Security Officer",
+      description: "Skills required: python, aws.",
+    });
+    const r = scoreOpportunityAgainstProfile(job, profile);
+    expect(r.total).toBeGreaterThan(50);
+    expect(r.signals.targetRoleBestMatch).toBe("Chief Security Officer");
+  });
+});

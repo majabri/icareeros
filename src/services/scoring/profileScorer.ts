@@ -48,6 +48,9 @@ export interface ProfileFitScore {
     missingSkills:    string[];
     senioritySignal:  "match" | "overqualified" | "underqualified" | "unknown";
     targetRoleSignal: "exact" | "adjacent" | "stretch" | "mismatch";
+    /** fix/jobs-multi-target-roles — which of the profile.targetRoles this
+     *  job best matched (empty when no targetRoles OR no match). */
+    targetRoleBestMatch: string;
   };
 }
 
@@ -85,6 +88,7 @@ export function scoreOpportunityAgainstProfile(
       missingSkills:    skillsScore.missing,
       senioritySignal:  senScore.signal,
       targetRoleSignal: targetRoleMatch.signal,
+      targetRoleBestMatch: targetRoleMatch.bestMatch,
     },
   };
 }
@@ -98,32 +102,32 @@ export function scoreOpportunityAgainstProfile(
 export function scoreTargetRoleMatch(
   job: OpportunityResult,
   profile: UserProfile,
-): { score: number; signal: "exact" | "adjacent" | "stretch" | "mismatch" } {
+): { score: number; signal: "exact" | "adjacent" | "stretch" | "mismatch"; bestMatch: string } {
   const jobTitle = normalise(job.title || "");
   if (!jobTitle || profile.targetRoles.length === 0) {
-    return { score: 0, signal: "mismatch" };
+    return { score: 0, signal: "mismatch", bestMatch: "" };
   }
   let best = 0;
+  let bestMatch = "";
   for (const target of profile.targetRoles) {
     const t = normalise(target);
     if (!t) continue;
-    if (t === jobTitle) return { score: 100, signal: "exact" };
+    if (t === jobTitle) return { score: 100, signal: "exact", bestMatch: target };
     const jw = new Set(jobTitle.split(" ").filter(w => w.length >= 3));
     const tw = new Set(t.split(" ").filter(w => w.length >= 3));
     if (tw.size === 0) continue;
     let shared = 0;
     for (const w of tw) if (jw.has(w)) shared++;
-    // Score = overlap ratio; scale into 0-100 with an anti-fluke floor
     const ratio = shared / tw.size;
     const score = Math.round(ratio * 100);
-    if (score > best) best = score;
+    if (score > best) { best = score; bestMatch = target; }
   }
   let signal: "exact" | "adjacent" | "stretch" | "mismatch";
   if (best >= 95)      signal = "exact";
   else if (best >= 60) signal = "adjacent";
   else if (best >= 30) signal = "stretch";
   else                 signal = "mismatch";
-  return { score: best, signal };
+  return { score: best, signal, bestMatch };
 }
 
 // ── scoreSkillsMatch ─────────────────────────────────────────────────────
@@ -182,8 +186,16 @@ function positive(n: number): number { return n === -1 ? Number.MAX_SAFE_INTEGER
 
 export function inferSeniority(text: string): Seniority {
   const t = text.toLowerCase();
-  if (/\bcto\b|\bceo\b|\bcio\b|\bciso\b|\bcfo\b|\bcoo\b|chief|executive/i.test(t)) return "executive";
+  // fix/jobs-multi-target-roles Task 3 — expanded exec-tier keyword list.
+  // Adds CSO/CTO/CFO/CIO/COO/CEO acronyms + spelled-out variants +
+  // "President" so Chief-* titles + president-tier roles land as executive.
+  if (
+    /\bcto\b|\bceo\b|\bcio\b|\bciso\b|\bcfo\b|\bcoo\b|\bcso\b|\bcmo\b|\bcpo\b/i.test(t) ||
+    /\bchief\b|\bpresident\b|\bexecutive\b/i.test(t)
+  ) return "executive";
   if (/\bvp\b|vice president/i.test(t))       return "vp";
+  // Business Information Security Officer is director-tier (Amir's list).
+  if (/\bbiso\b|\bbusiness information security officer\b/i.test(t)) return "director";
   if (/director|head of/i.test(t))            return "director";
   if (/principal/i.test(t))                    return "principal";
   if (/\bstaff\b/i.test(t))                    return "staff";
