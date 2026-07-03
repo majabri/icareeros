@@ -293,7 +293,12 @@ export async function searchOpportunities(
             };
           } catch { pfsTotal = 0; breakdown = null; }
           return { ...opp, fit_score: pfsTotal, fit_breakdown: breakdown };
-        }).filter(o => (o.fit_score ?? 0) >= 20)
+        // fix/jobs-smart-apply-issues Fix 1 — raise floor from 20 → 40.
+        // Sub-40 results were leaking irrelevant jobs into the list even
+        // when profile scoring correctly identified them as poor matches.
+        // Sort DESC across ALL sources so DB / Adzuna / Greenhouse / HN
+        // mix by score alone, not by origin.
+        }).filter(o => (o.fit_score ?? 0) >= 40)
           .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0));
       }
     } catch { /* silent — fall through to unranked enriched */ }

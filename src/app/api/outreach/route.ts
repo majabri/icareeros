@@ -15,6 +15,7 @@ import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
+import { extractJson } from "@/lib/ai/extractJson";
 import type { OutreachResult } from "@/services/ai/outreachService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
@@ -47,7 +48,7 @@ const OUTREACH_SYSTEM = `You are an expert career coach specialising in professi
 
 Your task: write a short, personalised outreach message a job seeker can send to a hiring manager, recruiter, or employee at a target company. Generate TWO versions — one for LinkedIn (≤300 characters for connection note) and one for email.
 
-Return ONLY valid JSON — no prose, no markdown fences — matching this exact shape:
+Return ONLY valid JSON — no prose, no markdown code blocks, no \`\`\`json fences, no explanatory text before or after — matching this exact shape:
 {
   "linkedin": {
     "subject": "Connection request",
@@ -191,7 +192,8 @@ export async function POST(req: Request) {
 
     let result: OutreachResult;
     try {
-      result = JSON.parse(raw.text) as OutreachResult;
+      // fix/jobs-smart-apply-issues Fix 2 — tolerate ```json fences.
+      result = extractJson<OutreachResult>(raw.text);
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

@@ -48,6 +48,77 @@ export interface AdzunaSearchResult {
 
 const ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs";
 
+
+/**
+ * fix/jobs-smart-apply-issues Fix 4 — Adzuna returns a `redirect_url` that
+ * bounces through Adzuna's tracker. Try to resolve it to the direct
+ * employer URL at ingest time. Falls back to the description body (which
+ * sometimes contains the ATS URL inline) and finally to the redirect_url.
+ *
+ * We keep this best-effort: the outer search always returns something,
+ * even if resolution fails (network, timeout, etc.).
+ */
+const RESOLVED_URL_CACHE = new Map<string, string>();
+
+async function followRedirects(initialUrl: string, hops = 3): Promise<string> {
+  let currentUrl = initialUrl;
+  for (let i = 0; i < hops; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8_000);
+      const res = await fetch(currentUrl, {
+        method:  "HEAD",
+        redirect: "manual",
+        signal:  controller.signal,
+        headers: { "User-Agent": "Mozilla/5.0 iCareerOS-JobFetcher/1.0" },
+      });
+      clearTimeout(timeout);
+      if (res.status >= 300 && res.status < 400) {
+        const next = res.headers.get("location");
+        if (!next) return currentUrl;
+        currentUrl = new URL(next, currentUrl).href;
+        continue;
+      }
+      // 2xx / 4xx / 5xx — stop chasing
+      return currentUrl;
+    } catch {
+      return currentUrl; // network or timeout: return best-known URL
+    }
+  }
+  return currentUrl;
+}
+
+export async function resolveAdzunaApplyUrl(adzunaJob: { redirect_url?: string; description?: string; apply_url?: string; company_url?: string }): Promise<string> {
+  // Direct fields sometimes populated by Adzuna
+  const direct = (adzunaJob as { apply_url?: string; company_url?: string }).apply_url ?? adzunaJob.company_url;
+  if (direct && !/adzuna\.com/i.test(direct)) return direct;
+
+  const redirectUrl = adzunaJob.redirect_url ?? "";
+  if (redirectUrl && RESOLVED_URL_CACHE.has(redirectUrl)) {
+    return RESOLVED_URL_CACHE.get(redirectUrl)!;
+  }
+
+  // 1) Follow up to 3 redirects
+  if (redirectUrl) {
+    const resolved = await followRedirects(redirectUrl, 3);
+    if (resolved && !/adzuna\.com/i.test(resolved)) {
+      RESOLVED_URL_CACHE.set(redirectUrl, resolved);
+      return resolved;
+    }
+  }
+
+  // 2) Extract ATS URL from description
+  const desc = adzunaJob.description ?? "";
+  const urlMatch = desc.match(/https?:\/\/(?:jobs|careers|apply|boards|(?:[a-z0-9-]+\.)?greenhouse|(?:[a-z0-9-]+\.)?ashbyhq|(?:[a-z0-9-]+\.)?lever|(?:[a-z0-9-]+\.)?workable|(?:[a-z0-9-]+\.)?smartrecruiters|(?:[a-z0-9-]+\.)?myworkdayjobs)[^\s"'<>]+/i);
+  if (urlMatch) {
+    RESOLVED_URL_CACHE.set(redirectUrl, urlMatch[0]);
+    return urlMatch[0];
+  }
+
+  // 3) Fall back to the Adzuna redirect
+  return redirectUrl;
+}
+
 export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSearchResult> {
   const appId  = process.env.ADZUNA_APP_ID;
   const appKey = process.env.ADZUNA_APP_KEY;
@@ -102,7 +173,7 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
       ? jobs.filter(j => /remote|wfh|work\s*from\s*home/i.test(`${j.title} ${j.location?.display_name ?? ""} ${j.description ?? ""}`))
       : jobs;
 
-    const opportunities: OpportunityResult[] = filtered.map(a => {
+    const opportunities: OpportunityResult[] = await Promise.all(filtered.map(async a => {
       const isRemote = /remote|wfh|work\s*from\s*home/i.test(
         `${a.title} ${a.location?.display_name ?? ""}`
       );
@@ -123,6 +194,14 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
         salary = `Up to $${Math.round(a.salary_max/1000)}K`;
       }
 
+      // fix/jobs-smart-apply-issues Fix 4 — resolve Adzuna's tracker
+      // redirect to the direct employer URL when possible. Falls back
+      // to a.redirect_url unchanged if resolution fails.
+      const resolvedUrl = await resolveAdzunaApplyUrl({
+        redirect_url: a.redirect_url,
+        description:  a.description,
+      });
+
       return {
         id:           `adzuna-${a.id}`,
         title:        a.title?.trim() ?? "Untitled",
@@ -130,7 +209,10 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
         location:     a.location?.display_name?.trim() ?? "",
         type,
         description:  cleanJobDescription(a.description),
-        url:          a.redirect_url,
+        url:          resolvedUrl,
+        // Preserve the Adzuna tracker as apply_url_company (used elsewhere)
+        // but the canonical `url` is now the direct employer link.
+        apply_url_company: !/adzuna\.com/i.test(resolvedUrl) ? resolvedUrl : (a.redirect_url ?? null),
         matchReason:  "",
         salary,
         salary_min:   a.salary_min ?? null,
@@ -140,7 +222,7 @@ export async function searchAdzuna(params: AdzunaSearchParams): Promise<AdzunaSe
         source:       "adzuna",
         first_seen_at: a.created,
       };
-    });
+    }));
 
     return {
       opportunities,
