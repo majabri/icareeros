@@ -18,6 +18,7 @@ import { createTracedClient } from "@/lib/observability/langfuse";
 import type { CoverLetterResult } from "@/services/ai/coverLetterService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
+import { extractJson } from "@/lib/ai/extractJson";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ const COVER_LETTER_SYSTEM = `You are an expert career coach and professional wri
 
 Your task: write a compelling, tailored cover letter for a job application. The letter should be professional, specific to the role and company, and highlight relevant experience without being generic.
 
-Return ONLY valid JSON — no prose, no markdown fences — matching this exact shape:
+Return ONLY valid JSON — no prose, no markdown code blocks, no \`\`\`json fences, no explanatory text before or after — matching this exact shape:
 {
   "subject": "Application for [Role] — [Candidate Name/Your Name]",
   "body": "Dear Hiring Manager,\\n\\n[Opening paragraph — 2-3 sentences connecting the candidate's background to this specific role and company]\\n\\n[Skills/experience paragraph — 2-3 sentences highlighting the most relevant skills and a concrete achievement or two]\\n\\n[Company-specific paragraph — 2-3 sentences showing genuine interest in this company's mission, culture, or recent work]\\n\\n[Closing paragraph — 1-2 sentences with a clear call to action]\\n\\nSincerely,\\n[Your Name]",
@@ -184,7 +185,9 @@ export async function POST(req: Request) {
 
     let result: CoverLetterResult;
     try {
-      result = JSON.parse(raw.text) as CoverLetterResult;
+      // fix/jobs-smart-apply-issues Fix 2 — tolerate ```json fences
+      // and preamble/postamble text that Claude sometimes adds.
+      result = extractJson<CoverLetterResult>(raw.text);
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }

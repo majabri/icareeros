@@ -40,8 +40,19 @@ export function SmartApplyPanel({ job, onClose, cycleId }: SmartApplyPanelProps)
   const [coverStep,    setCoverStep]    = useState<"idle" | "loading" | "done" | "err">("idle");
   const [coverLetter,  setCoverLetter]  = useState<{ subject?: string; body?: string } | null>(null);
   const [coverError,   setCoverError]   = useState<string | null>(null);
-  const [outreachStep, setOutreachStep] = useState<"idle" | "loading" | "done" | "err">("idle");
-  const [outreach,     setOutreach]     = useState<{ linkedin?: string; email?: string; founder?: string } | null>(null);
+  // fix/jobs-smart-apply-issues Fix 3 — per-variant outreach state so users
+  // can generate all three types without losing previous results.
+  interface OutreachSlot { text?: string; subject?: string; loading?: boolean; error?: string }
+  const [outreach, setOutreach] = useState<{
+    linkedin?: OutreachSlot;
+    email?:    OutreachSlot;
+    founder?:  OutreachSlot;
+  }>({});
+  const outreachStep: "idle" | "loading" | "done" | "err" =
+    (outreach.linkedin?.loading || outreach.email?.loading || outreach.founder?.loading) ? "loading" :
+    (outreach.linkedin?.error   || outreach.email?.error   || outreach.founder?.error)   ? "err"     :
+    (outreach.linkedin?.text    || outreach.email?.text    || outreach.founder?.text)    ? "done"    :
+    "idle";
   const [applied,      setApplied]      = useState(false);
   const [applyMsg,     setApplyMsg]     = useState<string | null>(null);
   const [expanded,     setExpanded]     = useState<Record<string, boolean>>({ r: true, c: true, o: true, a: true });
@@ -112,13 +123,12 @@ export function SmartApplyPanel({ job, onClose, cycleId }: SmartApplyPanelProps)
     }
   }
 
-  async function runOutreach(_variant: "linkedin" | "email" | "founder") {
+  async function runOutreach(variant: "linkedin" | "email" | "founder") {
     if (!job || !job.opportunity_id) {
-      setOutreach({ ...(outreach ?? {}), [_variant]: "Outreach requires a saved opportunity id (open the job from your Opportunities list)." });
-      setOutreachStep("done");
+      setOutreach(prev => ({ ...prev, [variant]: { error: "Outreach requires a saved opportunity id (open the job from your Opportunities list)." } }));
       return;
     }
-    setOutreachStep("loading");
+    setOutreach(prev => ({ ...prev, [variant]: { ...prev[variant], loading: true, error: undefined } }));
     try {
       const res = await fetch("/api/outreach", {
         method:  "POST",
@@ -127,23 +137,45 @@ export function SmartApplyPanel({ job, onClose, cycleId }: SmartApplyPanelProps)
       });
       const data = await res.json().catch(() => ({} as { error?: string }));
       if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Failed (${res.status})`);
-      const d = data as { linkedin?: { message?: string }; email?: { message?: string }; variants?: Array<{ id?: string; message?: string }> };
-      const founder = d.variants?.find(v => v.id === "referral" || v.id === "founder")?.message;
-      setOutreach({
-        linkedin: d.linkedin?.message,
-        email:    d.email?.message,
-        founder,
-      });
-      setOutreachStep("done");
-    } catch {
-      setOutreachStep("err");
+      const d = data as {
+        linkedin?: { message?: string; subject?: string };
+        email?:    { message?: string; subject?: string };
+        variants?: Array<{ id?: string; message?: string; subject?: string }>;
+      };
+      const founder = d.variants?.find(v => v.id === "referral" || v.id === "founder");
+      setOutreach(prev => ({
+        ...prev,
+        // Populate only the requested variant so each button's click owns its slot.
+        [variant]:
+          variant === "linkedin" ? { text: d.linkedin?.message ?? "", subject: d.linkedin?.subject, loading: false } :
+          variant === "email"    ? { text: d.email?.message    ?? "", subject: d.email?.subject,    loading: false } :
+                                   { text: founder?.message    ?? "", subject: founder?.subject,    loading: false },
+      }));
+    } catch (e) {
+      setOutreach(prev => ({ ...prev, [variant]: { ...prev[variant], loading: false, error: e instanceof Error ? e.message : "Outreach generation failed" } }));
     }
   }
 
   async function openApplication() {
     if (!job) return;
+    // fix/jobs-smart-apply-issues Fix 5 — resolve Adzuna/tracker URLs to the
+    // direct employer URL before opening. Never opens a tracker directly.
+    let target = job.url;
+    if (job.url && /adzuna\.com|indeed\.com\/rc\/|glassdoor\.com\/partner|ziprecruiter\.com\/j\//i.test(job.url)) {
+      try {
+        const r = await fetch("/api/jobs/resolve-url", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ url: job.url }),
+        });
+        if (r.ok) {
+          const d = await r.json() as { url?: string; wasResolved?: boolean };
+          if (d.url) target = d.url;
+        }
+      } catch { /* fall through — open tracker if resolve fails */ }
+    }
     // Open the actual apply URL in a new tab first — user-initiated click
-    if (job.url) window.open(job.url, "_blank", "noopener,noreferrer");
+    if (target) window.open(target, "_blank", "noopener,noreferrer");
 
     // Auto-track in pipeline. Best-effort — apply URL is the tracking key.
     try {
@@ -250,21 +282,50 @@ export function SmartApplyPanel({ job, onClose, cycleId }: SmartApplyPanelProps)
 
         {/* Step 3 — Outreach */}
         <Section title="Step 3 — Outreach (optional)" expanded={expanded.o} onToggle={() => setExpanded(v => ({ ...v, o: !v.o }))}>
-          {outreachStep === "loading" && <p className="text-xs text-gray-500">Generating…</p>}
-          {!outreach && (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => void runOutreach("linkedin")} className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs">LinkedIn Note</button>
-              <button type="button" onClick={() => void runOutreach("email")}    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs">Cold Email</button>
-              <button type="button" onClick={() => void runOutreach("founder")}  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs">Founder Message</button>
-            </div>
-          )}
-          {outreach && (
-            <div className="space-y-3">
-              {outreach.linkedin && <OutreachPreview label="LinkedIn Note" body={outreach.linkedin} />}
-              {outreach.email    && <OutreachPreview label="Cold Email"    body={outreach.email} />}
-              {outreach.founder  && <OutreachPreview label="Founder Msg"   body={outreach.founder} />}
-            </div>
-          )}
+          {/* fix/jobs-smart-apply-issues Fix 3 — always-visible variant buttons
+              with per-variant loading state; result cards render below the
+              buttons and persist across generations. */}
+          <div className="flex flex-wrap gap-2">
+            <OutreachButton
+              label="LinkedIn Note"
+              slot={outreach.linkedin}
+              onClick={() => void runOutreach("linkedin")}
+            />
+            <OutreachButton
+              label="Cold Email"
+              slot={outreach.email}
+              onClick={() => void runOutreach("email")}
+            />
+            <OutreachButton
+              label="Founder Message"
+              slot={outreach.founder}
+              onClick={() => void runOutreach("founder")}
+            />
+          </div>
+          <div className="mt-3 space-y-3">
+            {outreach.linkedin && (
+              <OutreachResultCard
+                label="LinkedIn Note"
+                slot={outreach.linkedin}
+                maxChars={300}
+                onRegenerate={() => void runOutreach("linkedin")}
+              />
+            )}
+            {outreach.email && (
+              <OutreachResultCard
+                label="Cold Email"
+                slot={outreach.email}
+                onRegenerate={() => void runOutreach("email")}
+              />
+            )}
+            {outreach.founder && (
+              <OutreachResultCard
+                label="Founder Message"
+                slot={outreach.founder}
+                onRegenerate={() => void runOutreach("founder")}
+              />
+            )}
+          </div>
         </Section>
 
         {/* Step 4 — Apply */}
@@ -314,20 +375,75 @@ function StepDot({ done, loading, label }: { done: boolean; loading: boolean; la
   );
 }
 
-function OutreachPreview({ label, body }: { label: string; body: string }) {
+// fix/jobs-smart-apply-issues Fix 3 — per-variant button + result-card components.
+interface _OutreachSlot { text?: string; subject?: string; loading?: boolean; error?: string }
+
+function OutreachButton({ label, slot, onClick }: { label: string; slot?: _OutreachSlot; onClick: () => void }) {
+  const isLoading = !!slot?.loading;
+  const hasResult = !!slot?.text;
   return (
-    <div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isLoading}
+      className={`rounded-lg border px-2.5 py-1 text-xs disabled:opacity-50 ${hasResult ? "border-brand-400 bg-brand-50 text-brand-800" : "border-gray-300"}`}
+      aria-busy={isLoading}
+    >
+      {isLoading ? "⏳ Generating…" : hasResult ? `↻ ${label}` : label}
+    </button>
+  );
+}
+
+function OutreachResultCard({
+  label, slot, maxChars, onRegenerate,
+}: {
+  label: string;
+  slot: _OutreachSlot;
+  maxChars?: number;
+  onRegenerate: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      const payload = slot.subject ? `Subject: ${slot.subject}\n\n${slot.text ?? ""}` : (slot.text ?? "");
+      await navigator.clipboard?.writeText(payload);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard denied */ }
+  }
+  const chars = (slot.text ?? "").length;
+  const overLimit = maxChars ? chars > maxChars : false;
+  if (slot.error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-medium text-red-800">{label}</p>
+          <button type="button" onClick={onRegenerate} className="text-[11px] text-red-700 underline hover:text-red-900">Retry</button>
+        </div>
+        <p className="mt-1 text-[11px] text-red-700">{slot.error}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-2">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium text-gray-700">{label}</p>
-        <button
-          type="button"
-          onClick={() => navigator.clipboard?.writeText(body)}
-          className="text-[11px] text-brand-700 underline hover:text-brand-800"
-        >
-          Copy
-        </button>
+        <div className="flex items-center gap-2">
+          {maxChars && (
+            <span className={`text-[10px] tabular-nums ${overLimit ? "text-red-600 font-semibold" : "text-gray-500"}`} title={overLimit ? `Over ${maxChars}-char limit for LinkedIn notes` : undefined}>
+              {chars}/{maxChars}
+            </span>
+          )}
+          <button type="button" onClick={copy} className="text-[11px] text-brand-700 underline hover:text-brand-800">{copied ? "✓ Copied" : "📋 Copy"}</button>
+          <button type="button" onClick={onRegenerate} className="text-[11px] text-gray-500 underline hover:text-gray-700">Regenerate</button>
+        </div>
       </div>
-      <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded border border-gray-200 bg-gray-50 p-2 text-[11px] text-gray-700">{body}</pre>
+      {slot.subject && <p className="mt-1 text-[11px] text-gray-500">Subject: <span className="text-gray-800">{slot.subject}</span></p>}
+      <textarea
+        readOnly
+        value={slot.text ?? ""}
+        className="mt-1 w-full h-32 overflow-y-auto whitespace-pre-wrap rounded border border-gray-200 bg-gray-50 p-2 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      />
     </div>
   );
 }

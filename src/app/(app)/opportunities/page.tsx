@@ -66,6 +66,11 @@ export default function JobsPage() {
   // fix/jobs-multi-target-roles Task 4 — expose the resolved target-role
   // list so the header label can render "Searching for N target roles: …"
   const [targetRoles, setTargetRoles] = useState<string[]>([]);
+  // fix/jobs-smart-apply-issues Fix 6 — session-scoped target roles
+  // (chip-removable in-session; profile stays untouched).
+  const [sessionTargetRoles, setSessionTargetRoles] = useState<string[]>([]);
+  // Refine keyword for auto mode — combined with sessionTargetRoles via AND
+  const [refineKeyword, setRefineKeyword] = useState<string>("");
   // Task Requirement C — user-controlled sort (Fit Score default).
   const [sortKey, setSortKey] = useState<"fit" | "recency" | "company" | "location">(
     () => (typeof window !== "undefined" && (window.localStorage.getItem("opportunitiesSort") as "fit"|"recency"|"company"|"location"|null)) || "fit"
@@ -134,18 +139,19 @@ export default function JobsPage() {
         ]);
         const roles = ((rolesRow?.data as { target_roles?: string[] } | null)?.target_roles ?? []) as string[];
         const cleanRoles = roles.map(r => (r ?? "").trim()).filter(Boolean);
-        setTargetRoles(cleanRoles);
+        setTargetRoles(cleanRoles); setSessionTargetRoles(cleanRoles);
         const headline = ((cpRow?.data as { headline?: string } | null)?.headline ?? "").trim();
-        // fix/jobs-multi-target-roles Task 1 — search across ALL target roles.
-        // We OR-join them so the server can build a compound tsquery. When
-        // no target roles are set, fall back to headline; else empty query.
-        const initialQuery = cleanRoles.length > 0
-          ? cleanRoles.join(" OR ")
-          : (headline || "");
-        if (initialQuery) {
-          setTargetRoleQuery(initialQuery);
-          setManual(prev => ({ ...prev, what: initialQuery }));
+        // fix/jobs-smart-apply-issues Fix 6 — DO NOT populate the search box
+        // with the raw OR-joined tsquery. Target roles now live in a chip
+        // row above the search input; the search box holds a user-typed
+        // additional keyword ("remote", "senior", etc.) with AND semantics.
+        // When no target roles are set, seed the (still empty) search box
+        // hint with the profile headline so manual-mode remains useful.
+        if (cleanRoles.length === 0 && headline) {
+          setTargetRoleQuery(headline);
+          setManual(prev => ({ ...prev, what: headline }));
         }
+        void cleanRoles; // keep for clarity — sessionTargetRoles below shadows this
       } catch { /* silent — falls back to empty query */ }
     })();
   }, []);
@@ -176,7 +182,15 @@ export default function JobsPage() {
         const dbRes = await fetch("/api/jobs/search-db", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: targetRoleQuery || "", limit: 50 }),
+          // fix/jobs-smart-apply-issues Fix 6 — send targetRoles + query
+          //   separately so the server can combine them (OR within roles,
+          //   AND with the refine keyword) without ever exposing raw
+          //   tsquery syntax to the user.
+          body: JSON.stringify({
+            targetRoles: sessionTargetRoles,
+            query:       refineKeyword.trim() || "",
+            limit:       50,
+          }),
         }).catch(() => null);
         const dbData = dbRes && dbRes.ok ? await dbRes.clone().json().catch(() => null) : null;
         if (dbRes && dbRes.ok && dbData && Array.isArray(dbData.opportunities) && dbData.opportunities.length >= 5) {
@@ -349,21 +363,8 @@ export default function JobsPage() {
             ? "Curated for you."
             : "Search by keyword, location, and filters."}
         </p>
-        {/* fix/jobs-multi-target-roles Task 4 — multi-role search label */}
-        {mode === "auto" && targetRoles.length > 0 && (
-          <p className="mt-1 text-xs text-gray-600">
-            {targetRoles.length === 1 && (
-              <>Searching for your target role: <span className="font-medium text-brand-700">{targetRoles[0]}</span></>
-            )}
-            {targetRoles.length >= 2 && targetRoles.length <= 3 && (
-              <>Searching for your target roles: <span className="font-medium text-brand-700">{targetRoles.join(" · ")}</span></>
-            )}
-            {targetRoles.length >= 4 && (
-              <>Searching for {targetRoles.length} target roles: <span className="font-medium text-brand-700">{targetRoles.slice(0, 2).join(", ")}, +{targetRoles.length - 2} more</span></>
-            )}
-            {" "}<Link href="/careerprofile/preferences" className="text-brand-600 underline hover:text-brand-800">Edit target roles</Link>
-          </p>
-        )}
+        {/* fix/jobs-smart-apply-issues Fix 6 — header label removed;
+            redundant with the target-role chip row below. */}
         <LastUpdatedRow
           lastUpdatedAt={lastUpdatedAt}
           nowMs={nowTick}
@@ -451,18 +452,101 @@ export default function JobsPage() {
         </form>
       )}
 
-      {/* Refresh button (auto mode) */}
-      {mode === "auto" && !loading && (
-        <div className="flex items-center gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => void runSearch("auto", EMPTY_MANUAL)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+      {/* fix/jobs-smart-apply-issues Fix 6 — target-role chip row + refine input */}
+      {mode === "auto" && (
+        <div className="space-y-2">
+          {sessionTargetRoles.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500 mr-1">Your target roles:</span>
+              {sessionTargetRoles.map((role) => (
+                <span
+                  key={role}
+                  className="inline-flex items-center gap-1 rounded-full bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-0.5 text-xs"
+                >
+                  <span>{role}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSessionTargetRoles(sessionTargetRoles.filter(r => r !== role))}
+                    className="ml-0.5 text-brand-700 hover:text-brand-900 focus:outline-none"
+                    aria-label={`Remove ${role} from this search`}
+                    title={`Remove ${role} from this search (doesn't change saved profile)`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <Link
+                href="/careerprofile/preferences"
+                className="inline-flex items-center rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs text-gray-500 hover:text-brand-700 hover:border-brand-400"
+              >
+                + Add role
+              </Link>
+            </div>
+          )}
+          {sessionTargetRoles.length === 0 && targetRoles.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500">Your target roles:</span>
+              <button
+                type="button"
+                onClick={() => setSessionTargetRoles(targetRoles)}
+                className="text-xs text-brand-700 underline hover:text-brand-900"
+              >
+                Restore {targetRoles.length} {targetRoles.length === 1 ? "role" : "roles"}
+              </button>
+              <Link
+                href="/careerprofile/preferences"
+                className="inline-flex items-center rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs text-gray-500 hover:text-brand-700 hover:border-brand-400"
+              >
+                + Add role
+              </Link>
+            </div>
+          )}
+
+          {/* Refine search input — combined with chips via AND on the server */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); void runSearch("auto", EMPTY_MANUAL); }}
+            className="flex flex-wrap items-center gap-2"
           >
-            ↻ Refresh
-          </button>
-          {scoringFit && <span className="text-xs text-gray-500">Ranking results…</span>}
-          <a href="/careerprofile/preferences" className="ml-auto text-xs text-gray-400 hover:text-gray-600">Tune your preferences</a>
+            <div className="flex-1 min-w-[240px] relative">
+              <span className="absolute inset-y-0 left-3 flex items-center text-gray-400" aria-hidden>🔍</span>
+              <input
+                type="text"
+                value={refineKeyword}
+                onChange={(e) => setRefineKeyword(e.target.value)}
+                placeholder="Add a keyword or role to refine results..."
+                aria-label="Refine search"
+                className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              Search
+            </button>
+            {refineKeyword && (
+              <button
+                type="button"
+                onClick={() => { setRefineKeyword(""); void runSearch("auto", EMPTY_MANUAL); }}
+                className="text-xs text-gray-500 underline hover:text-gray-700"
+              >
+                Clear
+              </button>
+            )}
+            {!loading && (
+              <button
+                type="button"
+                onClick={() => void runSearch("auto", EMPTY_MANUAL)}
+                className="ml-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                title="Re-run the search"
+              >
+                ↻ Refresh
+              </button>
+            )}
+            {scoringFit && <span className="text-xs text-gray-500">Ranking results…</span>}
+            <a href="/careerprofile/preferences" className="ml-auto text-xs text-gray-400 hover:text-gray-600">Tune your preferences</a>
+          </form>
         </div>
       )}
 
@@ -541,10 +625,13 @@ export default function JobsPage() {
               // feat/jobs-ats-aggregation Phase 3 — surface company count
               // from the curated_ats breakdown when present.
               const curated  = sources.curated_ats as { companies?: number; total?: number } | undefined;
+              // fix/jobs-smart-apply-issues Fix 1 — show per-source COUNTS in
+              // the indicator line so users see the honest breakdown instead of
+              // just a source-name list.
               const active = Object.entries(sources)
                 .filter(([k, info]) => (info?.count ?? info?.total ?? 0) > 0 && k !== "curated_ats")
                 .sort(([, a], [, b]) => ((b.count ?? b.total ?? 0) - (a.count ?? a.total ?? 0)))
-                .map(([k]) => labels[k] ?? k);
+                .map(([k, info]) => `${labels[k] ?? k} (${info.count ?? info.total ?? 0})`);
               if (active.length === 0 && !curated) return null;
               return (
                 <div
@@ -555,6 +642,7 @@ export default function JobsPage() {
                   {searchOrigin === "database" && <><span className="font-medium text-teal-700">database</span>{" · "}</>}
                   {searchOrigin === "mixed"    && <><span className="font-medium text-teal-700">database + live</span>{" · "}</>}
                   {searchOrigin === "live"     && <><span className="font-medium">live search</span>{" · "}</>}
+                  <span className="text-teal-700">scored against your profile</span>{" · "}
                   from {active.join(" · ")}
                   {curated && curated.companies ? (
                     <> · <span title={`Fanned out to ${curated.companies} curated companies across 9 ATS platforms`}>ATS Direct ({curated.companies} companies)</span></>

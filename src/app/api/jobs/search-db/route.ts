@@ -69,12 +69,19 @@ async function makeSupabaseServer() {
 }
 
 interface SearchDbBody {
-  query?:    string;
-  location?: string;
-  remote?:   boolean;
-  sources?:  string[];
-  limit?:    number;
-  offset?:   number;
+  query?:       string;
+  /**
+   * fix/jobs-smart-apply-issues Fix 6 — target roles are now sent as a
+   * structured array (chip row on /opportunities), not as a raw OR-joined
+   * tsquery string in `query`. Server combines them: (role1 | role2 | …)
+   * AND (query tokens) when both present.
+   */
+  targetRoles?: string[];
+  location?:    string;
+  remote?:      boolean;
+  sources?:     string[];
+  limit?:       number;
+  offset?:      number;
 }
 
 interface AtsJobRow {
@@ -128,8 +135,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const query    = (body.query    ?? "").trim();
-  const location = (body.location ?? "").trim();
+  const query        = (body.query ?? "").trim();
+  const targetRoles  = Array.isArray(body.targetRoles)
+    ? body.targetRoles.map(r => (r ?? "").trim()).filter(Boolean)
+    : [];
+  const location     = (body.location ?? "").trim();
   const remote   = !!body.remote;
   const sources  = Array.isArray(body.sources) ? body.sources : undefined;
   const limit    = Math.min(MAX_LIMIT, Math.max(1, body.limit  ?? DEFAULT_LIMIT));
@@ -144,21 +154,32 @@ export async function POST(req: NextRequest) {
     .order("posted_at", { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
-  // fix/jobs-multi-target-roles Task 1 — multi-role OR queries. When
-  // the client sends "Director of Security OR CISO OR BISO", build a
-  // proper tsquery (`(director&security) | (ciso) | (biso)`) rather
-  // than let websearch_to_tsquery try to interpret the OR keyword.
-  if (query) {
-    const roles = query.split(/\s+OR\s+/i).map(s => s.trim()).filter(Boolean);
-    if (roles.length > 1) {
-      const tsquery = roles.map(r => {
-        const tokens = r.split(/\s+/).filter(Boolean);
-        return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
-      }).join(" | ");
-      q = q.textSearch("title", tsquery, { type: "plain", config: "english" });
-    } else {
-      q = q.textSearch("title", query, { type: "websearch", config: "english" });
-    }
+  // fix/jobs-smart-apply-issues Fix 6 — combine structured targetRoles
+  // (OR) with the free-text refine `query` (AND). Legacy back-compat: if
+  // targetRoles is empty and `query` still looks like an OR-joined string
+  // (e.g. "Director of Security OR CISO"), split and treat as targetRoles.
+  const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
+  const rolesFrag = (roles: string[]) =>
+    roles.map(r => {
+      const tokens = tokensOf(r);
+      return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
+    }).join(" | ");
+
+  let effectiveRoles = targetRoles;
+  let effectiveQuery = query;
+  if (effectiveRoles.length === 0 && /\s+OR\s+/i.test(query)) {
+    effectiveRoles = query.split(/\s+OR\s+/i).map(s => s.trim()).filter(Boolean);
+    effectiveQuery = "";
+  }
+
+  if (effectiveRoles.length > 0 && effectiveQuery) {
+    const combined = "(" + rolesFrag(effectiveRoles) + ") & (" + tokensOf(effectiveQuery).join(" & ") + ")";
+    q = q.textSearch("title", combined, { type: "plain", config: "english" });
+  } else if (effectiveRoles.length > 0) {
+    const roles = rolesFrag(effectiveRoles);
+    q = q.textSearch("title", roles, { type: "plain", config: "english" });
+  } else if (effectiveQuery) {
+    q = q.textSearch("title", effectiveQuery, { type: "websearch", config: "english" });
   }
   if (location && location.toLowerCase() !== "remote") q = q.ilike("location", `%${location}%`);
   if (remote || location.toLowerCase() === "remote")   q = q.eq("remote", true);
@@ -203,7 +224,7 @@ export async function POST(req: NextRequest) {
       return { ...opp, profileFitScore: pfs, fit_score: pfs.total, fit_breakdown: pfsToBreakdown(pfs) };
     });
     profileScored = profileScored
-      .filter(o => (o.profileFitScore?.total ?? 0) >= 20)
+      .filter(o => (o.profileFitScore?.total ?? 0) >= 40)
       .sort((a, b) => (b.profileFitScore?.total ?? 0) - (a.profileFitScore?.total ?? 0));
   }
 
