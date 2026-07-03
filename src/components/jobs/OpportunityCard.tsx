@@ -185,6 +185,12 @@ export function OpportunityCard({ opportunity: opp, cycleId, onSelect, onSmartAp
               {opp.company}
               {opp.location ? ` · ${opp.location}` : ""}
             </p>
+            {/* feat/jobs-for-you-curator Task 7 — deterministic reasoning line */}
+            {opp.matchReason && (
+              <p className="mt-1 text-xs text-teal-700 line-clamp-2" title={opp.matchReason}>
+                {opp.matchReason}
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             {/* Requirement B — prominent numeric fit-score badge with hover expand */}

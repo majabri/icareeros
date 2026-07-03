@@ -71,6 +71,16 @@ export default function JobsPage() {
   const [sessionTargetRoles, setSessionTargetRoles] = useState<string[]>([]);
   // Refine keyword for auto mode — combined with sessionTargetRoles via AND
   const [refineKeyword, setRefineKeyword] = useState<string>("");
+  // feat/jobs-for-you-curator Task 7 — 3-tier curator result cache.
+  interface CuratorTier { url?: string | null; [k: string]: unknown }
+  const [curatorResult, setCuratorResult] = useState<null | {
+    strongMatch: CuratorTier[];
+    worthConsidering: CuratorTier[];
+    stretch: CuratorTier[];
+    tierExplanations: { strongMatch: string; worthConsidering: string; stretch: string };
+    totalCandidates: number;
+    metadata: { expandedRoles: string[]; skillsUsed: string[]; exclusionsApplied: number };
+  }>(null);
   // Task Requirement C — user-controlled sort (Fit Score default).
   const [sortKey, setSortKey] = useState<"fit" | "recency" | "company" | "location">(
     () => (typeof window !== "undefined" && (window.localStorage.getItem("opportunitiesSort") as "fit"|"recency"|"company"|"location"|null)) || "fit"
@@ -165,6 +175,7 @@ export default function JobsPage() {
     setFitScores({});
     setSources({});
     setFiltered({ count: 0, reasons: [] });
+    setCuratorResult(null);
 
     try {
       // feat/jobs-search-db (Task 4) — try /api/jobs/search-db first in auto
@@ -175,6 +186,34 @@ export default function JobsPage() {
       let res: Response;
       let dbFirstUsed = false;
       if (m === "auto") {
+        // feat/jobs-for-you-curator — when the user has no refine keyword
+        // AND has target roles, call the curator to get 3-tier results.
+        // Any keyword typed = fall through to the existing search-db path
+        // (which honours targetRoles + query AND semantics).
+        if (!refineKeyword.trim() && sessionTargetRoles.length > 0) {
+          const curRes = await fetch("/api/jobs/for-you", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          }).catch(() => null);
+          if (curRes && curRes.ok) {
+            const cd = await curRes.json().catch(() => null);
+            if (cd && Array.isArray(cd.strongMatch)) {
+              setCuratorResult(cd);
+              // Also populate the flat results list (union of tiers) so
+              // downstream components (drawer, cycleId) keep working.
+              const flat = [...cd.strongMatch, ...cd.worthConsidering, ...cd.stretch] as OpportunityResult[];
+              setResults(flat);
+              setTotal(cd.totalCandidates ?? flat.length);
+              setLastUpdatedAt(new Date());
+              setNowTick(Date.now());
+              setSearchOrigin("database");
+              setLoading(false);
+              return;
+            }
+          }
+          // curator failed — fall through to legacy search-db path
+        }
+        setCuratorResult(null);
         // fix/jobs-opportunity-quality-p0 — send the resolved target-role
         // query so search-db can textSearch against title. Falls back to
         // empty query (unchanged behaviour) when the state hasn't been
@@ -675,23 +714,60 @@ export default function JobsPage() {
               );
             })()}
           </div>
-          <div className="space-y-3">
-            {sortedResults.map((opp, i) => (
-              <OpportunityCard
-                key={opp.id ?? `${opp.url}-${i}`}
-                opportunity={opp}
+          {/* feat/jobs-for-you-curator Task 7 — 3-tier rendering when the
+              curator produced tiered output. Falls back to flat sorted list. */}
+          {curatorResult && mode === "auto" && !refineKeyword.trim() ? (
+            <div className="space-y-6">
+              <TierSection
+                icon="🎯"
+                title="Strong Match"
+                subtitle={curatorResult.tierExplanations.strongMatch}
+                jobs={curatorResult.strongMatch as unknown as OpportunityResult[]}
                 cycleId={cycleId}
                 onSelect={openJob}
-                onSmartApply={(o) => setSmartApplyJob({
-                  title:          o.title,
-                  company:        o.company,
-                  description:    o.description,
-                  url:            o.apply_url_company ?? o.url,
-                  opportunity_id: (typeof o.id === "string" ? o.id : null),
-                })}
+                onSmartApply={setSmartApplyJob}
+                defaultExpanded={true}
               />
-            ))}
-          </div>
+              <TierSection
+                icon="✨"
+                title="Worth Considering"
+                subtitle={curatorResult.tierExplanations.worthConsidering}
+                jobs={curatorResult.worthConsidering as unknown as OpportunityResult[]}
+                cycleId={cycleId}
+                onSelect={openJob}
+                onSmartApply={setSmartApplyJob}
+                defaultExpanded={false}
+              />
+              <TierSection
+                icon="🚀"
+                title="Stretch Opportunity"
+                subtitle={curatorResult.tierExplanations.stretch}
+                jobs={curatorResult.stretch as unknown as OpportunityResult[]}
+                cycleId={cycleId}
+                onSelect={openJob}
+                onSmartApply={setSmartApplyJob}
+                defaultExpanded={false}
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sortedResults.map((opp, i) => (
+                <OpportunityCard
+                  key={opp.id ?? `${opp.url}-${i}`}
+                  opportunity={opp}
+                  cycleId={cycleId}
+                  onSelect={openJob}
+                  onSmartApply={(o) => setSmartApplyJob({
+                    title:          o.title,
+                    company:        o.company,
+                    description:    o.description,
+                    url:            o.apply_url_company ?? o.url,
+                    opportunity_id: (typeof o.id === "string" ? o.id : null),
+                  })}
+                />
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -896,4 +972,62 @@ function formatRelativeAge(ageMs: number): string {
   const days = Math.floor(ageMs / dayMs);
   if (days === 1) return "yesterday";
   return `${days} days ago`;
+}
+
+
+// feat/jobs-for-you-curator Task 7 — collapsible tier section.
+function TierSection({
+  icon, title, subtitle, jobs, cycleId, onSelect, onSmartApply, defaultExpanded,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  jobs: OpportunityResult[];
+  cycleId: string | null | undefined;
+  onSelect: (o: OpportunityResult) => void;
+  onSmartApply: (o: SmartApplyJob) => void;
+  defaultExpanded: boolean;
+}) {
+  const [open, setOpen] = useState(defaultExpanded);
+  if (jobs.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex w-full items-start justify-between gap-3 px-5 py-3 text-left hover:bg-gray-50"
+        aria-expanded={open}
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900">
+            <span aria-hidden className="mr-1.5">{icon}</span>{title}
+            <span className="ml-2 rounded-full bg-brand-50 text-brand-800 border border-brand-200 px-2 py-0.5 text-[10px] font-medium">
+              {jobs.length}
+            </span>
+          </h2>
+          {subtitle && <p className="mt-1 text-xs text-gray-600">{subtitle}</p>}
+        </div>
+        <span className="text-gray-400 mt-1" aria-hidden>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 p-4 space-y-3">
+          {jobs.map((opp, i) => (
+            <OpportunityCard
+              key={opp.id ?? `${opp.url}-${i}`}
+              opportunity={opp}
+              cycleId={cycleId}
+              onSelect={onSelect}
+              onSmartApply={(o) => onSmartApply({
+                title:          o.title,
+                company:        o.company,
+                description:    o.description,
+                url:            o.apply_url_company ?? o.url,
+                opportunity_id: (typeof o.id === "string" ? o.id : null),
+              })}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
