@@ -67,6 +67,47 @@ export const GREENHOUSE_COMPANIES: AtsCompany[] = [
   { name: "Squarespace",   slug: "squarespace",        industry: "tech",      size: "mid" },
   { name: "Snowflake",     slug: "snowflakecomputing", industry: "tech",      size: "enterprise" },
   { name: "Okta",          slug: "okta",               industry: "tech",      size: "enterprise" },
+  // ── feat/jobs-multi-industry-coverage additions ──
+  { name: 'Carta'                                 , slug: 'carta'                         , industry: 'finance'     , size: 'smb'        },   // greenhouse: 49 jobs
+  { name: 'Betterment'                            , slug: 'betterment'                    , industry: 'finance'     , size: 'smb'        },   // greenhouse: 34 jobs
+  { name: 'Marqeta'                               , slug: 'marqeta'                       , industry: 'finance'     , size: 'smb'        },   // greenhouse: 33 jobs
+  { name: 'Nubank'                                , slug: 'nubank'                        , industry: 'finance'     , size: 'mid'        },   // greenhouse: 102 jobs
+  { name: 'Toast'                                 , slug: 'toast'                         , industry: 'finance'     , size: 'mid'        },   // greenhouse: 287 jobs
+  { name: 'SoFi'                                  , slug: 'sofi'                          , industry: 'finance'     , size: 'mid'        },   // greenhouse: 94 jobs
+  { name: 'Affirm'                                , slug: 'affirm'                        , industry: 'finance'     , size: 'mid'        },   // greenhouse: 177 jobs
+  { name: 'Chime'                                 , slug: 'chime'                         , industry: 'finance'     , size: 'smb'        },   // greenhouse: 64 jobs
+  { name: 'Jump Trading'                          , slug: 'jumptrading'                   , industry: 'finance'     , size: 'smb'        },   // greenhouse: 58 jobs
+  { name: 'Akuna Capital'                         , slug: 'akunacapital'                  , industry: 'finance'     , size: 'smb'        },   // greenhouse: 27 jobs
+  { name: 'Virtu Financial'                       , slug: 'virtu'                         , industry: 'finance'     , size: 'smb'        },   // greenhouse: 36 jobs
+  { name: 'Honor'                                 , slug: 'honor'                         , industry: 'healthcare'  , size: 'startup'    },   // greenhouse: 17 jobs
+  { name: 'IMC Trading'                           , slug: 'imc'                           , industry: 'finance'     , size: 'mid'        },   // greenhouse: 145 jobs
+  { name: 'One Medical'                           , slug: 'onemedical'                    , industry: 'healthcare'  , size: 'enterprise' },   // greenhouse: 334 jobs
+  { name: 'Oscar Health'                          , slug: 'oscar'                         , industry: 'healthcare'  , size: 'mid'        },   // greenhouse: 266 jobs
+  { name: 'Zocdoc'                                , slug: 'zocdoc'                        , industry: 'healthcare'  , size: 'smb'        },   // greenhouse: 50 jobs
+  { name: 'Talkspace'                             , slug: 'talkspace'                     , industry: 'healthcare'  , size: 'startup'    },   // greenhouse: 10 jobs
+  { name: 'Zscaler'                               , slug: 'zscaler'                       , industry: 'tech'        , size: 'enterprise' },   // greenhouse: 320 jobs
+  { name: 'Cloudflare'                            , slug: 'cloudflare'                    , industry: 'tech'        , size: 'mid'        },   // greenhouse: 239 jobs
+  { name: 'Mixpanel'                              , slug: 'mixpanel'                      , industry: 'tech'        , size: 'smb'        },   // greenhouse: 37 jobs
+  { name: 'PagerDuty'                             , slug: 'pagerduty'                     , industry: 'tech'        , size: 'smb'        },   // greenhouse: 24 jobs
+  { name: 'Amplitude'                             , slug: 'amplitude'                     , industry: 'tech'        , size: 'smb'        },   // greenhouse: 48 jobs
+  { name: 'Dashlane'                              , slug: 'dashlane'                      , industry: 'tech'        , size: 'smb'        },   // greenhouse: 24 jobs
+  { name: 'New Relic'                             , slug: 'newrelic'                      , industry: 'tech'        , size: 'smb'        },   // greenhouse: 55 jobs
+  { name: 'Braze'                                 , slug: 'braze'                         , industry: 'tech'        , size: 'mid'        },   // greenhouse: 229 jobs
+  { name: 'MongoDB'                               , slug: 'mongodb'                       , industry: 'tech'        , size: 'enterprise' },   // greenhouse: 397 jobs
+  { name: 'Dragos'                                , slug: 'dragos'                        , industry: 'tech'        , size: 'smb'        },   // greenhouse: 30 jobs
+  { name: 'Riot Games'                            , slug: 'riotgames'                     , industry: 'media'       , size: 'mid'        },   // greenhouse: 166 jobs
+  { name: 'Epic Games'                            , slug: 'epicgames'                     , industry: 'media'       , size: 'mid'        },   // greenhouse: 127 jobs
+  { name: 'Thoughtworks'                          , slug: 'thoughtworks'                  , industry: 'consulting'  , size: 'smb'        },   // greenhouse: 72 jobs
+  { name: 'Roblox'                                , slug: 'roblox'                        , industry: 'media'       , size: 'mid'        },   // greenhouse: 231 jobs
+  { name: 'Glossier'                              , slug: 'glossier'                      , industry: 'retail'      , size: 'startup'    },   // greenhouse: 19 jobs
+  { name: 'Peloton'                               , slug: 'peloton'                       , industry: 'retail'      , size: 'smb'        },   // greenhouse: 61 jobs
+  { name: 'Vox Media'                             , slug: 'voxmedia'                      , industry: 'media'       , size: 'startup'    },   // greenhouse: 12 jobs
+  { name: 'BuzzFeed'                              , slug: 'buzzfeed'                      , industry: 'media'       , size: 'startup'    },   // greenhouse: 6 jobs
+  { name: 'Adyen'                                 , slug: 'adyen'                         , industry: 'finance'     , size: 'mid'        },   // greenhouse: 208 jobs
+  { name: 'Databricks'                            , slug: 'databricks'                    , industry: 'tech'        , size: 'enterprise' },   // greenhouse: 791 jobs
+  { name: 'Monzo'                                 , slug: 'monzo'                         , industry: 'finance'     , size: 'smb'        },   // greenhouse: 67 jobs
+  { name: 'BCG'                                   , slug: 'bcg'                           , industry: 'consulting'  , size: 'startup'    },   // greenhouse: 14 jobs
+  { name: 'TCS'                                   , slug: 'tcs'                           , industry: 'consulting'  , size: 'smb'        },   // greenhouse: 77 jobs
 ];
 
 // ── Lever (api.lever.co) ─────────────────────────────────────────────────
@@ -91,6 +132,8 @@ export const LEVER_COMPANIES: AtsCompany[] = [
   { name: "Framer",        slug: "framer",        industry: "tech",  size: "smb" },
   { name: "Raycast",       slug: "raycast",       industry: "tech",  size: "startup" },
   { name: "Arc",           slug: "arc",           industry: "tech",  size: "smb" },
+  // ── feat/jobs-multi-industry-coverage additions ──
+  { name: 'Palantir'                              , slug: 'palantir'                      , industry: 'consulting'  , size: 'mid'        },   // lever: 275 jobs
 ];
 
 // ── Ashby (api.ashbyhq.com) ──────────────────────────────────────────────
@@ -114,6 +157,23 @@ export const ASHBY_COMPANIES: AtsCompany[] = [
   { name: "Trigger",       slug: "trigger",       industry: "tech",    size: "startup" },
   { name: "Windsurf",      slug: "windsurf",      industry: "tech",    size: "startup" },
   { name: "Cursor",        slug: "cursor",        industry: "tech",    size: "startup" },
+  // ── feat/jobs-multi-industry-coverage additions ──
+  { name: 'Method'                                , slug: 'method'                        , industry: 'finance'     , size: 'startup'    },   // ashby: 12 jobs
+  { name: 'Persona'                               , slug: 'persona'                       , industry: 'finance'     , size: 'smb'        },   // ashby: 24 jobs
+  { name: 'Column'                                , slug: 'column'                        , industry: 'finance'     , size: 'startup'    },   // ashby: 16 jobs
+  { name: 'Abridge'                               , slug: 'abridge'                       , industry: 'healthcare'  , size: 'smb'        },   // ashby: 54 jobs
+  { name: 'Writer'                                , slug: 'writer'                        , industry: 'tech'        , size: 'smb'        },   // ashby: 49 jobs
+  { name: 'Character AI'                          , slug: 'character'                     , industry: 'tech'        , size: 'startup'    },   // ashby: 16 jobs
+  { name: 'Midjourney'                            , slug: 'midjourney'                    , industry: 'tech'        , size: 'startup'    },   // ashby: 11 jobs
+  { name: 'PostHog'                               , slug: 'posthog'                       , industry: 'tech'        , size: 'smb'        },   // ashby: 21 jobs
+  { name: 'Photoroom'                             , slug: 'photoroom'                     , industry: 'tech'        , size: 'startup'    },   // ashby: 14 jobs
+  { name: 'Resend'                                , slug: 'resend'                        , industry: 'tech'        , size: 'startup'    },   // ashby: 8 jobs
+  { name: 'LangChain'                             , slug: 'langchain'                     , industry: 'tech'        , size: 'mid'        },   // ashby: 102 jobs
+  { name: 'Cohere'                                , slug: 'cohere'                        , industry: 'tech'        , size: 'mid'        },   // ashby: 127 jobs
+  { name: 'ElevenLabs'                            , slug: 'elevenlabs'                    , industry: 'tech'        , size: 'mid'        },   // ashby: 144 jobs
+  { name: 'Kalshi'                                , slug: 'kalshi'                        , industry: 'finance'     , size: 'smb'        },   // ashby: 34 jobs
+  { name: 'Whoop'                                 , slug: 'whoop'                         , industry: 'healthcare'  , size: 'mid'        },   // ashby: 158 jobs
+  { name: 'Drata'                                 , slug: 'drata'                         , industry: 'tech'        , size: 'smb'        },   // ashby: 52 jobs
 ];
 
 // ── Workday (per-tenant CXS API) ─────────────────────────────────────────
