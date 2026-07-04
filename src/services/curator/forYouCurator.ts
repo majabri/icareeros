@@ -10,6 +10,7 @@ import { extractSkillsFingerprint, type WorkEntry } from "./skillsFingerprint";
 import { buildExclusions, seniorityIndex } from "./exclusions";
 import {
   queryExactRoleMatches, queryAdjacentTitles, querySkillBasedMatches,
+  queryByRoleFamilies,
 } from "./queries";
 import {
   generateTierExplanation, generateJobReasoning, type ScoredOpportunity,
@@ -64,9 +65,16 @@ export async function curateForYou(
   const exclusions                   = await buildExclusions(userId, profile, skills, supabase);
 
   // 3. 3 parallel queries
+  // feat/jobs-multi-industry-coverage — prefer the indexed role_families
+  // fast-path over the tsquery on title. Falls back to queryAdjacentTitles
+  // when the target roles didn't expand into any family key (e.g. an
+  // uncommon niche title).
+  const { families } = expandTargetRoles(profile.targetRoles);
   const [exactRaw, adjacentRaw, skillRaw] = await Promise.all([
     queryExactRoleMatches(supabase, profile.targetRoles),
-    queryAdjacentTitles(supabase, expandedRoles),
+    families.length > 0
+      ? queryByRoleFamilies(supabase, families)
+      : queryAdjacentTitles(supabase, expandedRoles),
     querySkillBasedMatches(supabase, skills.coreSkills.slice(0, 5)),
   ]);
 

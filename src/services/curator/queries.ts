@@ -76,6 +76,51 @@ function toWebsearchQuery(roles: string[]): string {
     .join(" OR ");
 }
 
+/**
+ * feat/jobs-multi-industry-coverage — fast-path using the new
+ * ats_jobs.role_families gin index. Overlaps takes O(log N) with the
+ * index vs the tsquery which scales linearly in title token count.
+ *
+ * Caller can pass ["director_of_security", "ciso", "biso"] to match
+ * any job whose role_families array intersects with those keys.
+ */
+export async function queryByRoleFamilies(
+  supabase: SupabaseClient,
+  families: string[],
+  limit = 40,
+): Promise<OpportunityResult[]> {
+  if (families.length === 0) return [];
+  const { data } = await supabase
+    .from("ats_jobs")
+    .select(ATS_JOBS_COLS)
+    .eq("is_active", true)
+    .eq("enrichment_status", "complete")
+    .overlaps("role_families", families)
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return (data ?? []).map(r => toOpp(r as AtsJobRow));
+}
+
+/**
+ * Filter by seniority band using the indexed seniority_tier column.
+ */
+export async function queryBySeniorityTier(
+  supabase: SupabaseClient,
+  tiers: string[],
+  limit = 40,
+): Promise<OpportunityResult[]> {
+  if (tiers.length === 0) return [];
+  const { data } = await supabase
+    .from("ats_jobs")
+    .select(ATS_JOBS_COLS)
+    .eq("is_active", true)
+    .eq("enrichment_status", "complete")
+    .in("seniority_tier", tiers)
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return (data ?? []).map(r => toOpp(r as AtsJobRow));
+}
+
 export async function queryExactRoleMatches(
   supabase:    SupabaseClient,
   targetRoles: string[],
