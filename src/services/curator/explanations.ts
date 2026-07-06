@@ -20,26 +20,39 @@ export function generateTierExplanation(
   skills:  SkillsFingerprint,
 ): string {
   if (jobs.length === 0) return "";
-  const targetRole = profile.targetRoles[0] ?? "your target role";
   const topSkills  = skills.coreSkills.slice(0, 3).filter(Boolean);
   const skillStr   = topSkills.length ? topSkills.join(", ") : "your background";
   const seniority  = (profile.targetSeniority && profile.targetSeniority !== "unknown")
     ? profile.targetSeniority
     : "target";
 
+  // fix/jobs-per-role-scoring Task 6 — surface which target roles are
+  // represented in this tier so users see per-role diversity.
+  const matched = new Set<string>();
+  for (const j of jobs) {
+    const best = j.profileFitScore?.signals?.targetRoleBestMatch;
+    if (best) matched.add(best);
+  }
+  const rolesList = Array.from(matched);
+  const rolesText = rolesList.length === 0
+    ? (profile.targetRoles[0] ?? "your target role")
+    : rolesList.length <= 3
+      ? rolesList.join(", ")
+      : `${rolesList.slice(0, 3).join(", ")}, +${rolesList.length - 3} more`;
+
   switch (tier) {
     case "strongMatch":
-      return `${jobs.length} ${jobs.length === 1 ? "role" : "roles"} closely aligned with your ${targetRole} target. ` +
+      return `${jobs.length} ${jobs.length === 1 ? "role" : "roles"} closely aligned with your ${rolesList.length > 1 ? "targets" : "target"}: ${rolesText}. ` +
              `They leverage your ${skillStr} background at the ${seniority} level.`;
     case "worthConsidering": {
       const stems = commonTitleStems(jobs).slice(0, 2);
       const stemStr = stems.length ? stems.join(" and ") : "adjacent";
       return `${jobs.length} adjacent ${jobs.length === 1 ? "opportunity" : "opportunities"} worth exploring. ` +
-             `These ${stemStr} roles share overlap with your target but may take you in a related direction.`;
+             `These ${stemStr} roles share overlap with ${rolesList.length > 1 ? "your targets " : ""}but may take you in a related direction.`;
     }
     case "stretch":
       return `${jobs.length} stretch ${jobs.length === 1 ? "opportunity" : "opportunities"} that push toward more senior or specialised roles. ` +
-             `They may require additional experience but align with your trajectory toward ${targetRole}.`;
+             `They may require additional experience but align with your trajectory toward ${rolesText}.`;
   }
 }
 
@@ -52,13 +65,15 @@ export function generateJobReasoning(job: ScoredOpportunity, profile: UserProfil
   const sig = job.profileFitScore?.signals;
   if (!sig) return "";
 
-  // Role signal
-  if (sig.targetRoleSignal === "exact" && sig.targetRoleBestMatch) {
-    parts.push(`Exact match for ${sig.targetRoleBestMatch}`);
+  // fix/jobs-per-role-scoring Task 5 — name the SPECIFIC matched target
+  // role (from targetRoleBestMatch) rather than always saying "your target".
+  const matchedRole = sig.targetRoleBestMatch || profile.targetRoles[0] || "your target";
+  if (sig.targetRoleSignal === "exact") {
+    parts.push(`Exact match for ${matchedRole}`);
   } else if (sig.targetRoleSignal === "adjacent") {
-    parts.push(`Adjacent to your ${profile.targetRoles[0] ?? "target"}`);
+    parts.push(`Adjacent to ${matchedRole}`);
   } else if (sig.targetRoleSignal === "stretch") {
-    parts.push("Stretch role");
+    parts.push(`Stretch role for ${matchedRole}`);
   }
 
   // Skills signal

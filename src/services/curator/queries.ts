@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OpportunityResult } from "@/services/opportunityTypes";
+import { expandTargetRoles } from "./roleFamilies";
 
 const ATS_JOBS_COLS = "id, source, external_id, company, title, location, description, apply_url, salary_min, salary_max, salary_currency, employment_type, remote, posted_at, last_seen_at";
 
@@ -84,6 +85,53 @@ function toWebsearchQuery(roles: string[]): string {
  * Caller can pass ["director_of_security", "ciso", "biso"] to match
  * any job whose role_families array intersects with those keys.
  */
+/**
+ * fix/jobs-per-role-scoring Task 1 — query for a SINGLE target role.
+ *
+ * Independent per-role search: expand ONLY this role to its family
+ * synonyms, try the indexed role_families overlap first, fall back to
+ * tsquery on title. Results are tagged with { matchedRole } so the
+ * scorer knows which target this job came from.
+ */
+export async function queryJobsForRole(
+  supabase:   SupabaseClient,
+  targetRole: string,
+  limit = 30,
+): Promise<Array<OpportunityResult & { matchedRole: string; queryMethod: "family" | "title" }>> {
+  const cleanRole = (targetRole ?? "").trim();
+  if (!cleanRole) return [];
+
+  const { expanded, families } = expandTargetRoles([cleanRole]);
+
+  // 1) Indexed families fast-path
+  if (families.length > 0) {
+    const { data } = await supabase
+      .from("ats_jobs")
+      .select(ATS_JOBS_COLS)
+      .eq("is_active", true)
+      .eq("enrichment_status", "complete")
+      .overlaps("role_families", families)
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (data && data.length > 0) {
+      return data.map(r => ({ ...toOpp(r as AtsJobRow), matchedRole: cleanRole, queryMethod: "family" as const }));
+    }
+  }
+
+  // 2) Fallback — websearch tsquery on title over expanded synonyms
+  const ts = toWebsearchQuery(expanded.slice(0, 15));
+  if (!ts) return [];
+  const { data } = await supabase
+    .from("ats_jobs")
+    .select(ATS_JOBS_COLS)
+    .eq("is_active", true)
+    .eq("enrichment_status", "complete")
+    .textSearch("title", ts, { type: "websearch", config: "english" })
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return (data ?? []).map(r => ({ ...toOpp(r as AtsJobRow), matchedRole: cleanRole, queryMethod: "title" as const }));
+}
+
 export async function queryByRoleFamilies(
   supabase: SupabaseClient,
   families: string[],

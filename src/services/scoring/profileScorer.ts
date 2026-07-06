@@ -102,32 +102,50 @@ export function scoreOpportunityAgainstProfile(
 export function scoreTargetRoleMatch(
   job: OpportunityResult,
   profile: UserProfile,
-): { score: number; signal: "exact" | "adjacent" | "stretch" | "mismatch"; bestMatch: string } {
+): { score: number; signal: "exact" | "adjacent" | "stretch" | "mismatch"; bestMatch: string; allScores: Record<string, number> } {
   const jobTitle = normalise(job.title || "");
+  const allScores: Record<string, number> = {};
+  // fix/jobs-per-role-scoring — query origin hint. When queryJobsForRole
+  // tagged the job with matchedRole, treat that as strong signal for THAT
+  // specific target role only.
+  const hintedRole = (job as OpportunityResult & { matchedRole?: string }).matchedRole ?? "";
   if (!jobTitle || profile.targetRoles.length === 0) {
-    return { score: 0, signal: "mismatch", bestMatch: "" };
+    return { score: 0, signal: "mismatch", bestMatch: "", allScores };
   }
-  let best = 0;
-  let bestMatch = "";
+  // Populate allScores by comparing each target role independently.
   for (const target of profile.targetRoles) {
     const t = normalise(target);
-    if (!t) continue;
-    if (t === jobTitle) return { score: 100, signal: "exact", bestMatch: target };
+    if (!t) { allScores[target] = 0; continue; }
+    if (t === jobTitle) { allScores[target] = 100; continue; }
     const jw = new Set(jobTitle.split(" ").filter(w => w.length >= 3));
     const tw = new Set(t.split(" ").filter(w => w.length >= 3));
-    if (tw.size === 0) continue;
+    if (tw.size === 0) { allScores[target] = 0; continue; }
     let shared = 0;
     for (const w of tw) if (jw.has(w)) shared++;
     const ratio = shared / tw.size;
-    const score = Math.round(ratio * 100);
-    if (score > best) { best = score; bestMatch = target; }
+    let score = Math.round(ratio * 100);
+    // The hinted role (from queryJobsForRole tagging) is strong evidence
+    // this specific job matched via THIS target. Elevate to a floor of 75
+    // so it wins over incidental title-token overlap with other roles.
+    if (hintedRole && normalise(hintedRole) === t) {
+      score = Math.max(score, 75);
+    }
+    allScores[target] = score;
+  }
+  // Pick highest — deterministic tie-break by preferring the hinted role.
+  let best = 0;
+  let bestMatch = "";
+  for (const [role, sc] of Object.entries(allScores)) {
+    if (sc > best || (sc === best && role === hintedRole)) {
+      best = sc; bestMatch = role;
+    }
   }
   let signal: "exact" | "adjacent" | "stretch" | "mismatch";
   if (best >= 95)      signal = "exact";
   else if (best >= 60) signal = "adjacent";
   else if (best >= 30) signal = "stretch";
   else                 signal = "mismatch";
-  return { score: best, signal, bestMatch };
+  return { score: best, signal, bestMatch, allScores };
 }
 
 // ── scoreSkillsMatch ─────────────────────────────────────────────────────

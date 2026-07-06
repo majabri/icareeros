@@ -10,7 +10,7 @@ import { extractSkillsFingerprint, type WorkEntry } from "./skillsFingerprint";
 import { buildExclusions, seniorityIndex } from "./exclusions";
 import {
   queryExactRoleMatches, queryAdjacentTitles, querySkillBasedMatches,
-  queryByRoleFamilies,
+  queryByRoleFamilies, queryJobsForRole,
 } from "./queries";
 import {
   generateTierExplanation, generateJobReasoning, type ScoredOpportunity,
@@ -64,31 +64,45 @@ export async function curateForYou(
   const skills                       = extractSkillsFingerprint(profile, workExperience);
   const exclusions                   = await buildExclusions(userId, profile, skills, supabase);
 
-  // 3. 3 parallel queries
-  // feat/jobs-multi-industry-coverage — prefer the indexed role_families
-  // fast-path over the tsquery on title. Falls back to queryAdjacentTitles
-  // when the target roles didn't expand into any family key (e.g. an
-  // uncommon niche title).
+  // 3. fix/jobs-per-role-scoring Task 2 — one INDEPENDENT query per
+  //    target role, plus one adjacent + one skill-based fallback query.
+  //    Each per-role result carries a matchedRole tag that
+  //    scoreTargetRoleMatch reads to boost that specific role's score.
   const { families } = expandTargetRoles(profile.targetRoles);
-  const [exactRaw, adjacentRaw, skillRaw] = await Promise.all([
-    queryExactRoleMatches(supabase, profile.targetRoles),
+  const perRoleQueries = profile.targetRoles.map(role =>
+    queryJobsForRole(supabase, role, 30)
+  );
+  const [perRoleResults, adjacentRaw, skillRaw] = await Promise.all([
+    Promise.all(perRoleQueries),
     families.length > 0
       ? queryByRoleFamilies(supabase, families)
       : queryAdjacentTitles(supabase, expandedRoles),
     querySkillBasedMatches(supabase, skills.coreSkills.slice(0, 5)),
   ]);
 
-  // 4. Tag with query origin + de-dupe by url (exact wins on collision)
-  const tagged = new Map<string, ScoredOpportunity>();
-  const add = (list: typeof exactRaw, origin: "exact" | "adjacent" | "skills") => {
+  // 4. Task 4 — merge per-role result sets first (they carry matchedRole
+  //    tags). Then layer in adjacent + skills as additional origins. On
+  //    URL collision, PREFER the exact per-role hit — it has the query
+  //    origin signal that scoreTargetRoleMatch trusts.
+  const tagged = new Map<string, ScoredOpportunity & { matchedRole?: string }>();
+  const addExact = (list: Array<import("@/services/opportunityTypes").OpportunityResult & { matchedRole?: string }>, origin: "exact") => {
+    for (const j of list) {
+      if (!j.url) continue;
+      // First-writer wins is fine here because per-role results are the
+      // strongest signal; later per-role queries for OTHER target roles
+      // that also happen to match this job add nothing new.
+      if (!tagged.has(j.url)) tagged.set(j.url, { ...j, queryOrigin: origin });
+    }
+  };
+  const addSecondary = (list: typeof adjacentRaw, origin: "adjacent" | "skills") => {
     for (const j of list) {
       if (!j.url) continue;
       if (!tagged.has(j.url)) tagged.set(j.url, { ...j, queryOrigin: origin });
     }
   };
-  add(exactRaw, "exact");
-  add(adjacentRaw, "adjacent");
-  add(skillRaw, "skills");
+  for (const per of perRoleResults) addExact(per, "exact");
+  addSecondary(adjacentRaw, "adjacent");
+  addSecondary(skillRaw, "skills");
 
   // 5. Client-side exclusion pass
   const titleExc = exclusions.excludeTitleKeywords.map(k => k.toLowerCase());
@@ -129,8 +143,13 @@ export async function curateForYou(
     } as ScoredOpportunity & { _senFits?: boolean };
   });
 
-  // 7. Tier classification
-  const tiers = classifyIntoTiers(scored);
+  // 7. Task 4 — dedupe by URL keeping highest fit_score. When the same
+  //    job matched via multiple per-role queries, only the strongest
+  //    signal survives so tier classification isn't polluted with dupes.
+  const deduped = dedupeByUrlKeepHighestScore(scored);
+
+  // 8. Tier classification
+  const tiers = classifyIntoTiers(deduped);
 
   // 8. Explanations
   const tierExplanations = {
@@ -142,13 +161,30 @@ export async function curateForYou(
   return {
     ...tiers,
     tierExplanations,
-    totalCandidates: scored.length,
+    totalCandidates: deduped.length,
     metadata: {
       expandedRoles,
       skillsUsed:        skills.coreSkills,
       exclusionsApplied: exclusions.excludeCompanies.length + exclusions.excludeTitleKeywords.length,
     },
   };
+}
+
+// ── fix/jobs-per-role-scoring Task 4 — dedupe helper ────────────────────
+/**
+ * When multiple per-role queries return the same job URL, keep the row
+ * whose fit_score is highest so the best signal wins.
+ */
+export function dedupeByUrlKeepHighestScore<T extends { url?: string; fit_score?: number | null }>(jobs: T[]): T[] {
+  const map = new Map<string, T>();
+  for (const j of jobs) {
+    if (!j.url) continue;
+    const existing = map.get(j.url);
+    if (!existing || (j.fit_score ?? 0) > (existing.fit_score ?? 0)) {
+      map.set(j.url, j);
+    }
+  }
+  return Array.from(map.values());
 }
 
 // ── Tier classifier ─────────────────────────────────────────────────────
