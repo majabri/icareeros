@@ -19,7 +19,7 @@ import {
 
 const CRITICAL_ENDPOINTS = [
   { name: "health",    path: "/api/health",                            timeoutMs: 5_000 },
-  { name: "supabase",  path: "/api/health",                            timeoutMs: 5_000 }, // fallback — true Supabase ping is the body inside /api/health
+  { name: "supabase",  path: "/api/health?deep=1",                     timeoutMs: 5_000 }, // ?deep=1 makes /api/health run a real Supabase auth probe (PR fix, 2026-07-04)
   { name: "landing",   path: "/",                                       timeoutMs: 8_000 },
   { name: "dashboard", path: "/auth/login",                             timeoutMs: 8_000 },
   { name: "legal",     path: "/legal/privacy",                          timeoutMs: 8_000 },
