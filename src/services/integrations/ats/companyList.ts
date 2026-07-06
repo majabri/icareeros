@@ -183,6 +183,21 @@ export const WORKDAY_COMPANIES: WorkdayCompany[] = [
   { name: "KLA",           slug: "kla",           shard: "wd1",  site: "Search",                industry: "tech",     size: "enterprise" },
   { name: "Salesforce",    slug: "salesforce",    shard: "wd12", site: "External_Career_Site",  industry: "tech",     size: "enterprise" },
   { name: "Adobe",         slug: "adobe",         shard: "wd5",  site: "external_experienced",  industry: "tech",     size: "enterprise" },
+  // ── feat/jobs-expand-workday-smartrecruiters additions ──
+  { name: 'Accenture'                     , slug: 'accenture'             , shard: 'wd103' , site: 'AccentureCareers'              , industry: 'consulting'  , size: 'enterprise' },   // verified 2026-07-06: 2000 jobs
+  { name: 'Boeing'                        , slug: 'boeing'                , shard: 'wd1'   , site: 'EXTERNAL_CAREERS'              , industry: 'other'       , size: 'enterprise' },   // verified 2026-07-06: 1018 jobs
+  { name: 'Capital One'                   , slug: 'capitalone'            , shard: 'wd12'  , site: 'Capital_One'                   , industry: 'finance'     , size: 'enterprise' },   // verified 2026-07-06: 1431 jobs
+  { name: 'CVS Health'                    , slug: 'cvshealth'             , shard: 'wd1'   , site: 'CVS_Health_Careers'            , industry: 'healthcare'  , size: 'enterprise' },   // verified 2026-07-06: 16603 jobs
+  { name: 'Disney'                        , slug: 'disney'                , shard: 'wd5'   , site: 'disneycareer'                  , industry: 'media'       , size: 'enterprise' },   // verified 2026-07-06: 613 jobs
+  { name: 'HPE'                           , slug: 'hpe'                   , shard: 'wd5'   , site: 'Jobsathpe'                     , industry: 'tech'        , size: 'enterprise' },   // verified 2026-07-06: 1174 jobs
+  { name: 'Intel'                         , slug: 'intel'                 , shard: 'wd1'   , site: 'External'                      , industry: 'tech'        , size: 'enterprise' },   // verified 2026-07-06: 626 jobs
+  { name: 'Mastercard'                    , slug: 'mastercard'            , shard: 'wd1'   , site: 'CorporateCareers'              , industry: 'finance'     , size: 'enterprise' },   // verified 2026-07-06: 1148 jobs
+  { name: 'Morgan Stanley'                , slug: 'ms'                    , shard: 'wd5'   , site: 'External'                      , industry: 'finance'     , size: 'enterprise' },   // verified 2026-07-06: 1354 jobs
+  { name: 'Pfizer'                        , slug: 'pfizer'                , shard: 'wd1'   , site: 'PfizerCareers'                 , industry: 'healthcare'  , size: 'mid'        },   // verified 2026-07-06: 495 jobs
+  { name: 'PwC'                           , slug: 'pwc'                   , shard: 'wd3'   , site: 'Global_Experienced_Careers'    , industry: 'consulting'  , size: 'enterprise' },   // verified 2026-07-06: 4403 jobs
+  { name: 'State Street'                  , slug: 'statestreet'           , shard: 'wd1'   , site: 'Global'                        , industry: 'finance'     , size: 'enterprise' },   // verified 2026-07-06: 1068 jobs
+  { name: 'Target'                        , slug: 'target'                , shard: 'wd5'   , site: 'targetcareers'                 , industry: 'retail'      , size: 'enterprise' },   // verified 2026-07-06: 2000 jobs
+  { name: 'Travelers'                     , slug: 'travelers'             , shard: 'wd5'   , site: 'External'                      , industry: 'finance'     , size: 'mid'        },   // verified 2026-07-06: 322 jobs
 ];
 
 // ── Workable (apply.workable.com widget API) ─────────────────────────────
@@ -206,6 +221,11 @@ export const RECRUITEE_COMPANIES: AtsCompany[] = [
 // endpoint. Others require an API token. Slugs verified live.
 export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
   { name: "Visa",          slug: "Visa",          industry: "finance",   size: "enterprise" },
+  // ── feat/jobs-expand-workday-smartrecruiters additions ──
+  { name: 'ASOS'                , slug: 'ASOS'                      , industry: 'other'       , size: 'smb'        },   // verified 2026-07-06: 57 jobs
+  { name: 'Bosch'               , slug: 'BoschGroup'                , industry: 'other'       , size: 'enterprise' },   // verified 2026-07-06: 4669 jobs
+  { name: 'Delivery Hero'       , slug: 'DeliveryHero'              , industry: 'other'       , size: 'enterprise' },   // verified 2026-07-06: 1123 jobs
+  { name: 'Dominos'             , slug: 'Dominos'                   , industry: 'other'       , size: 'enterprise' },   // verified 2026-07-06: 24454 jobs
 ];
 
 // ── Breezy (per-tenant subdomain) ────────────────────────────────────────
