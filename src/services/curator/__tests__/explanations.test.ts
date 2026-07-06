@@ -39,7 +39,8 @@ function scored(pfs: Partial<ProfileFitScore["signals"]> & { fit_score?: number 
 describe("generateTierExplanation", () => {
   it("mentions the target role + top skills + seniority for strongMatch", () => {
     const txt = generateTierExplanation("strongMatch", [scored(), scored()], profile, skills);
-    expect(txt).toContain("Director of Security");
+    // fix/jobs-per-role-scoring — tier now names the actually-matched role from targetRoleBestMatch.
+    expect(txt).toContain("CISO");
     expect(txt).toContain("Python, AWS, GRC");
     expect(txt).toContain("director");
     expect(txt).toMatch(/^2 roles closely aligned/);
@@ -49,7 +50,8 @@ describe("generateTierExplanation", () => {
   });
   it("stretch copy mentions trajectory toward target role", () => {
     const txt = generateTierExplanation("stretch", [scored()], profile, skills);
-    expect(txt).toContain("Director of Security");
+    // fix/jobs-per-role-scoring — stretch copy now uses targetRoleBestMatch.
+    expect(txt).toContain("CISO");
     expect(txt).toContain("stretch");
   });
 });
@@ -65,7 +67,8 @@ describe("generateJobReasoning", () => {
   });
   it("adjacent role → 'Adjacent to your Director of Security'", () => {
     const txt = generateJobReasoning(scored({ targetRoleSignal: "adjacent" }), profile);
-    expect(txt).toContain("Adjacent to your Director of Security");
+    // fix/jobs-per-role-scoring — Adjacent uses matched role from targetRoleBestMatch.
+    expect(txt).toContain("Adjacent to CISO");
   });
   it("seniority match line included", () => {
     const txt = generateJobReasoning(scored(), profile);
