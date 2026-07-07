@@ -1,5 +1,6 @@
 /**
  * feat/jobs-expand-workday-smartrecruiters — company list integrity tests.
+ * fix/jobs-ingest-adapter-bugs — floors adjusted after live-audit pruned 17 dead slugs.
  * Prevents accidental deletions + shape drift after future expansions.
  */
 import { describe, it, expect } from "vitest";
@@ -14,13 +15,13 @@ import {
 
 describe("companyList — floor counts (regression guards)", () => {
   it("GREENHOUSE_COMPANIES has at least 50 verified entries", () => {
-    expect(GREENHOUSE_COMPANIES.length).toBeGreaterThanOrEqual(50);
+    expect(GREENHOUSE_COMPANIES.length).toBeGreaterThanOrEqual(55);
   });
   it("LEVER_COMPANIES has at least 15 verified entries", () => {
     expect(LEVER_COMPANIES.length).toBeGreaterThanOrEqual(15);
   });
   it("ASHBY_COMPANIES has at least 30 verified entries", () => {
-    expect(ASHBY_COMPANIES.length).toBeGreaterThanOrEqual(30);
+    expect(ASHBY_COMPANIES.length).toBeGreaterThanOrEqual(25);
   });
   it("WORKDAY_COMPANIES has at least 15 verified entries", () => {
     expect(WORKDAY_COMPANIES.length).toBeGreaterThanOrEqual(15);
@@ -29,7 +30,7 @@ describe("companyList — floor counts (regression guards)", () => {
     expect(SMARTRECRUITERS_COMPANIES.length).toBeGreaterThanOrEqual(4);
   });
   it("totalCuratedCompanies is at least 130", () => {
-    expect(totalCuratedCompanies()).toBeGreaterThanOrEqual(130);
+    expect(totalCuratedCompanies()).toBeGreaterThanOrEqual(120);
   });
 });
 

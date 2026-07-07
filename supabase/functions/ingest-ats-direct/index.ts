@@ -1,15 +1,13 @@
 /**
  * feat/jobs-ats-aggregation Phase 2 — ingest-ats-direct edge function.
- * feat/jobs-ingest-workday-smartrecruiters — v3: adds Workday CXS + SR
- * fan-out and syncs the hardcoded slug lists to companyList.ts contents.
+ * fix/jobs-ingest-adapter-bugs (v4) — Platform's PR #363 deploy report:
+ *   Bug 1  SmartRecruiters ?embed=jobAd so applyUrl is populated
+ *   Bug 2A fetchJsonWithLogging surfaces non-200s per source per slug
+ *   Bug 2B 17 dead slugs pruned (verified via curl at PR time)
+ *   Bug 3  Workday tenants parallelized batch=4 + MAX_PAGES_PER_TENANT=15
+ *   Bug 4  Rolled-up `inserted` + `errors` at top level of response
  *
- * Runs every ~4h (via pg_cron or the Supabase scheduler) to refresh the
- * public.ats_jobs table with every open posting on the curated ATS
- * company list. The function fans out at BATCH_SIZE parallel requests
- * to avoid stampeding any single ATS host. Never throws — all
- * per-tenant failures degrade to a logged error in the response body.
- *
- * Deploy:  supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
+ * Deploy: supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
  * Trigger: POST https://{project}.supabase.co/functions/v1/ingest-ats-direct
  */
 // deno-lint-ignore-file no-explicit-any
@@ -18,17 +16,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 20;                // Greenhouse/Lever/Ashby fetch batch
 const FETCH_TIMEOUT_MS = 10_000;
-const WD_PAGE_DELAY_MS = 200;   // rate-limit between Workday pages per tenant
+const WD_PAGE_DELAY_MS = 100;         // Bug 3 — was 200
+const WD_TENANT_BATCH  = 4;           // Bug 3 — parallel tenants per batch
+const WD_MAX_PAGES_PER_TENANT = 15;   // Bug 3 — cap per tenant
+const WD_PAGE_SIZE = 20;
+const SR_PAGE_SIZE = 100;
+const SR_MAX_PAGES = 30;
 
-// ── Company lists — kept in sync with src/services/integrations/ats/companyList.ts ──
+// ── Company lists — synced to companyList.ts (dead slugs pruned) ────────
 
 const GREENHOUSE: string[] = [
-  "airbnb","instacart","doordash","lyft","robinhood",
-  "coinbase","stripe","discord","datadoghq","elastic",
-  "gitlab","twilio","shopify","atlassian","asana",
-  "reddit","pinterest","squarespace","snowflakecomputing","okta",
+  "airbnb","instacart","lyft","robinhood","coinbase",
+  "stripe","discord","elastic","gitlab","twilio",
+  "asana","reddit","pinterest","squarespace","okta",
   "carta","betterment","marqeta","nubank","toast",
   "sofi","affirm","chime","jumptrading","akunacapital",
   "virtu","honor","imc","onemedical","oscar",
@@ -40,18 +42,15 @@ const GREENHOUSE: string[] = [
 ];
 
 const LEVER: string[] = [
-  "netflix","spotify","rippling","ramp","scale",
-  "anthropic","openai","huggingface","perplexity","linear",
-  "vercel","supabase","replit","notion","figma",
-  "loom","miro","framer","raycast","arc",
-  "palantir"
+  "spotify","rippling","ramp","scale","anthropic",
+  "openai","huggingface","perplexity","linear","vercel",
+  "supabase","replit","notion","figma","loom",
+  "miro","framer","raycast","arc"
 ];
 
 const ASHBY: string[] = [
-  "ramp","linear","vanta","modal","deel",
-  "mercury","brex","warpdotdev","attio","prisma",
-  "tigerbeetle","render","fly","convex","neon",
-  "browserbase","trigger","windsurf","cursor","method",
+  "ramp","linear","vanta","modal","attio",
+  "render","neon","browserbase","cursor","method",
   "persona","column","abridge","writer","character",
   "midjourney","posthog","photoroom","resend","langchain",
   "cohere","elevenlabs","kalshi","whoop","drata"
@@ -84,10 +83,16 @@ const SMARTRECRUITERS: string[] = [
 // ── Common helpers ──────────────────────────────────────────────────────
 
 function stripHtml(s: string): string {
-  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return (s ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T | null> {
+/**
+ * Bug 2A — fetch helper that logs every non-2xx into the shared errors[]
+ * so we can see which specific slugs are dying, instead of silently
+ * treating them as "no jobs".
+ */
+async function fetchJsonWithLogging<T>(url: string, source: string, slug: string, errors: string[], init: RequestInit = {}): Promise<T | null> {
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
@@ -97,12 +102,16 @@ async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T | nu
       signal: ctl.signal,
     });
     clearTimeout(t);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      errors.push(`${source}:${slug}:HTTP ${res.status}`);
+      return null;
+    }
     return (await res.json()) as T;
-  } catch { return null; }
+  } catch (err) {
+    errors.push(`${source}:${slug}:${(err as Error).message}`);
+    return null;
+  }
 }
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // ── Greenhouse ──────────────────────────────────────────────────────────
 
@@ -112,7 +121,10 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
   for (let i = 0; i < GREENHOUSE.length; i += BATCH_SIZE) {
     const batch = GREENHOUSE.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
-      const data = await fetchJson<{ jobs?: any[] }>(`https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`);
+      const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
+        `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`,
+        "greenhouse", slug, errors,
+      );
       const jobs = data?.jobs ?? [];
       const rows = jobs.filter((j: any) => j.absolute_url).map((j: any) => ({
         source: "greenhouse",
@@ -150,7 +162,10 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
   for (let i = 0; i < LEVER.length; i += BATCH_SIZE) {
     const batch = LEVER.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
-      const postings = (await fetchJson<any[]>(`https://api.lever.co/v0/postings/${slug}?mode=json`)) ?? [];
+      const postings = (await fetchJsonWithLogging<any[]>(
+        `https://api.lever.co/v0/postings/${slug}?mode=json`,
+        "lever", slug, errors,
+      )) ?? [];
       const rows = postings.filter((p: any) => p.hostedUrl).map((p: any) => ({
         source: "lever",
         external_id: p.id,
@@ -187,7 +202,10 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
   for (let i = 0; i < ASHBY.length; i += BATCH_SIZE) {
     const batch = ASHBY.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
-      const data = await fetchJson<{ jobs?: any[] }>(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
+      const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
+        `https://api.ashbyhq.com/posting-api/job-board/${slug}`,
+        "ashby", slug, errors,
+      );
       const jobs = data?.jobs ?? [];
       const rows = jobs.filter((j: any) => j.jobUrl).map((j: any) => ({
         source: "ashby",
@@ -217,128 +235,135 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
   return { upserted, errors };
 }
 
-// ── Workday CXS ─────────────────────────────────────────────────────────
+// ── Workday CXS — Bug 3: parallel tenant batches ────────────────────────
 
-/**
- * Workday tenant fetcher. Paginates through all pages of `.jobPostings[]`
- * (up to a hard cap of 20 pages) and upserts rows. Descriptions are NOT
- * fetched during ingest — the enrichment cron picks up the row and
- * resolves the direct URL + skills etc. later.
- */
 export function buildWorkdayUrl(tenant: string, shard: string, site: string): string {
   return `https://${tenant}.${shard}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
 }
-
 export function workdayApplyUrl(tenant: string, shard: string, site: string, externalPath: string): string {
   return `https://${tenant}.${shard}.myworkdayjobs.com/${site}${externalPath}`;
+}
+
+async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; site: string }, supabase: any, errors: string[]): Promise<number> {
+  const url = buildWorkdayUrl(t.tenant, t.shard, t.site);
+  let offset = 0, upserted = 0;
+  for (let page = 0; page < WD_MAX_PAGES_PER_TENANT; page++) {
+    const data = await fetchJsonWithLogging<any>(url, "workday", t.tenant, errors, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appliedFacets: {}, limit: WD_PAGE_SIZE, offset, searchText: "" }),
+    });
+    const postings: any[] = data?.jobPostings ?? [];
+    if (postings.length === 0) break;
+    const rows = postings.map((p: any) => {
+      const externalPath = p.externalPath ?? "";
+      if (!externalPath) return null;
+      return {
+        source: "workday",
+        external_id: `${t.tenant}:${externalPath}`,
+        company: t.tenant,
+        title: (p.title || "").trim(),
+        location: p.locationsText ?? null,
+        description: "",
+        apply_url: workdayApplyUrl(t.tenant, t.shard, t.site, externalPath),
+        posted_at: null,
+        remote: /remote/i.test(p.locationsText ?? "") || /remote/i.test(p.title ?? ""),
+        raw: p,
+        last_seen_at: new Date().toISOString(),
+        is_active: true,
+        enrichment_status: "pending",
+      };
+    }).filter((r: any) => r !== null);
+    if (rows.length > 0) {
+      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      if (error) { errors.push(`workday:${t.tenant}:${error.message}`.slice(0, 200)); break; }
+      upserted += rows.length;
+    }
+    if (postings.length < WD_PAGE_SIZE) break;
+    offset += WD_PAGE_SIZE;
+    await sleep(WD_PAGE_DELAY_MS);
+  }
+  return upserted;
+}
+
+export function chunkWorkdayTenants<T>(tenants: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < tenants.length; i += size) out.push(tenants.slice(i, i + size));
+  return out;
 }
 
 async function ingestWorkday(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
   const errors: string[] = [];
-  const WD_PAGE_SIZE = 20;
-  const WD_MAX_PAGES = 20;
-  for (const tenant of WORKDAY) {
-    const url = buildWorkdayUrl(tenant.tenant, tenant.shard, tenant.site);
-    let offset = 0;
-    try {
-      for (let page = 0; page < WD_MAX_PAGES; page++) {
-        const body = { appliedFacets: {}, limit: WD_PAGE_SIZE, offset, searchText: "" };
-        const data = await fetchJson<any>(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const postings: any[] = data?.jobPostings ?? [];
-        if (postings.length === 0) break;
-
-        const rows = postings.map((p: any) => {
-          const externalPath = p.externalPath ?? "";
-          const applyUrl = externalPath ? workdayApplyUrl(tenant.tenant, tenant.shard, tenant.site, externalPath) : null;
-          if (!applyUrl) return null;
-          return {
-            source: "workday",
-            external_id: `${tenant.tenant}:${externalPath}`,
-            company: tenant.tenant,
-            title: (p.title || "").trim(),
-            location: p.locationsText ?? null,
-            description: "", // populated by enrichment
-            apply_url: applyUrl,
-            posted_at: null,
-            remote: /remote/i.test(p.locationsText ?? "") || /remote/i.test(p.title ?? ""),
-            raw: p,
-            last_seen_at: new Date().toISOString(),
-            is_active: true,
-            enrichment_status: "pending",
-          };
-        }).filter((r: any) => r !== null);
-
-        if (rows.length > 0) {
-          const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-          if (error) { errors.push(`wd:${tenant.tenant}:${error.message}`.slice(0, 200)); break; }
-          upserted += rows.length;
-        }
-        if (postings.length < WD_PAGE_SIZE) break;
-        offset += WD_PAGE_SIZE;
-        await sleep(WD_PAGE_DELAY_MS);
-      }
-    } catch (e) {
-      errors.push(`wd:${tenant.tenant}:${(e as Error).message}`.slice(0, 200));
+  for (const batch of chunkWorkdayTenants(WORKDAY, WD_TENANT_BATCH)) {
+    const results = await Promise.allSettled(batch.map(t => ingestSingleWorkdayTenant(t, supabase, errors)));
+    for (const r of results) {
+      if (r.status === "fulfilled") upserted += r.value;
+      else errors.push(String(r.reason).slice(0, 200));
     }
   }
   return { upserted, errors };
 }
 
-// ── SmartRecruiters ─────────────────────────────────────────────────────
+// ── SmartRecruiters — Bug 1: ?embed=jobAd ───────────────────────────────
+
+export function buildSmartRecruitersUrl(slug: string, offset: number, limit = SR_PAGE_SIZE): string {
+  return `https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=${limit}&offset=${offset}&embed=jobAd`;
+}
+
+export function srLocationString(loc: any): string | null {
+  if (!loc?.city) return null;
+  return `${loc.city}${loc.country ? ", " + loc.country : ""}`;
+}
 
 async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
   const errors: string[] = [];
-  const SR_PAGE_SIZE = 100;
-  const SR_MAX_PAGES = 30;
   for (const slug of SMARTRECRUITERS) {
     let offset = 0;
-    try {
-      for (let page = 0; page < SR_MAX_PAGES; page++) {
-        const listUrl = `https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=${SR_PAGE_SIZE}&offset=${offset}`;
-        const data = await fetchJson<any>(listUrl);
-        const postings: any[] = data?.content ?? [];
-        if (postings.length === 0) break;
-
-        // Batch details in parallel (small — 100 per page)
-        const rows = postings.filter((p: any) => p.id && p.applyUrl).map((p: any) => ({
+    for (let page = 0; page < SR_MAX_PAGES; page++) {
+      const data = await fetchJsonWithLogging<any>(
+        buildSmartRecruitersUrl(slug, offset),
+        "smartrecruiters", slug, errors,
+      );
+      const postings: any[] = data?.content ?? [];
+      if (postings.length === 0) break;
+      const rows = postings.map((p: any) => {
+        // Bug 1 — with ?embed=jobAd, applyUrl is populated. Fallback
+        // constructs the standard jobs.smartrecruiters.com URL.
+        const applyUrl = p.applyUrl ?? p.postingUrl
+                       ?? `https://jobs.smartrecruiters.com/${slug}/${p.id}`;
+        if (!p.id) return null;
+        return {
           source: "smartrecruiters",
-          external_id: p.id,
+          external_id: `${slug}:${p.id}`,
           company: slug,
           title: (p.name || "").trim(),
-          location: p.location?.city ? `${p.location.city}${p.location.country ? ", " + p.location.country : ""}` : null,
-          description: "", // enrichment fills this
-          apply_url: p.applyUrl ?? p.postingUrl,
+          location: srLocationString(p.location),
+          description: stripHtml(p.jobAd?.sections?.jobDescription?.text ?? ""),
+          apply_url: applyUrl,
           posted_at: p.releasedDate ?? p.createdOn ?? null,
           remote: !!p.location?.remote,
           raw: p,
           last_seen_at: new Date().toISOString(),
           is_active: true,
           enrichment_status: "pending",
-        }));
-
-        if (rows.length > 0) {
-          const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-          if (error) { errors.push(`sr:${slug}:${error.message}`.slice(0, 200)); break; }
-          upserted += rows.length;
-        }
-        if (postings.length < SR_PAGE_SIZE) break;
-        offset += SR_PAGE_SIZE;
-        await sleep(WD_PAGE_DELAY_MS);
+        };
+      }).filter((r: any) => r !== null);
+      if (rows.length > 0) {
+        const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+        if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
+        upserted += rows.length;
       }
-    } catch (e) {
-      errors.push(`sr:${slug}:${(e as Error).message}`.slice(0, 200));
+      if (postings.length < SR_PAGE_SIZE) break;
+      offset += SR_PAGE_SIZE;
+      await sleep(WD_PAGE_DELAY_MS);
     }
   }
   return { upserted, errors };
 }
 
-// ── HTTP entrypoint ─────────────────────────────────────────────────────
+// ── HTTP entrypoint — Bug 4: rolled-up inserted + errors ────────────────
 
 serve(async (_req) => {
   const startTime = Date.now();
@@ -347,12 +372,8 @@ serve(async (_req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-
     const runStartedAt = new Date().toISOString();
 
-    // feat/jobs-ingest-workday-smartrecruiters — fan out across all 5
-    // sources in parallel via Promise.allSettled so a slow Workday tenant
-    // can't block a fast Greenhouse response.
     const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
       ingestGreenhouse(supabase),
       ingestLever(supabase),
@@ -366,7 +387,6 @@ serve(async (_req) => {
     const gh = unwrap(ghRes), lever = unwrap(leverRes), ashby = unwrap(ashbyRes);
     const workday = unwrap(wdRes), smartrecruiters = unwrap(srRes);
 
-    // Deactivate postings not seen in ~48h. Non-fatal on failure.
     let deactivated = 0;
     try {
       const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
@@ -379,7 +399,11 @@ serve(async (_req) => {
       deactivated = count ?? 0;
     } catch (_e) { /* best-effort */ }
 
-    const totalIngested = gh.upserted + lever.upserted + ashby.upserted + workday.upserted + smartrecruiters.upserted;
+    // Bug 4 — rolled-up counts at top level so the cron caller reads
+    // result.inserted + result.errors instead of digging into per-source.
+    const totalUpserted = gh.upserted + lever.upserted + ashby.upserted + workday.upserted + smartrecruiters.upserted;
+    const totalErrors   = gh.errors.length + lever.errors.length + ashby.errors.length + workday.errors.length + smartrecruiters.errors.length;
+
     const combinedErrors = [
       ...gh.errors.map(e             => ({ source: "greenhouse",      error: e })),
       ...lever.errors.map(e          => ({ source: "lever",           error: e })),
@@ -387,29 +411,31 @@ serve(async (_req) => {
       ...workday.errors.map(e        => ({ source: "workday",         error: e })),
       ...smartrecruiters.errors.map(e=> ({ source: "smartrecruiters", error: e })),
     ];
+
     const body = {
-      success:  true,
       ok:       true,
-      ingested: totalIngested,
-      updated:  0,
-      deactivated,
-      sources: {
-        greenhouse:      gh.upserted,
-        lever:           lever.upserted,
-        ashby:           ashby.upserted,
-        workday:         workday.upserted,
-        smartrecruiters: smartrecruiters.upserted,
-      },
-      // Compact per-source shape the brief asked for
-      greenhouse:      { upserted: gh.upserted,             errors: gh.errors.length },
-      lever:           { upserted: lever.upserted,          errors: lever.errors.length },
-      ashby:           { upserted: ashby.upserted,          errors: ashby.errors.length },
-      workday:         { upserted: workday.upserted,        errors: workday.errors.length },
-      smartrecruiters: { upserted: smartrecruiters.upserted, errors: smartrecruiters.errors.length },
-      duration_ms: Date.now() - startTime,
-      errors: combinedErrors,
+      success:  true,
       runStartedAt,
       finishedAt: new Date().toISOString(),
+      duration_ms: Date.now() - startTime,
+      // Bug 4 — rolled-up counts for cron logging
+      inserted: totalUpserted,
+      updated:  0,
+      errors:   totalErrors,
+      deactivated,
+      // Per-source detail
+      greenhouse:      { upserted: gh.upserted,              errors: gh.errors.length },
+      lever:           { upserted: lever.upserted,           errors: lever.errors.length },
+      ashby:           { upserted: ashby.upserted,           errors: ashby.errors.length },
+      workday:         { upserted: workday.upserted,         errors: workday.errors.length },
+      smartrecruiters: { upserted: smartrecruiters.upserted, errors: smartrecruiters.errors.length },
+      // Aggregate for the older cron path
+      sources: {
+        greenhouse: gh.upserted, lever: lever.upserted, ashby: ashby.upserted,
+        workday: workday.upserted, smartrecruiters: smartrecruiters.upserted,
+      },
+      errorDetails: combinedErrors,
+      ingested: totalUpserted,
     };
     return new Response(JSON.stringify(body, null, 2), {
       headers: { "Content-Type": "application/json" },
