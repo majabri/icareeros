@@ -37,9 +37,19 @@ interface IngestResponse {
   deactivated:  number;
   sources:      Record<string, number>;
   duration_ms:  number;
-  errors:       Array<{ source: string; company?: string; error: string }>;
+  errors:       number | Array<{ source: string; company?: string; error: string }>;
   runStartedAt?: string;
   finishedAt?:  string;
+  // fix/jobs-ingest-adapter-bugs Bug 4 — rolled-up counts + per-source
+  // detail. The edge function returns both `errors` as a number (rolled)
+  // and `errorDetails` as an array.
+  inserted?:    number;
+  errorDetails?: Array<{ source: string; company?: string; error: string }>;
+  greenhouse?:      { upserted: number; errors: number };
+  lever?:           { upserted: number; errors: number };
+  ashby?:           { upserted: number; errors: number };
+  workday?:         { upserted: number; errors: number };
+  smartrecruiters?: { upserted: number; errors: number };
 }
 
 export async function POST(req: NextRequest) {
@@ -86,14 +96,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sourceBreakdown = json?.sources
-      ? Object.entries(json.sources).map(([s, n]) => `${s}=${n}`).join(" ")
-      : "";
+    // fix/jobs-ingest-adapter-bugs Bug 4 — new log line reads the rolled-up
+    // `inserted`/`errors` from the edge function's v4 response, with the
+    // per-source detail in brackets.
+    const totalIngested = json?.inserted ?? json?.ingested ?? 0;
+    const totalErrors   = typeof json?.errors === "number" ? json.errors
+                        : (Array.isArray(json?.errors) ? json.errors.length : 0);
+    const perSourceParts = [
+      json?.greenhouse      ? `gh=${json.greenhouse.upserted}(err=${json.greenhouse.errors})`         : null,
+      json?.lever           ? `lev=${json.lever.upserted}(err=${json.lever.errors})`                  : null,
+      json?.ashby           ? `ash=${json.ashby.upserted}(err=${json.ashby.errors})`                  : null,
+      json?.workday         ? `wd=${json.workday.upserted}(err=${json.workday.errors})`               : null,
+      json?.smartrecruiters ? `sr=${json.smartrecruiters.upserted}(err=${json.smartrecruiters.errors})` : null,
+    ].filter(Boolean);
     console.info(
-      `[cron/ingest-ats] ok in ${elapsedMs}ms — ingested=${json?.ingested ?? "?"} ` +
-      `updated=${json?.updated ?? "?"} deactivated=${json?.deactivated ?? "?"} ` +
-      `errors=${json?.errors?.length ?? 0} ` +
-      (sourceBreakdown ? `[${sourceBreakdown}]` : "")
+      `[cron/ingest-ats] ok in ${elapsedMs}ms — ingested=${totalIngested} ` +
+      `deactivated=${json?.deactivated ?? 0} errors=${totalErrors} ` +
+      `[${perSourceParts.join(" ")}]`
     );
     return NextResponse.json({ ok: true, elapsedMs, result: json ?? null });
   } catch (e) {

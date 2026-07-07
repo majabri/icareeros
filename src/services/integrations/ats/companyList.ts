@@ -49,23 +49,18 @@ export interface WorkdayCompany extends AtsCompany {
 export const GREENHOUSE_COMPANIES: AtsCompany[] = [
   { name: "Airbnb",        slug: "airbnb",             industry: "tech",      size: "enterprise" },
   { name: "Instacart",     slug: "instacart",          industry: "tech",      size: "enterprise" },
-  { name: "DoorDash",      slug: "doordash",           industry: "tech",      size: "enterprise" },
   { name: "Lyft",          slug: "lyft",               industry: "tech",      size: "enterprise" },
   { name: "Robinhood",     slug: "robinhood",          industry: "finance",   size: "enterprise" },
   { name: "Coinbase",      slug: "coinbase",           industry: "finance",   size: "enterprise" },
   { name: "Stripe",        slug: "stripe",             industry: "finance",   size: "enterprise" },
   { name: "Discord",       slug: "discord",            industry: "tech",      size: "mid" },
-  { name: "Datadog",       slug: "datadoghq",          industry: "tech",      size: "enterprise" },
   { name: "Elastic",       slug: "elastic",            industry: "tech",      size: "enterprise" },
   { name: "GitLab",        slug: "gitlab",             industry: "tech",      size: "enterprise" },
   { name: "Twilio",        slug: "twilio",             industry: "tech",      size: "enterprise" },
-  { name: "Shopify",       slug: "shopify",            industry: "tech",      size: "enterprise" },
-  { name: "Atlassian",     slug: "atlassian",          industry: "tech",      size: "enterprise" },
   { name: "Asana",         slug: "asana",              industry: "tech",      size: "mid" },
   { name: "Reddit",        slug: "reddit",             industry: "media",     size: "mid" },
   { name: "Pinterest",     slug: "pinterest",          industry: "media",     size: "mid" },
   { name: "Squarespace",   slug: "squarespace",        industry: "tech",      size: "mid" },
-  { name: "Snowflake",     slug: "snowflakecomputing", industry: "tech",      size: "enterprise" },
   { name: "Okta",          slug: "okta",               industry: "tech",      size: "enterprise" },
   // ── feat/jobs-multi-industry-coverage additions ──
   { name: 'Carta'                                 , slug: 'carta'                         , industry: 'finance'     , size: 'smb'        },   // greenhouse: 49 jobs
@@ -112,7 +107,6 @@ export const GREENHOUSE_COMPANIES: AtsCompany[] = [
 
 // ── Lever (api.lever.co) ─────────────────────────────────────────────────
 export const LEVER_COMPANIES: AtsCompany[] = [
-  { name: "Netflix",       slug: "netflix",       industry: "media", size: "enterprise" },
   { name: "Spotify",       slug: "spotify",       industry: "media", size: "enterprise" },
   { name: "Rippling",      slug: "rippling",      industry: "tech",  size: "mid" },
   { name: "Ramp",          slug: "ramp",          industry: "finance", size: "mid" },
@@ -133,7 +127,6 @@ export const LEVER_COMPANIES: AtsCompany[] = [
   { name: "Raycast",       slug: "raycast",       industry: "tech",  size: "startup" },
   { name: "Arc",           slug: "arc",           industry: "tech",  size: "smb" },
   // ── feat/jobs-multi-industry-coverage additions ──
-  { name: 'Palantir'                              , slug: 'palantir'                      , industry: 'consulting'  , size: 'mid'        },   // lever: 275 jobs
 ];
 
 // ── Ashby (api.ashbyhq.com) ──────────────────────────────────────────────
@@ -142,20 +135,10 @@ export const ASHBY_COMPANIES: AtsCompany[] = [
   { name: "Linear",        slug: "linear",        industry: "tech",    size: "startup" },
   { name: "Vanta",         slug: "vanta",         industry: "tech",    size: "mid" },
   { name: "Modal",         slug: "modal",         industry: "tech",    size: "startup" },
-  { name: "Deel",          slug: "deel",          industry: "tech",    size: "mid" },
-  { name: "Mercury",       slug: "mercury",       industry: "finance", size: "mid" },
-  { name: "Brex",          slug: "brex",          industry: "finance", size: "mid" },
-  { name: "Warp",          slug: "warpdotdev",    industry: "tech",    size: "startup" },
   { name: "Attio",         slug: "attio",         industry: "tech",    size: "startup" },
-  { name: "Prisma",        slug: "prisma",        industry: "tech",    size: "startup" },
-  { name: "TigerBeetle",   slug: "tigerbeetle",   industry: "tech",    size: "startup" },
   { name: "Render",        slug: "render",        industry: "tech",    size: "startup" },
-  { name: "Fly.io",        slug: "fly",           industry: "tech",    size: "startup" },
-  { name: "Convex",        slug: "convex",        industry: "tech",    size: "startup" },
   { name: "Neon",          slug: "neon",          industry: "tech",    size: "startup" },
   { name: "Browserbase",   slug: "browserbase",   industry: "tech",    size: "startup" },
-  { name: "Trigger",       slug: "trigger",       industry: "tech",    size: "startup" },
-  { name: "Windsurf",      slug: "windsurf",      industry: "tech",    size: "startup" },
   { name: "Cursor",        slug: "cursor",        industry: "tech",    size: "startup" },
   // ── feat/jobs-multi-industry-coverage additions ──
   { name: 'Method'                                , slug: 'method'                        , industry: 'finance'     , size: 'startup'    },   // ashby: 12 jobs
