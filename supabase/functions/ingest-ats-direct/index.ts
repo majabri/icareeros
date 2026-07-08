@@ -399,6 +399,22 @@ serve(async (_req) => {
       deactivated = count ?? 0;
     } catch (_e) { /* best-effort */ }
 
+    // fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich
+    // pass targeting exec / director / VP / security titles so the newly
+    // ingested rows get classified fast. Generalizable: the filter is a
+    // parameter, not hardcoded here — swap the string for any future
+    // high-value pattern.
+    try {
+      void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chainDepth: 0,
+          priorityTitleFilter: "security|ciso|biso|director|chief|vp|head of",
+        }),
+      }).catch(() => {});
+    } catch { /* silent — never fail ingest on enrich chain */ }
+
     // Bug 4 — rolled-up counts at top level so the cron caller reads
     // result.inserted + result.errors instead of digging into per-source.
     const totalUpserted = gh.upserted + lever.upserted + ashby.upserted + workday.upserted + smartrecruiters.upserted;

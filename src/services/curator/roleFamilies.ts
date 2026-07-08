@@ -42,6 +42,11 @@ export const ROLE_FAMILIES: Record<string, string[]> = {
     "lead security architect", "senior security architect",
     "chief security architect", "staff security architect",
     "enterprise security architect", "cybersecurity architect",
+    // fix/jobs-enrichment-throughput Fix 4 — architect variants where the
+    // "architect" word comes BEFORE "security" (e.g. Elastic's job title
+    // was previously falling out of every security family).
+    "solutions architect security", "security solutions architect",
+    "principal solutions architect security",
   ],
   vp_security: [
     "vp security", "vice president security", "vp information security",

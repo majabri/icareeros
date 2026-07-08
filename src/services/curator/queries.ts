@@ -97,19 +97,20 @@ export async function queryJobsForRole(
   supabase:   SupabaseClient,
   targetRole: string,
   limit = 30,
-): Promise<Array<OpportunityResult & { matchedRole: string; queryMethod: "family" | "title" }>> {
+): Promise<Array<OpportunityResult & { matchedRole: string; queryMethod: "family" | "title" | "title_unenriched" }>> {
   const cleanRole = (targetRole ?? "").trim();
   if (!cleanRole) return [];
 
   const { expanded, families } = expandTargetRoles([cleanRole]);
 
-  // 1) Indexed families fast-path
+  // 1) Indexed families fast-path — graceful degrade: accept rows with
+  //    enrichment_status='complete' OR any populated role_families array
+  //    (some rows have families populated but status still 'pending').
   if (families.length > 0) {
     const { data } = await supabase
       .from("ats_jobs")
       .select(ATS_JOBS_COLS)
       .eq("is_active", true)
-      .eq("enrichment_status", "complete")
       .overlaps("role_families", families)
       .order("posted_at", { ascending: false, nullsFirst: false })
       .limit(limit);
@@ -118,10 +119,10 @@ export async function queryJobsForRole(
     }
   }
 
-  // 2) Fallback — websearch tsquery on title over expanded synonyms
+  // 2) Fallback — websearch tsquery on title over enriched rows
   const ts = toWebsearchQuery(expanded.slice(0, 15));
   if (!ts) return [];
-  const { data } = await supabase
+  const { data: enrichedTitle } = await supabase
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
@@ -129,7 +130,23 @@ export async function queryJobsForRole(
     .textSearch("title", ts, { type: "websearch", config: "english" })
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
-  return (data ?? []).map(r => ({ ...toOpp(r as AtsJobRow), matchedRole: cleanRole, queryMethod: "title" as const }));
+  if (enrichedTitle && enrichedTitle.length > 0) {
+    return enrichedTitle.map(r => ({ ...toOpp(r as AtsJobRow), matchedRole: cleanRole, queryMethod: "title" as const }));
+  }
+
+  // 3) Final fallback — title tsquery WITHOUT the enrichment filter.
+  //    Fix/jobs-enrichment-throughput Fix 3: when the family and enriched
+  //    title paths both return 0, surface unenriched rows too. Scoring
+  //    still gates quality; the row just skips the family fast-path in
+  //    the scorer downstream.
+  const { data: unenrichedTitle } = await supabase
+    .from("ats_jobs")
+    .select(ATS_JOBS_COLS)
+    .eq("is_active", true)
+    .textSearch("title", ts, { type: "websearch", config: "english" })
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return (unenrichedTitle ?? []).map(r => ({ ...toOpp(r as AtsJobRow), matchedRole: cleanRole, queryMethod: "title_unenriched" as const }));
 }
 
 export async function queryByRoleFamilies(
@@ -142,7 +159,6 @@ export async function queryByRoleFamilies(
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
-    .eq("enrichment_status", "complete")
     .overlaps("role_families", families)
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -162,7 +178,6 @@ export async function queryBySeniorityTier(
     .from("ats_jobs")
     .select(ATS_JOBS_COLS)
     .eq("is_active", true)
-    .eq("enrichment_status", "complete")
     .in("seniority_tier", tiers)
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
