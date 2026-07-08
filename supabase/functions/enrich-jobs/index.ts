@@ -130,9 +130,10 @@ async function resolveApplyUrl(applyUrl: string): Promise<{ resolved: string; st
 }
 
 // ── Batch orchestration ─────────────────────────────────────────────────
-const BATCH_SIZE   = 100;
-const WORKER_COUNT = 5;
-const MAX_RETRIES  = 3;
+const BATCH_SIZE       = 250;   // Fix 1 — raised from 100
+const WORKER_COUNT     = 5;
+const MAX_RETRIES      = 3;
+const MAX_CHAIN_DEPTH  = 40;    // Fix 1 — hard stop on self-invoke chain
 
 interface JobRow {
   id: string;
@@ -176,34 +177,93 @@ async function processJob(supabase: any, job: JobRow): Promise<void> {
   await supabase.from("ats_jobs").update(patch).eq("id", job.id);
 }
 
-async function runBatch(supabase: any): Promise<{ processed: number; failed: number; ok: number }> {
-  const { data, error } = await supabase
-    .from("ats_jobs")
-    .select("id, title, description, apply_url, enrichment_retry_count")
-    .eq("enrichment_status", "pending")
-    .eq("is_active", true)
-    .lt("enrichment_retry_count", MAX_RETRIES)
-    .limit(BATCH_SIZE);
-  if (error) throw error;
-  const jobs: JobRow[] = (data ?? []) as JobRow[];
-  let ok = 0, failed = 0;
+async function runBatch(
+  supabase: any,
+  opts: { priorityTitleFilter?: string } = {},
+): Promise<{ processed: number; failed: number; ok: number; remainingPending: number }> {
+  // Fix 2 — priority lane. When priorityTitleFilter is set, we first try
+  // to pull rows whose title matches the regex; if that returns < BATCH_SIZE,
+  // fill with regular pending rows so we never starve the general queue.
+  let priorityRows: JobRow[] = [];
+  if (opts.priorityTitleFilter && opts.priorityTitleFilter.length > 0) {
+    // Postgres regex_matches via .ilike-style OR — pg does not accept a
+    // full regex in supabase-js filters directly, so we split the filter
+    // into OR-joined ilike patterns. Callers pass a "|"-delimited word
+    // list like "security|ciso|director|chief|vp|head of".
+    const orFilter = opts.priorityTitleFilter
+      .split("|")
+      .map(k => k.trim())
+      .filter(Boolean)
+      .map(k => `title.ilike.%${k}%`)
+      .join(",");
+    if (orFilter) {
+      const { data } = await supabase
+        .from("ats_jobs")
+        .select("id, title, description, apply_url, enrichment_retry_count")
+        .eq("enrichment_status", "pending")
+        .eq("is_active", true)
+        .lt("enrichment_retry_count", MAX_RETRIES)
+        .or(orFilter)
+        .limit(BATCH_SIZE);
+      priorityRows = (data ?? []) as JobRow[];
+    }
+  }
 
-  // 5 parallel workers, each pulling from the shared queue
+  let regularRows: JobRow[] = [];
+  const remaining = BATCH_SIZE - priorityRows.length;
+  if (remaining > 0) {
+    // Exclude the priority row ids to avoid double-processing
+    let q = supabase
+      .from("ats_jobs")
+      .select("id, title, description, apply_url, enrichment_retry_count")
+      .eq("enrichment_status", "pending")
+      .eq("is_active", true)
+      .lt("enrichment_retry_count", MAX_RETRIES)
+      .limit(remaining);
+    if (priorityRows.length > 0) {
+      const ids = priorityRows.map(r => r.id).filter(Boolean);
+      if (ids.length > 0) q = q.not("id", "in", `(${ids.join(",")})`);
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    regularRows = (data ?? []) as JobRow[];
+  }
+
+  const jobs = [...priorityRows, ...regularRows];
+  let ok = 0, failed = 0;
   const queue = [...jobs];
   await Promise.all(Array.from({ length: WORKER_COUNT }).map(async () => {
     while (queue.length > 0) {
       const job = queue.shift();
       if (!job) break;
-      try {
-        await processJob(supabase, job);
-        ok++;
-      } catch (_e) {
-        failed++;
-      }
+      try { await processJob(supabase, job); ok++; }
+      catch (_e) { failed++; }
     }
   }));
 
-  return { processed: jobs.length, ok, failed };
+  // Fix 1 — remainingPending for observability + chain gating
+  const { count: remainingCount } = await supabase
+    .from("ats_jobs")
+    .select("id", { count: "estimated", head: true })
+    .eq("enrichment_status", "pending")
+    .eq("is_active", true)
+    .lt("enrichment_retry_count", MAX_RETRIES);
+
+  return { processed: jobs.length, ok, failed, remainingPending: remainingCount ?? 0 };
+}
+
+async function selfInvokeIfPending(chainDepth: number, priorityTitleFilter?: string): Promise<void> {
+  // Fix 1 — fire-and-forget self-invocation to drain the queue in one
+  // 4h cron tick. Cap at MAX_CHAIN_DEPTH so a bug can't create an
+  // infinite chain (40 × 250 rows = 10,000 rows per cron tick).
+  if (chainDepth >= MAX_CHAIN_DEPTH) return;
+  try {
+    void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chainDepth: chainDepth + 1, priorityTitleFilter }),
+    }).catch(() => {});
+  } catch { /* silent — never let self-invoke failure surface */ }
 }
 
 Deno.serve(async (req: Request) => {
@@ -212,17 +272,36 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
+  // Fix 1 + Fix 2 — read chainDepth + priorityTitleFilter from body
+  let chainDepth = 0;
+  let priorityTitleFilter: string | undefined;
+  try {
+    const body = await req.json();
+    if (typeof body?.chainDepth === "number") chainDepth = Math.max(0, body.chainDepth);
+    if (typeof body?.priorityTitleFilter === "string") priorityTitleFilter = body.priorityTitleFilter;
+  } catch { /* no body / not JSON — treat as first tick */ }
+
   try {
     const started = Date.now();
-    const result  = await runBatch(supabase);
+    const result  = await runBatch(supabase, { priorityTitleFilter });
     const durationMs = Date.now() - started;
-    return new Response(JSON.stringify({ ...result, durationMs }), {
+
+    // Fix 1 — self-invoke if pending remains, unless we hit the depth cap.
+    if (result.remainingPending > 0 && result.processed > 0) {
+      await selfInvokeIfPending(chainDepth, priorityTitleFilter);
+    }
+
+    return new Response(JSON.stringify({
+      ...result,
+      chainDepth,
+      durationMs,
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
     console.error("[enrich-jobs] fatal:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(JSON.stringify({ error: String(err), chainDepth }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
