@@ -369,6 +369,16 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
                      focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           placeholder={mode === "signup" ? "At least 8 characters" : "••••••••"}
         />
+        {mode === "login" && (
+          <div className="mt-2 flex justify-end">
+            <a
+              href="/auth/forgot-password"
+              className="text-xs font-medium text-brand-600 hover:text-brand-700"
+            >
+              Forgot password?
+            </a>
+          </div>
+        )}
       </div>
 
       {mode === "signup" && (
