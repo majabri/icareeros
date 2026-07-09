@@ -10,7 +10,7 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       # Tests run against the live Vercel deployment — no local server needed
