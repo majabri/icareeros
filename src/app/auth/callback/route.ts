@@ -21,6 +21,13 @@
  *
  * If the code is missing or the exchange fails, we send the user back to
  * /auth/login with an error query so AuthForm can surface a helpful message.
+ *
+ * Password recovery (2026-07-07):
+ *   - When the caller passes `?type=recovery` (set by
+ *     `resetPasswordForEmail`\'s `redirectTo`), we exchange the code so
+ *     the recovery session is established, then redirect to
+ *     /auth/reset-password. This branch is additive — OAuth (`next=…`)
+ *     and email-confirm (no `next`) paths are unchanged.
  */
 
 import { createServerClient } from "@supabase/ssr";
@@ -37,6 +44,12 @@ export async function GET(req: Request) {
   // force a fresh login. When `next` is provided (OAuth, linked-accounts)
   // we keep the session and forward.
   const explicitNext = url.searchParams.get("next");
+
+  // Password recovery — resetPasswordForEmail sets ?type=recovery on
+  // its redirectTo. After the code exchange we redirect to the
+  // reset-password page WITH the session kept, so `updateUser` can
+  // succeed there.
+  const isRecovery = url.searchParams.get("type") === "recovery";
 
   if (!code) {
     return NextResponse.redirect(
@@ -71,6 +84,14 @@ export async function GET(req: Request) {
         req.url
       )
     );
+  }
+
+  // Password-recovery flow → keep session, forward to /auth/reset-password
+  // where the user submits their new password. Placed BEFORE the
+  // signup-confirmation branch so a recovery link never triggers the
+  // sign-out-on-confirm rule.
+  if (isRecovery) {
+    return NextResponse.redirect(new URL("/auth/reset-password", req.url));
   }
 
   // Signup-confirmation flow → sign out, then bounce to login with banner.
