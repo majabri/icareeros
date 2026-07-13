@@ -11,6 +11,10 @@ import type { SkillsFingerprint } from "./skillsFingerprint";
 export interface ScoredOpportunity extends OpportunityResult {
   profileFitScore?: ProfileFitScore;
   queryOrigin?: "exact" | "adjacent" | "skills";
+  /** fix/jobs-curation-family-precision PR 3 — retrievedFor labels from
+   *  the unified retrieval engine. Each entry is one of the user's raw
+   *  target role strings the job was retrieved for. */
+  retrievedFor?: string[];
 }
 
 export function generateTierExplanation(
@@ -26,12 +30,19 @@ export function generateTierExplanation(
     ? profile.targetSeniority
     : "target";
 
-  // fix/jobs-per-role-scoring Task 6 — surface which target roles are
-  // represented in this tier so users see per-role diversity.
+  // fix/jobs-curation-family-precision PR 3 — enumerate ALL retrievedFor
+  // labels across the tier (from the unified engine) rather than only
+  // the scorer's inferred bestMatch. Prefer retrievedFor when present,
+  // fall back to targetRoleBestMatch for legacy candidates.
   const matched = new Set<string>();
   for (const j of jobs) {
-    const best = j.profileFitScore?.signals?.targetRoleBestMatch;
-    if (best) matched.add(best);
+    const rf = (j as ScoredOpportunity).retrievedFor ?? [];
+    if (rf.length > 0) {
+      for (const label of rf) matched.add(label);
+    } else {
+      const best = j.profileFitScore?.signals?.targetRoleBestMatch;
+      if (best) matched.add(best);
+    }
   }
   const rolesList = Array.from(matched);
   const rolesText = rolesList.length === 0
@@ -65,10 +76,18 @@ export function generateJobReasoning(job: ScoredOpportunity, profile: UserProfil
   const sig = job.profileFitScore?.signals;
   if (!sig) return "";
 
-  // fix/jobs-per-role-scoring Task 5 — name the SPECIFIC matched target
-  // role (from targetRoleBestMatch) rather than always saying "your target".
-  const matchedRole = sig.targetRoleBestMatch || profile.targetRoles[0] || "your target";
-  if (sig.targetRoleSignal === "exact") {
+  // fix/jobs-curation-family-precision PR 3 — prefer retrievedFor (the
+  // exact target title the unified engine matched this job for) over the
+  // legacy scorer signal. If the job carries a retrievedFor label, use
+  // it directly — this is the same title the user typed, verbatim.
+  const retrievedFor = (job as ScoredOpportunity).retrievedFor ?? [];
+  const matchedRole = retrievedFor[0]
+    || sig.targetRoleBestMatch
+    || profile.targetRoles[0]
+    || "your target";
+  if (retrievedFor.length > 0) {
+    parts.push(`Retrieved for ${matchedRole}`);
+  } else if (sig.targetRoleSignal === "exact") {
     parts.push(`Exact match for ${matchedRole}`);
   } else if (sig.targetRoleSignal === "adjacent") {
     parts.push(`Adjacent to ${matchedRole}`);

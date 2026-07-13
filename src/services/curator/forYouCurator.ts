@@ -12,6 +12,8 @@ import {
   queryExactRoleMatches, queryAdjacentTitles, querySkillBasedMatches,
   queryByRoleFamilies, queryJobsForRole,
 } from "./queries";
+import { retrieveByTitle, type Candidate } from "@/services/retrieval/retrieveByTitle";
+import { expandQueries } from "@/services/retrieval/expandQueries";
 import {
   generateTierExplanation, generateJobReasoning, type ScoredOpportunity,
 } from "./explanations";
@@ -64,45 +66,44 @@ export async function curateForYou(
   const skills                       = extractSkillsFingerprint(profile, workExperience);
   const exclusions                   = await buildExclusions(userId, profile, skills, supabase);
 
-  // 3. fix/jobs-per-role-scoring Task 2 — one INDEPENDENT query per
-  //    target role, plus one adjacent + one skill-based fallback query.
-  //    Each per-role result carries a matchedRole tag that
-  //    scoreTargetRoleMatch reads to boost that specific role's score.
-  const { families } = expandTargetRoles(profile.targetRoles);
-  const perRoleQueries = profile.targetRoles.map(role =>
-    queryJobsForRole(supabase, role, 30)
-  );
-  const [perRoleResults, adjacentRaw, skillRaw] = await Promise.all([
-    Promise.all(perRoleQueries),
-    families.length > 0
-      ? queryByRoleFamilies(supabase, families)
-      : queryAdjacentTitles(supabase, expandedRoles),
-    querySkillBasedMatches(supabase, skills.coreSkills.slice(0, 5)),
-  ]);
+  // 3. fix/jobs-curation-family-precision PR 3 — Curation now uses the
+  //    SAME retrieval engine as Search. expandQueries produces one group
+  //    per target role (R2 multi-title first-class); retrieveByTitle
+  //    runs the tsqueries in parallel and unions with retrievedFor
+  //    provenance. NO family fast-path, NO matchedRole tag (the +75
+  //    floor in profileScorer becomes a no-op).
+  //
+  //    Legacy per-role/adjacent/skill queries are kept in ./queries.ts
+  //    for PR 4's deletion sweep; they're not called here anymore.
+  void expandedRoles; void queryJobsForRole; void queryByRoleFamilies;
+  void queryAdjacentTitles; void querySkillBasedMatches;
 
-  // 4. Task 4 — merge per-role result sets first (they carry matchedRole
-  //    tags). Then layer in adjacent + skills as additional origins. On
-  //    URL collision, PREFER the exact per-role hit — it has the query
-  //    origin signal that scoreTargetRoleMatch trusts.
-  const tagged = new Map<string, ScoredOpportunity & { matchedRole?: string }>();
-  const addExact = (list: Array<import("@/services/opportunityTypes").OpportunityResult & { matchedRole?: string }>, origin: "exact") => {
-    for (const j of list) {
-      if (!j.url) continue;
-      // First-writer wins is fine here because per-role results are the
-      // strongest signal; later per-role queries for OTHER target roles
-      // that also happen to match this job add nothing new.
-      if (!tagged.has(j.url)) tagged.set(j.url, { ...j, queryOrigin: origin });
-    }
-  };
-  const addSecondary = (list: typeof adjacentRaw, origin: "adjacent" | "skills") => {
-    for (const j of list) {
-      if (!j.url) continue;
-      if (!tagged.has(j.url)) tagged.set(j.url, { ...j, queryOrigin: origin });
-    }
-  };
-  for (const per of perRoleResults) addExact(per, "exact");
-  addSecondary(adjacentRaw, "adjacent");
-  addSecondary(skillRaw, "skills");
+  const groups = expandQueries(profile.targetRoles);
+  const engineCandidates = await retrieveByTitle(
+    supabase,
+    { queryGroups: groups },
+    { isActive: true },
+    100,
+  );
+
+  // 4. Tag every candidate with a synthetic queryOrigin='exact' — every
+  //    row was title-matched by construction. retrievedFor carries the
+  //    per-title provenance for reasoning + tier explanations.
+  const tagged = new Map<string, ScoredOpportunity & { matchedRole?: string; retrievedFor?: string[] }>();
+  for (const c of engineCandidates) {
+    if (!c.url) continue;
+    if (tagged.has(c.url)) continue;
+    // Pick the FIRST retrievedFor label as the matchedRole for back-compat
+    // with generateJobReasoning's targetRoleBestMatch signal. The full
+    // list stays on retrievedFor for tier explanations.
+    const firstLabel = c.retrievedFor?.[0];
+    tagged.set(c.url, {
+      ...c,
+      queryOrigin: "exact" as const,
+      matchedRole: firstLabel,
+      retrievedFor: c.retrievedFor,
+    });
+  }
 
   // 5. Client-side exclusion pass
   const titleExc = exclusions.excludeTitleKeywords.map(k => k.toLowerCase());

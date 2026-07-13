@@ -144,37 +144,54 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   const skills = (cp?.skills ?? []) as string[];
   const profile = { targetRoles, skills, targetSeniority: null };
 
-  const expanded = expandRoles(targetRoles);
-  const exactTs    = toWebsearchQuery(targetRoles.slice(0, 8));
-  const adjacentTs = toWebsearchQuery(expanded.slice(0, 15));
-
-  const [exactRes, adjRes] = await Promise.all([
-    supabase.from("ats_jobs")
+  // fix/jobs-curation-family-precision PR 3 — Deno port of the
+  //   unified retrieval engine. One tsquery per target role, run in
+  //   parallel; union + dedupe by id with retrievedFor labels
+  //   accumulated. NO family fast-path here either.
+  void expandRoles; void toWebsearchQuery;   // legacy — no longer used
+  const groups = expandQueriesDeno(targetRoles);
+  const perGroupResults = await Promise.all(groups.map(async g => {
+    const arg = buildTsqueryArgDeno(g.queries);
+    if (!arg.arg) return { label: g.label, rows: [] as any[] };
+    const { data } = await supabase.from("ats_jobs")
       .select("id, title, company, description, extracted_skills, extracted_seniority")
       .eq("is_active", true).eq("enrichment_status", "complete")
-      .textSearch("title", exactTs, { type: "websearch", config: "english" })
-      .limit(40),
-    supabase.from("ats_jobs")
-      .select("id, title, company, description, extracted_skills, extracted_seniority")
-      .eq("is_active", true).eq("enrichment_status", "complete")
-      .textSearch("title", adjacentTs, { type: "websearch", config: "english" })
-      .limit(40),
-  ]);
+      .textSearch("title", arg.arg, { type: arg.mode, config: "english" })
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .limit(40);
+    return { label: g.label, rows: data ?? [] };
+  }));
 
-  const tagged = new Map<string, { row: any; origin: "exact" | "adjacent" }>();
-  for (const r of (exactRes.data ?? [])) tagged.set(r.id, { row: r, origin: "exact" });
-  for (const r of (adjRes.data ?? [])) if (!tagged.has(r.id)) tagged.set(r.id, { row: r, origin: "adjacent" });
+  const tagged = new Map<string, { row: any; retrievedFor: string[] }>();
+  for (const { label, rows } of perGroupResults) {
+    for (const r of rows) {
+      const existing = tagged.get(r.id);
+      if (existing) {
+        if (!existing.retrievedFor.includes(label)) existing.retrievedFor.push(label);
+      } else {
+        tagged.set(r.id, { row: r, retrievedFor: [label] });
+      }
+    }
+  }
 
-  const scored = [...tagged.values()].map(({ row, origin }) => {
+  const scored = [...tagged.values()].map(({ row, retrievedFor }) => {
+    // Every candidate came from an exact title match — queryOrigin='exact'
+    // per the unified model.
     const s = scoreJob(row, profile);
-    const tier = classify(s.total, origin);
+    const tier = classify(s.total, "exact");
     if (!tier) return null;
+    // Prefer retrievedFor[0] as the matched role in the reason line.
+    const matchedRole = retrievedFor[0] ?? "";
+    const baseReason = reasonFor(s);
+    const reasonWithProvenance = matchedRole
+      ? `Retrieved for ${matchedRole}${baseReason ? " · " + baseReason : ""}`
+      : baseReason;
     return {
       user_id:      userId,
       job_id:       row.id,
       fit_score:    s.total,
       tier,
-      match_reason: reasonFor(s),
+      match_reason: reasonWithProvenance,
     };
   }).filter(Boolean).slice(0, 100);
 
