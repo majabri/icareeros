@@ -13,8 +13,10 @@
  * Batch: 200 rows / invocation, 10 parallel workers.
  */
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// (removed jsr:@supabase/functions-js edge-runtime type import — pulls a transitive npm:openai
+//  dep that deno check cannot resolve without a node_modules folder. Deno.serve is provided
+//  ambient in the edge runtime.)
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BATCH_SIZE   = 200;
 const WORKER_COUNT = 10;

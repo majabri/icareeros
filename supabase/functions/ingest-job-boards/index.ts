@@ -140,7 +140,7 @@ serve(async (req) => {
         failedCompanies.push(company.slug);
         errors.push({
           company: company.slug,
-          error: error.message
+          error: (error as Error)?.message ?? String(error)
         });
       }
     }
@@ -173,7 +173,7 @@ serve(async (req) => {
         companies_failed: [],
         processing_time_ms: 0,
         jobs: [],
-        error: error.message
+        error: (error as Error)?.message ?? String(error)
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -301,7 +301,7 @@ async function scrapeLever(
         salary_max: job.salaryMax,
         currency: job.salaryCurrency || 'USD',
         benefits: extractBenefits(job.description),
-        requirements: job.lists?.find(l => l.text.includes('requirement'))?.content,
+        requirements: job.lists?.find((l: any) => l.text.includes('requirement'))?.content,
         employment_type: parseEmploymentType(job.text, job.description),
         posted_at: job.createdAt ? new Date(job.createdAt).toISOString() : new Date().toISOString(),
         apply_url: job.applyUrl || job.hostedUrl,

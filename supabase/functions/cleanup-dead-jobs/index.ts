@@ -8,8 +8,10 @@
  *     (ON DELETE CASCADE handles the majority, this is defense-in-depth).
  */
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// (removed jsr:@supabase/functions-js edge-runtime type import — pulls a transitive npm:openai
+//  dep that deno check cannot resolve without a node_modules folder. Deno.serve is provided
+//  ambient in the edge runtime.)
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 Deno.serve(async (_req: Request) => {
   const supabase = createClient(
