@@ -14,8 +14,10 @@
  * job — errors are captured on the row (enrichment_retry_count + failed).
  */
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// (removed jsr:@supabase/functions-js edge-runtime type import — pulls a transitive npm:openai
+//  dep that deno check cannot resolve without a node_modules folder. Deno.serve is provided
+//  ambient in the edge runtime.)
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ── Skill inference (shared with the Next.js side; kept in-file so the
 //    edge bundle has no external deps beyond @supabase/supabase-js) ──────

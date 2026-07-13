@@ -10,7 +10,7 @@ jobs:
   pr-checks:
     name: Type-check + Unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -27,3 +27,25 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      # fix/jobs-curator-deno-port Fix 2 — every edge function under
+      # supabase/functions/ must type-check with `deno check`. PR #370
+      # shipped call sites for functions that were never defined
+      # (ReferenceError on every invoke) because Deno files were never
+      # type-checked in CI. This step closes that gap and is a required
+      # status check per branch-protection settings.
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deno check edge functions
+        run: |
+          fail=0
+          for f in supabase/functions/*/index.ts; do
+            echo "-- deno check $f --"
+            if ! deno check "$f"; then
+              fail=1
+            fi
+          done
+          exit $fail

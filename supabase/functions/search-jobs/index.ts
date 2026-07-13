@@ -150,7 +150,7 @@ serve(async (req) => {
         processing_time_ms: 0,
         jobs: [],
         search_metadata: {},
-        error: error.message
+        error: (error as Error)?.message ?? String(error)
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
