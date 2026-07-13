@@ -32,6 +32,7 @@ import { applyQualityGate } from "@/services/integrations/qualityGate";
 import { isValidApplyUrl } from "@/services/integrations/applyUrlValidator";
 import { extractUserProfile } from "@/services/scoring/profileExtractor";
 import { scoreOpportunityAgainstProfile, type ProfileFitScore } from "@/services/scoring/profileScorer";
+import { retrieveByTitle, buildTsqueryArg } from "@/services/retrieval/retrieveByTitle";
 
 
 // fix/jobs-multi-target-roles Requirement B — flatten ProfileFitScore
@@ -147,24 +148,16 @@ export async function POST(req: NextRequest) {
 
   // 1) DB query — Postgres full-text search on title, ilike on location,
   //    boolean on remote. Order by posted_at desc so freshest floats up.
-  let q = supabase
-    .from("ats_jobs")
-    .select("id, source, external_id, company, title, location, description, apply_url, salary_min, salary_max, salary_currency, employment_type, remote, posted_at, last_seen_at", { count: "estimated" })
-    .eq("is_active", true)
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1);
-
+  // ── fix/jobs-curation-family-precision PR 2 — delegate to retrieveByTitle ──
+  // The tsquery construction is identical (buildTsqueryArg uses the same
+  // plain/websearch modes and (tok & tok) | ... OR form). This preserves
+  // byte-identical results per the regression baseline at
+  // docs/regression/search-baseline-2026-07.json.
+  //
   // fix/jobs-smart-apply-issues Fix 6 — combine structured targetRoles
   // (OR) with the free-text refine `query` (AND). Legacy back-compat: if
   // targetRoles is empty and `query` still looks like an OR-joined string
   // (e.g. "Director of Security OR CISO"), split and treat as targetRoles.
-  const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
-  const rolesFrag = (roles: string[]) =>
-    roles.map(r => {
-      const tokens = tokensOf(r);
-      return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
-    }).join(" | ");
-
   let effectiveRoles = targetRoles;
   let effectiveQuery = query;
   if (effectiveRoles.length === 0 && /\s+OR\s+/i.test(query)) {
@@ -172,31 +165,83 @@ export async function POST(req: NextRequest) {
     effectiveQuery = "";
   }
 
+  // Build the SAME tsquery arg that the hand-built path produced.
+  //   roles + query → "(roleFrag) & (queryTokens)"    — plain mode
+  //   roles only    → "(role1_tokens) | (role2_tokens)" — plain mode (via buildTsqueryArg multi)
+  //   query only    → websearch mode with the raw phrase
+  let candidates: Awaited<ReturnType<typeof retrieveByTitle>> = [];
   if (effectiveRoles.length > 0 && effectiveQuery) {
-    const combined = "(" + rolesFrag(effectiveRoles) + ") & (" + tokensOf(effectiveQuery).join(" & ") + ")";
-    q = q.textSearch("title", combined, { type: "plain", config: "english" });
+    const { arg: rolesArg } = buildTsqueryArg(effectiveRoles);
+    const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
+    const combined = "(" + rolesArg + ") & (" + tokensOf(effectiveQuery).join(" & ") + ")";
+    // Use raw supabase for the ONE case where both are present — a
+    // fully custom tsquery. retrieveByTitle uses websearch on single/
+    // plain on multi, but this combined form needs plain mode explicitly.
+    let rq = supabase
+      .from("ats_jobs")
+      .select("id, source, external_id, company, title, location, description, apply_url, direct_apply_url, salary_min, salary_max, salary_currency, employment_type, remote, posted_at, last_seen_at, extracted_skills, extracted_seniority, seniority_tier")
+      .eq("is_active", true)
+      .textSearch("title", combined, { type: "plain", config: "english" });
+    if (location && location.toLowerCase() !== "remote") rq = rq.ilike("location", `%${location}%`);
+    if (remote || location.toLowerCase() === "remote")   rq = rq.eq("remote", true);
+    if (sources && sources.length > 0)                   rq = rq.in("source", sources);
+    const { data: rawData } = await rq
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .range(offset, offset + limit - 1);
+    candidates = (rawData ?? []) as unknown as Awaited<ReturnType<typeof retrieveByTitle>>;
   } else if (effectiveRoles.length > 0) {
-    const roles = rolesFrag(effectiveRoles);
-    q = q.textSearch("title", roles, { type: "plain", config: "english" });
+    // roles only — flat mode.
+    candidates = await retrieveByTitle(
+      supabase,
+      { titleQueries: effectiveRoles },
+      { isActive: true, remote, location, sources },
+      limit,
+    );
   } else if (effectiveQuery) {
-    q = q.textSearch("title", effectiveQuery, { type: "websearch", config: "english" });
-  }
-  if (location && location.toLowerCase() !== "remote") q = q.ilike("location", `%${location}%`);
-  if (remote || location.toLowerCase() === "remote")   q = q.eq("remote", true);
-  if (sources && sources.length > 0)                   q = q.in("source", sources);
-
-  const { data, count, error } = await q;
-  if (error) {
-    console.warn("[search-db] Supabase error:", error.message);
-    // Degrade gracefully to a live search
-    return liveFallback(query, location, remote, limit);
+    candidates = await retrieveByTitle(
+      supabase,
+      { titleQueries: [effectiveQuery] },
+      { isActive: true, remote, location, sources },
+      limit,
+    );
+  } else {
+    // No query and no roles → simple recent-listings feed.
+    candidates = await retrieveByTitle(
+      supabase,
+      { titleQueries: [] },
+      { isActive: true, remote, location, sources },
+      limit,
+    );
   }
 
   // fix/jobs-ux-feedback Fix 3 — pre-filter company-level career-page
   // URLs before the quality gate.
-  const rawRows = ((data ?? []) as AtsJobRow[]).filter(r => isValidApplyUrl(r.apply_url));
+  // Convert the Candidate shape back to AtsJobRow-shaped for the existing
+  // downstream rowToOpportunity + applyQualityGate pipeline.
+  const rawRows = candidates
+    .map(c => ({
+      // extract the DB-side id from the "db-<uuid>" prefix
+      id:              (c.id ?? "").toString().replace(/^db-/, ""),
+      source:          c.source ?? "",
+      external_id:    null,
+      company:         c.company,
+      title:           c.title,
+      location:        c.location ?? null,
+      description:     c.description ?? null,
+      apply_url:       c.url,
+      direct_apply_url: null,
+      salary_min:      c.salary_min ?? null,
+      salary_max:      c.salary_max ?? null,
+      salary_currency: c.salary_currency ?? null,
+      employment_type: c.type ?? null,
+      remote:          !!c.is_remote,
+      posted_at:       c.first_seen_at ?? null,
+      last_seen_at:    c.first_seen_at ?? null,
+    })) as unknown as AtsJobRow[];
+  const count = candidates.length;
+  const rawRowsFiltered = rawRows.filter(r => isValidApplyUrl(r.apply_url));
   const dbOpps: OpportunityResult[] = [];
-  for (const row of rawRows) {
+  for (const row of rawRowsFiltered) {
     const opp = rowToOpportunity(row);
     const gate = applyQualityGate(opp);
     if (gate.passed) dbOpps.push(opp);
@@ -205,7 +250,7 @@ export async function POST(req: NextRequest) {
   // Freshness signal
   let freshestAt: string | null = null;
   const perSource: Record<string, number> = {};
-  for (const row of rawRows) {
+  for (const row of rawRowsFiltered) {
     if (row.last_seen_at && (!freshestAt || row.last_seen_at > freshestAt)) {
       freshestAt = row.last_seen_at;
     }
