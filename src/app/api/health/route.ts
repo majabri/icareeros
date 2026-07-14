@@ -22,7 +22,7 @@ export async function GET() {
       version: process.env.NEXT_PUBLIC_APP_VERSION ?? "dev",
       observability: {
         sentry:     Boolean(process.env.SENTRY_DSN),
-        smtp:       Boolean(process.env.BLUEHOST_SMTP_HOST),
+        smtp:       Boolean(process.env.EMAIL_HOST),
         supabase:   Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
         stripe:     Boolean(process.env.STRIPE_SECRET_KEY),
         cronSecret: Boolean(process.env.CRON_SECRET),

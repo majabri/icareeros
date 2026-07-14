@@ -5,7 +5,7 @@
  * Sends personalised weekly career insights to opted-in users.
  *
  * Protected by CRON_SECRET env var.
- * Required env vars: BLUEHOST_SMTP_*, NEXT_PUBLIC_SUPABASE_URL,
+ * Required env vars: EMAIL_* (see src/lib/mailer.ts), NEXT_PUBLIC_SUPABASE_URL,
  *                    SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
  */
 

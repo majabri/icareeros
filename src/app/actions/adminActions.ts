@@ -231,7 +231,7 @@ ${newEntry}` : newEntry;
 
   // Send the email first; only persist the reply if the send succeeded.
   // MailOptions requires `html` — escape minimal HTML chars; mailer sets `from`
-  // internally via ALERT_FROM_EMAIL / BLUEHOST_SMTP_USER, so we don't pass it.
+  // internally via ALERT_FROM_EMAIL / EMAIL_USER, so we don't pass it.
   const { sendMail } = await import("@/lib/mailer");
   const escapeHtml = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

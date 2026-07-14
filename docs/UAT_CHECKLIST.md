@@ -14,7 +14,7 @@
 | 0.1 | Vercel deployment is green (no build errors) | |
 | 0.2 | Supabase `kuneabeiwcxavvyyfjkx` is online (Health → API working) | |
 | 0.3 | ANTHROPIC_API_KEY is set in Vercel env (Settings → Environment Variables) | |
-| 0.4 | BLUEHOST_SMTP_* env vars are set (needed for email tests) | |
+| 0.4 | EMAIL_* env vars are set (EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD, EMAIL_SMTP_PORT, EMAIL_IMAP_PORT — needed for email tests) | |
 | 0.5 | SUPABASE_SERVICE_ROLE_KEY is set (needed for Admin panel) | |
 
 ---

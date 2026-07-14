@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ts          = new Date().toISOString();
-  const probeTarget = process.env.BLUEHOST_SMTP_USER ?? "bugs@icareeros.com";
+  const probeTarget = process.env.EMAIL_USER ?? "bugs@icareeros.com";
   const start       = Date.now();
 
   try {

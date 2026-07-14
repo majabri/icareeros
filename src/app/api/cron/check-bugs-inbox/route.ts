@@ -16,11 +16,12 @@
  *     lets the /admin/system control center disable the cron without code
  *     changes.
  *
- * Env vars required:
- *   BUGS_EMAIL_HOST     – IMAP host (e.g. mail.icareeros.com)
- *   BUGS_EMAIL_PORT     – 993 (IMAP-SSL) or 143
- *   BUGS_EMAIL_USER     – bugs@icareeros.com
- *   BUGS_EMAIL_PASSWORD – mailbox password
+ * Env vars required (shared unified credential set — same mailbox used by
+ * the SMTP mailer in src/lib/mailer.ts. See docs/EMAIL_DELIVERABILITY.md):
+ *   EMAIL_HOST          – IMAP host (e.g. mail.icareeros.com)
+ *   EMAIL_IMAP_PORT     – 993 (IMAP-SSL) or 143 — defaults to 993
+ *   EMAIL_USER          – bugs@icareeros.com
+ *   EMAIL_PASSWORD      – mailbox password (same value the SMTP mailer uses)
  *   ANTHROPIC_API_KEY   – already set (Haiku classification)
  *   GH_TOKEN            – already set (Issues: write scope on majabri/icareeros)
  */
@@ -62,13 +63,13 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) Env-var check
-  const host     = process.env.BUGS_EMAIL_HOST;
-  const portStr  = process.env.BUGS_EMAIL_PORT;
-  const user     = process.env.BUGS_EMAIL_USER;
-  const password = process.env.BUGS_EMAIL_PASSWORD;
-  if (!host || !portStr || !user || !password) {
+  const host     = process.env.EMAIL_HOST;
+  const portStr  = process.env.EMAIL_IMAP_PORT ?? "993";
+  const user     = process.env.EMAIL_USER;
+  const password = process.env.EMAIL_PASSWORD;
+  if (!host || !user || !password) {
     return NextResponse.json(
-      { error: "missing_env", message: "Set BUGS_EMAIL_HOST/PORT/USER/PASSWORD" },
+      { error: "missing_env", message: "Set EMAIL_HOST/EMAIL_USER/EMAIL_PASSWORD (EMAIL_IMAP_PORT defaults to 993)" },
       { status: 500 },
     );
   }

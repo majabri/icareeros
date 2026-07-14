@@ -6,7 +6,7 @@
  * and sends a win-back email (if opted in and not already sent this week).
  *
  * Protected by CRON_SECRET env var.
- * Required env vars: BLUEHOST_SMTP_*, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Required env vars: EMAIL_* (see src/lib/mailer.ts), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 
 import { NextRequest, NextResponse } from "next/server";

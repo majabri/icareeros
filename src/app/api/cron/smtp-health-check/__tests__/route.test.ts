@@ -21,7 +21,7 @@ import { POST } from "../route";
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = "cron-secret-with-enough-bytes";
-  process.env.BLUEHOST_SMTP_USER = "bugs@icareeros.com";
+  process.env.EMAIL_USER = "bugs@icareeros.com";
 });
 
 function makeReq(secret?: string) {

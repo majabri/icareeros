@@ -5,7 +5,7 @@
  * Sends job alert digest emails to opted-in users with active subscriptions.
  *
  * Protected by CRON_SECRET env var.
- * Required env vars: BLUEHOST_SMTP_*, NEXT_PUBLIC_SUPABASE_URL,
+ * Required env vars: EMAIL_* (see src/lib/mailer.ts), NEXT_PUBLIC_SUPABASE_URL,
  *                    SUPABASE_SERVICE_ROLE_KEY
  */
 

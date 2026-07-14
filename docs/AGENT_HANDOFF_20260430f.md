@@ -74,6 +74,10 @@ BLUEHOST_SMTP_HOST           ← Bluehost SMTP host (usually mail.icareeros.com)
 BLUEHOST_SMTP_PORT           ← 587
 BLUEHOST_SMTP_USER           ← bugs@icareeros.com
 BLUEHOST_SMTP_PASS           ← Bluehost email password
+
+# 2026-07-14 update — these vars were superseded by the unified EMAIL_*
+# family (EMAIL_HOST / EMAIL_USER / EMAIL_PASSWORD / EMAIL_SMTP_PORT /
+# EMAIL_IMAP_PORT). See docs/EMAIL_DELIVERABILITY.md § Credential Rotation.
 CRON_SECRET                  ← generate: openssl rand -base64 32
 INTERNAL_API_SECRET          ← generate: openssl rand -base64 32
 SENTRY_DSN                   ← Sentry → icareeros project → DSN

@@ -2,17 +2,24 @@
  * iCareerOS — Shared Mailer
  * Server-only. Wraps nodemailer with Bluehost SMTP config.
  *
+ * Reads the unified EMAIL_* credential set (shared with the IMAP consumer
+ * in src/app/api/cron/check-bugs-inbox/route.ts). One mailbox
+ * (bugs@icareeros.com), one password, two protocols — SMTP send (this
+ * file) and IMAP read (bugs-inbox cron). See docs/EMAIL_DELIVERABILITY.md
+ * for rotation procedure.
+ *
  * Required env vars (set in Vercel + .env.local):
- *   BLUEHOST_SMTP_HOST  e.g. mail.icareeros.com
- *   BLUEHOST_SMTP_PORT  e.g. 465 (SSL) or 587 (STARTTLS) — defaults to 465
- *   BLUEHOST_SMTP_USER  SMTP auth username — MUST be a real Bluehost mailbox.
+ *   EMAIL_HOST          e.g. mail.icareeros.com
+ *   EMAIL_SMTP_PORT     e.g. 465 (SSL) or 587 (STARTTLS) — defaults to 465
+ *   EMAIL_USER          SMTP auth username — MUST be a real Bluehost mailbox.
  *                       e.g. bugs@icareeros.com
- *   BLUEHOST_SMTP_PASS  the password of the BLUEHOST_SMTP_USER mailbox.
+ *   EMAIL_PASSWORD      the password of the EMAIL_USER mailbox. Same value
+ *                       used by the IMAP consumer.
  *   ALERT_FROM_EMAIL    display \"From\" address shown to recipients.
- *                       CAN differ from BLUEHOST_SMTP_USER, but Bluehost
- *                       may reject sends if it requires From=auth-user
- *                       (test via the relay before relying on a mismatch).
- *                       Defaults to BLUEHOST_SMTP_USER.
+ *                       CAN differ from EMAIL_USER, but Bluehost may reject
+ *                       sends if it requires From=auth-user (test via the
+ *                       relay before relying on a mismatch).
+ *                       Defaults to EMAIL_USER.
  *                       e.g. noreply@icareeros.com
  */
 
@@ -34,10 +41,10 @@ export interface MailResult {
 
 /** Returns null when SMTP env vars are not set (e.g. in local dev without .env.local). */
 function createTransporter() {
-  const host = process.env.BLUEHOST_SMTP_HOST;
-  const port = parseInt(process.env.BLUEHOST_SMTP_PORT ?? "465", 10);
-  const user = process.env.BLUEHOST_SMTP_USER;
-  const pass = process.env.BLUEHOST_SMTP_PASS;
+  const host = process.env.EMAIL_HOST;
+  const port = parseInt(process.env.EMAIL_SMTP_PORT ?? "465", 10);
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASSWORD;
 
   if (!host || !user || !pass) return null;
 
@@ -49,11 +56,11 @@ function createTransporter() {
   });
 }
 
-/** Resolved "From" address — prefers ALERT_FROM_EMAIL, falls back to BLUEHOST_SMTP_USER. */
+/** Resolved "From" address — prefers ALERT_FROM_EMAIL, falls back to EMAIL_USER. */
 export function getFromAddress(): string {
   return (
     process.env.ALERT_FROM_EMAIL ??
-    process.env.BLUEHOST_SMTP_USER ??
+    process.env.EMAIL_USER ??
     "noreply@icareeros.com"
   );
 }
