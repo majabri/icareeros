@@ -10,6 +10,34 @@ Cowork sessions running against this project need three credentials. All three a
 | **Anything under `.github/workflows/`** (CI edits, workflow YAML) | `COWORK_GITHUB_WORKFLOW_PAT` | `EJdVavSdjrzBlDM4` | GitHub `repo + workflow` |
 | Supabase edge-function deploy + management-API SQL | `SUPABASE_MGMT_TOKEN` | `RLOeBdRQBBPVk8zb` | Supabase PAT (`sbp_...`) |
 
+## Bluehost mailbox credentials (`bugs@icareeros.com`) — added 2026-07-14
+
+Single shared credential for the SMTP send + IMAP read paths — same mailbox, same password, one source of truth. See `EMAIL_DELIVERABILITY.md § Credential Rotation` for the rotation procedure and the 2026 outage that drove this consolidation.
+
+| Purpose | Vercel env-var key | Vercel env-var **id** | Type |
+|---|---|---|---|
+| Bluehost outbound SMTP host | `BLUEHOST_SMTP_HOST` | `d9HUPM4xWFXwGba6` | plain |
+| SMTP port (465) | `BLUEHOST_SMTP_PORT` | `E96rFhN8KoaWwoh5` | encrypted |
+| IMAP port (993) | `BLUEHOST_IMAP_PORT` | `h8TILJiwURdEJRTo` | encrypted |
+| Auth username (`bugs@icareeros.com`) | `BLUEHOST_SMTP_USER` | `m47hCh0LIX6Isv4n` | encrypted |
+| Auth password (Bluehost mailbox) | `BLUEHOST_SMTP_PASS` | `zydLa4Et5tYDu44k` | encrypted |
+
+**Consumers:** `src/lib/mailer.ts` (SMTP send), `src/app/api/cron/check-bugs-inbox/route.ts` (IMAP read), `src/app/api/cron/smtp-health-check/route.ts` (T-017 probe), `src/app/api/health/route.ts` (observability flag).
+
+**All five are `encrypted` or `plain` — none `sensitive`.** That means every value is fetchable via the by-ID API pattern below, so future Cowork sessions can verify credentials against Bluehost in seconds rather than paste-and-pray. `sensitive` type returns empty strings via the Vercel API, which is exactly how the June–July 2026 outage went 33 days undetected.
+
+### Sanity checks
+
+If the decrypted value doesn't start with the expected prefix, decryption did not happen — the list endpoint was probably used by mistake. Recheck the URL is `/v1/projects/icareeros/env/{id}` (not `/v9/projects/icareeros/env`).
+
+| Var | Expected value / shape |
+|---|---|
+| `BLUEHOST_SMTP_HOST` | exact: `mail.icareeros.com` |
+| `BLUEHOST_SMTP_PORT` | exact: `465` |
+| `BLUEHOST_IMAP_PORT` | exact: `993` |
+| `BLUEHOST_SMTP_USER` | exact: `bugs@icareeros.com` |
+| `BLUEHOST_SMTP_PASS` | non-empty string; check the T-017 probe next (see `EMAIL_DELIVERABILITY.md § Verification after rotation`) — a valid value does not guarantee Bluehost accepts it. |
+
 **Which one to use when:**
 
 - Touching `src/**`, `docs/**`, `.github/ISSUE_TEMPLATE/**`, `vercel.json`, or any non-workflow file → **`COWORK_GITHUB_PAT`**.
