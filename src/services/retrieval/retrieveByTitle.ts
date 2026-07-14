@@ -79,21 +79,23 @@ export const MAX_PHRASES_PER_TSQUERY = 15;
  * The caller decides whether to pass `type: "websearch"` (single) or
  * `type: "plain"` (multi). Exposed for tests.
  */
-export function buildTsqueryArg(phrases: string[]): { arg: string; mode: "websearch" | "plain" } {
+/**
+ * fix/jobs-tsquery-mode — Node side of the mode/arg contract fix. See the
+ * matching comment in supabase/functions/curate-user-recommendations/lib.ts.
+ * TL;DR: the old `mode: "plain"` output was routed to plainto_tsquery which
+ * treats operator characters as literals, so every multi-phrase group
+ * matched zero rows. Both the curator (Deno) and search-db (Node) call
+ * this function; both were emitting arg that plainto_tsquery could not
+ * parse. Fix: emit websearch OR-form (unambiguously supported by
+ * `.textSearch(..., {type:"websearch"})`).
+ */
+export function buildTsqueryArg(phrases: string[]): { arg: string; mode: "websearch" } {
   const cleaned = phrases
     .map(p => (p ?? "").trim().toLowerCase())
     .filter(Boolean)
-    .slice(0, MAX_PHRASES_PER_TSQUERY);
-  if (cleaned.length === 0) return { arg: "", mode: "websearch" };
-  if (cleaned.length === 1) return { arg: cleaned[0], mode: "websearch" };
-  const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
-  const arg = cleaned
-    .map(p => {
-      const tokens = tokensOf(p);
-      return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
-    })
-    .join(" | ");
-  return { arg, mode: "plain" };
+    .slice(0, MAX_PHRASES_PER_TSQUERY)
+    .map(p => /\s/.test(p) ? `"${p.replace(/"/g, "")}"` : p);
+  return { arg: cleaned.join(" OR "), mode: "websearch" };
 }
 
 function toCandidate(row: AtsJobRow, retrievedFor: string[] = []): Candidate {

@@ -188,6 +188,8 @@ export function expandQueriesDeno(
 ): Array<{ label: string; queries: string[] }> {
   const groups: Array<{ label: string; queries: string[] }> = [];
   const seenLabels = new Set<string>();
+  // fix/jobs-tsquery-mode Fix 4 — dedupe groups by identical query set.
+  const seenQuerySets = new Map<string, string>();
   for (const raw of targetRoles) {
     const label = (raw ?? "").trim();
     if (!label) continue;
@@ -197,28 +199,43 @@ export function expandQueriesDeno(
     const queries = new Set<string>();
     queries.add(label.toLowerCase());
     for (const s of synonyms) queries.add(s.toLowerCase());
-    groups.push({ label, queries: Array.from(queries).slice(0, 15) });
+    const arr = Array.from(queries).slice(0, 15);
+    const fp = [...arr].sort().join("|");
+    if (seenQuerySets.has(fp)) continue;
+    seenQuerySets.set(fp, label);
+    groups.push({ label, queries: arr });
   }
   return groups;
 }
 
 export const MAX_PHRASES_PER_TSQUERY_DENO = 15;
 
+/**
+ * fix/jobs-tsquery-mode — DO NOT return `mode: "plain"` with operator-laden
+ * args. The pre-fix version emitted `(tok & tok) | (tok & tok) | tok` under
+ * `mode: "plain"`, which Supabase's `.textSearch(col, arg, {type:"plain"})`
+ * routes to `plainto_tsquery`. plainto_tsquery treats `&`, `|`, `(`, `)` as
+ * ordinary literal characters, so the arg matched zero rows on every call.
+ *
+ * The supabase-js SDK only supports `plain | phrase | websearch` — raw
+ * `to_tsquery` is unreachable without `.rpc()`. `websearch_to_tsquery` gives
+ * us the disjunction we need via the `word OR "quoted phrase"` grammar and
+ * is safe to feed through `.textSearch(..., {type:"websearch"})`.
+ *
+ * Multi-word phrases are quoted so websearch treats them as phrase queries
+ * (adjacent-token match), which is stricter than the pre-fix AND-of-tokens
+ * form but correct: "director of security" should require adjacent occurrence,
+ * not merely the co-presence of "director" + "security" anywhere in the title.
+ */
 export function buildTsqueryArgDeno(
   phrases: string[],
-): { arg: string; mode: "websearch" | "plain" } {
+): { arg: string; mode: "websearch" } {
   const cleaned = phrases
     .map((p: string) => (p ?? "").trim().toLowerCase())
     .filter(Boolean)
-    .slice(0, MAX_PHRASES_PER_TSQUERY_DENO);
-  if (cleaned.length === 0) return { arg: "", mode: "websearch" };
-  if (cleaned.length === 1) return { arg: cleaned[0], mode: "websearch" };
-  const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
-  const arg = cleaned
-    .map((p: string) => {
-      const tokens = tokensOf(p);
-      return tokens.length === 1 ? tokens[0] : "(" + tokens.join(" & ") + ")";
-    })
-    .join(" | ");
-  return { arg, mode: "plain" };
+    .slice(0, MAX_PHRASES_PER_TSQUERY_DENO)
+    .map((p: string) =>
+      /\s/.test(p) ? `"${p.replace(/"/g, "")}"` : p
+    );
+  return { arg: cleaned.join(" OR "), mode: "websearch" };
 }

@@ -171,24 +171,36 @@ export async function POST(req: NextRequest) {
   //   query only    → websearch mode with the raw phrase
   let candidates: Awaited<ReturnType<typeof retrieveByTitle>> = [];
   if (effectiveRoles.length > 0 && effectiveQuery) {
-    const { arg: rolesArg } = buildTsqueryArg(effectiveRoles);
-    const tokensOf = (s: string) => s.split(/\s+/).filter(Boolean);
-    const combined = "(" + rolesArg + ") & (" + tokensOf(effectiveQuery).join(" & ") + ")";
-    // Use raw supabase for the ONE case where both are present — a
-    // fully custom tsquery. retrieveByTitle uses websearch on single/
-    // plain on multi, but this combined form needs plain mode explicitly.
+    // fix/jobs-tsquery-mode — the pre-fix "combined" path built a
+    //   `(rolesArg) & (queryTokens)` string under `type:"plain"`,
+    //   which plainto_tsquery treats as literal characters. Fixed:
+    //   we get the roles-OR match via websearch on the roles arg,
+    //   then AND-filter the returned candidates in JS by requiring
+    //   every query token (case-insensitive) to appear in the title.
+    //   websearch cannot express `(A OR B) AND C` — its parens are
+    //   literal characters, and its implicit AND has looser
+    //   precedence than OR — so the AND is enforced client-side.
+    const { arg: rolesArg, mode: rolesMode } = buildTsqueryArg(effectiveRoles);
     let rq = supabase
       .from("ats_jobs")
       .select("id, source, external_id, company, title, location, description, apply_url, direct_apply_url, salary_min, salary_max, salary_currency, employment_type, remote, posted_at, last_seen_at, extracted_skills, extracted_seniority, seniority_tier")
-      .eq("is_active", true)
-      .textSearch("title", combined, { type: "plain", config: "english" });
+      .eq("is_active", true);
+    if (rolesArg) rq = rq.textSearch("title", rolesArg, { type: rolesMode, config: "english" });
     if (location && location.toLowerCase() !== "remote") rq = rq.ilike("location", `%${location}%`);
     if (remote || location.toLowerCase() === "remote")   rq = rq.eq("remote", true);
     if (sources && sources.length > 0)                   rq = rq.in("source", sources);
+    // Over-fetch so the in-memory AND-filter still returns >= limit
+    // rows even when the query tokens knock out ~half the roles hits.
+    const overFetch = Math.min(500, (offset + limit) * 3);
     const { data: rawData } = await rq
       .order("posted_at", { ascending: false, nullsFirst: false })
-      .range(offset, offset + limit - 1);
-    candidates = (rawData ?? []) as unknown as Awaited<ReturnType<typeof retrieveByTitle>>;
+      .range(0, overFetch - 1);
+    const queryTokens = effectiveQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    const filtered = (rawData ?? []).filter((row: { title: string | null }) => {
+      const t = (row.title ?? "").toLowerCase();
+      return queryTokens.every(qt => t.includes(qt));
+    });
+    candidates = filtered.slice(offset, offset + limit) as unknown as Awaited<ReturnType<typeof retrieveByTitle>>;
   } else if (effectiveRoles.length > 0) {
     // roles only — flat mode.
     candidates = await retrieveByTitle(

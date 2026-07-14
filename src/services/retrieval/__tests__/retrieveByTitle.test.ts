@@ -9,30 +9,41 @@ import { describe, it, expect } from "vitest";
 import { buildTsqueryArg, MAX_PHRASES_PER_TSQUERY, retrieveByTitle } from "../retrieveByTitle";
 
 describe("buildTsqueryArg — Search vs Curation modes", () => {
-  it("single phrase → websearch mode with the raw phrase passed through", () => {
+  it("single multi-word phrase → websearch mode with the phrase QUOTED", () => {
+    // fix/jobs-tsquery-mode — multi-word phrases are wrapped in
+    //   quotes so websearch_to_tsquery treats them as adjacent-phrase
+    //   queries (`director <-> of <-> security`) instead of the looser
+    //   `director & of & security`. The strictness is intentional.
     expect(buildTsqueryArg(["director of security"])).toEqual({
-      arg: "director of security", mode: "websearch",
+      arg: '"director of security"', mode: "websearch",
     });
   });
-  it("multi phrase → plain mode with OR-joined (tok & tok)", () => {
+  it("single single-word phrase → websearch mode, bare (no quotes)", () => {
+    expect(buildTsqueryArg(["ciso"])).toEqual({ arg: "ciso", mode: "websearch" });
+  });
+  it("multi phrase → websearch OR form (Fix 1 — was buggy plain mode)", () => {
+    // fix/jobs-tsquery-mode Fix 1 — the pre-fix version emitted mode:"plain"
+    //   with `(tok & tok) | tok | (tok & tok)` operator syntax. Supabase
+    //   `.textSearch(col, arg, {type:"plain"})` maps to plainto_tsquery,
+    //   which treats `|` `&` `(` `)` as literal characters → 0 matches.
+    //   Fixed: emit `word OR "quoted phrase"` under mode:"websearch".
     const { arg, mode } = buildTsqueryArg(["director of security", "ciso", "chief security officer"]);
-    expect(mode).toBe("plain");
-    expect(arg).toBe("(director & of & security) | ciso | (chief & security & officer)");
+    expect(mode).toBe("websearch");
+    expect(arg).toBe('"director of security" OR ciso OR "chief security officer"');
   });
   it("empty input → empty arg (caller skips textSearch)", () => {
     expect(buildTsqueryArg([])).toEqual({ arg: "", mode: "websearch" });
     expect(buildTsqueryArg(["", "  "])).toEqual({ arg: "", mode: "websearch" });
   });
-  it("15-phrase cap enforced (PR #354 hang lesson)", () => {
+  it("15-phrase cap enforced (PR #354 hang lesson, now under websearch)", () => {
     const many = Array.from({ length: 30 }, (_, i) => `phrase${i}`);
     const { arg } = buildTsqueryArg(many);
-    // 15 pipes → 16 fragments would be too many; each phrase is one token so we get 15 pieces
-    const parts = arg.split(" | ").filter(Boolean);
+    const parts = arg.split(" OR ").filter(Boolean);
     expect(parts.length).toBe(MAX_PHRASES_PER_TSQUERY);
   });
   it("lowercases every phrase before tsquery construction", () => {
     const { arg } = buildTsqueryArg(["CISO", "Chief Information Security Officer"]);
-    expect(arg).toBe("ciso | (chief & information & security & officer)");
+    expect(arg).toBe('ciso OR "chief information security officer"');
   });
 });
 
@@ -67,7 +78,7 @@ describe("retrieveByTitle — queryGroups mode dedup + retrievedFor", () => {
       extracted_seniority: "executive", seniority_tier: "executive" };
     const supabase = makeMockSupabase({
       "ciso": [shared],
-      "chief security officer": [shared],
+      '"chief security officer"': [shared],   // fix/jobs-tsquery-mode — multi-word → quoted
     });
     const result = await retrieveByTitle(supabase, {
       queryGroups: [
@@ -90,7 +101,7 @@ describe("retrieveByTitle — queryGroups mode dedup + retrievedFor", () => {
     const j2 = { ...j1, id: "2", title: "Director of Security", apply_url: "https://a/2", posted_at: "2026-07-01" };
     const supabase = makeMockSupabase({
       "ciso": [j1],
-      "director of security": [j2],
+      '"director of security"': [j2],   // fix/jobs-tsquery-mode — multi-word → quoted
     });
     const result = await retrieveByTitle(supabase, {
       queryGroups: [
