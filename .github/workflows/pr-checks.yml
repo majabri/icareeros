@@ -37,12 +37,31 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          # Pin the exact version. Floating `v2.x` means a Deno release
+          # could break CI without any code change on our side. Bump this
+          # deliberately by editing the version below (proven locally
+          # first). 2026-07-14 — validated at v2.9.2.
+          deno-version: v2.9.2
+          # Cache downloaded modules across CI runs. Every edge function
+          # imports @supabase/supabase-js from esm.sh + the ingest-ats
+          # function pulls deno.land/std; cold-cache CI runs currently
+          # spend 20-40s downloading these. Cache-hit path is <5s.
+          # The action defaults cache-hash to a hash of deno.lock files;
+          # we don't check one in, so the key falls back to just the
+          # deno-version, which is what we want — shared across runs.
+          cache: true
 
       - name: Deno check edge functions
+        # Glob widened 2026-07-14 from `*/index.ts` to `*/*.ts` so helper
+        # files (curator's lib.ts, potential future co-located test .ts,
+        # anything not on the direct import path from index.ts) are also
+        # type-checked. A helper file that's never imported would
+        # otherwise pass CI silently and only fail at deploy or runtime.
+        # Baseline validated 2026-07-14: all 10 .ts files under
+        # supabase/functions/**/*.ts pass on main HEAD 978b6ef.
         run: |
           fail=0
-          for f in supabase/functions/*/index.ts; do
+          for f in supabase/functions/*/*.ts; do
             echo "-- deno check $f --"
             if ! deno check "$f"; then
               fail=1
