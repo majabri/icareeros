@@ -82,6 +82,14 @@ export function expandQueries(targetRoles: string[]): Array<{ label: string; que
   const groups: Array<{ label: string; queries: string[] }> = [];
   const seenLabels = new Set<string>();
 
+  // fix/jobs-tsquery-mode Fix 4 — dedupe groups that produce
+  //   identical query sets. When a user has three target roles that
+  //   all map to the same family (Amir: ciso / Chief Security Officer
+  //   / Chief Information Security Officer all -> ciso family), the
+  //   pre-fix version fired three identical DB queries and unioned
+  //   three identical row sets. Keep the FIRST label — that's what
+  //   the user typed first and is the natural retrievedFor tag.
+  const seenQuerySets = new Map<string, string>();  // fingerprint -> label
   for (const raw of targetRoles) {
     const label = (raw ?? "").trim();
     if (!label) continue;
@@ -89,13 +97,16 @@ export function expandQueries(targetRoles: string[]): Array<{ label: string; que
     seenLabels.add(label.toLowerCase());
 
     const synonyms = synonymsForExact(label);
-    // If the taxonomy doesn't know this title, still search on the raw
-    // words the user typed — retrieval on the literal title covers niches
-    // like "Director of Nursing" that aren't in the family list.
     const queries = new Set<string>();
     queries.add(label.toLowerCase());
     for (const s of synonyms) queries.add(s.toLowerCase());
-    groups.push({ label, queries: Array.from(queries).slice(0, 15) });
+    const arr = Array.from(queries).slice(0, 15);
+    // Fingerprint is the sorted set of queries. Two labels that
+    // produce the same query set collapse into one group.
+    const fp = [...arr].sort().join("|");
+    if (seenQuerySets.has(fp)) continue;
+    seenQuerySets.set(fp, label);
+    groups.push({ label, queries: arr });
   }
   return groups;
 }

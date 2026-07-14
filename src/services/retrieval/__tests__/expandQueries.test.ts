@@ -57,8 +57,14 @@ describe("synonymsForExact — archetype (a) Amir security exec", () => {
       "Director of Security", "biso", "ciso",
       "Chief Security Officer", "Chief Information Security Officer",
     ]);
-    // 5 target roles → 5 groups
-    expect(groups).toHaveLength(5);
+    // fix/jobs-tsquery-mode Fix 4 — ciso / "Chief Security Officer" /
+    //   "Chief Information Security Officer" all resolve to the ciso
+    //   family and produce the same query set → collapse to one group.
+    //   Pre-Fix-4 this was 5; the correct behaviour is 3.
+    expect(groups).toHaveLength(3);
+    expect(groups.map(g => g.label)).toEqual([
+      "Director of Security", "biso", "ciso",
+    ]);
     // Union of all groups' queries must contain zero director-of-product-etc phrases
     const union = new Set(groups.flatMap(g => g.queries.map(q => q.toLowerCase())));
     for (const bad of [
@@ -150,28 +156,32 @@ describe("synonymsForExact — negatives (defensive)", () => {
 });
 
 describe("expandQueries — R2 multi-title provenance", () => {
-  it("Amir 5 targets → 5 groups, each ≤ 15 queries", () => {
+  it("Amir 5 targets → 3 groups (Fix 4 dedupe), each ≤ 15 queries", () => {
     const groups = expandQueries([
       "Director of Security", "biso", "ciso",
       "Chief Security Officer", "Chief Information Security Officer",
     ]);
-    expect(groups).toHaveLength(5);
+    // fix/jobs-tsquery-mode Fix 4 — the last two targets both map to
+    //   the ciso family and produce the same query set as "ciso" itself,
+    //   so they collapse. First label wins.
+    expect(groups).toHaveLength(3);
     for (const g of groups) {
       expect(g.queries.length).toBeLessThanOrEqual(15);
       expect(g.queries.length).toBeGreaterThan(0);
     }
     expect(groups.map(g => g.label)).toEqual([
       "Director of Security", "biso", "ciso",
-      "Chief Security Officer", "Chief Information Security Officer",
     ]);
   });
-  it("VP Marketing / CMO / Head of Growth → 3 groups with own labels", () => {
+  it("VP Marketing / CMO / Head of Growth → 2 groups (Fix 4 collapses CMO into VP Marketing family)", () => {
     const groups = expandQueries(["VP Marketing", "CMO", "Head of Growth"]);
-    expect(groups).toHaveLength(3);
-    // The label is preserved verbatim
-    expect(groups.map(g => g.label)).toEqual(["VP Marketing", "CMO", "Head of Growth"]);
+    // Fix 4: VP Marketing + CMO both live in the cmo family → merged into
+    // the first label ("VP Marketing"). Head of Growth is unknown to the
+    // taxonomy so it falls through to raw and becomes its own group.
+    expect(groups).toHaveLength(2);
+    expect(groups.map(g => g.label)).toEqual(["VP Marketing", "Head of Growth"]);
     // Head of Growth isn't in the taxonomy → falls through to raw
-    expect(groups[2].queries).toEqual(["head of growth"]);
+    expect(groups[1].queries).toEqual(["head of growth"]);
   });
   it("dedupes case-insensitive input labels", () => {
     const groups = expandQueries(["CISO", "ciso", "Ciso"]);

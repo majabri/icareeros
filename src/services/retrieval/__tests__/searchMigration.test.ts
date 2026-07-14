@@ -32,42 +32,51 @@ const BASELINE_QUERIES = [
   "security architect", "account executive",
 ];
 
-describe("PR 2 regression — buildTsqueryArg matches pre-refactor rolesFrag", () => {
-  it("single-phrase queries: mode=websearch, arg=raw phrase (byte-identical)", () => {
-    for (const q of BASELINE_QUERIES) {
+describe("PR 2 regression — buildTsqueryArg contract (fixed in fix/jobs-tsquery-mode)", () => {
+  // NOTE: The pre-refactor rolesFrag mode:"plain" + (tok & tok) | ... form
+  // this file was originally guarding was itself buggy — plainto_tsquery
+  // treats `|` `&` `(` `)` as literal characters, so those args matched
+  // zero rows on every call. The regression baseline in
+  // docs/regression/search-baseline-2026-07.json documents that pre-refactor
+  // state. This test now guards the CORRECT contract emitted after the fix.
+  void preRefactorRolesFrag;
+
+  it("single-word queries → websearch mode, bare token", () => {
+    for (const q of BASELINE_QUERIES.filter(x => !/\s/.test(x))) {
       const { arg, mode } = buildTsqueryArg([q]);
-      // Search uses websearch mode for single-phrase — the raw string is passed to Postgres
-      // which itself does the tokenization. There is NO tsquery construction step.
-      expect(arg).toBe(q.toLowerCase());
       expect(mode).toBe("websearch");
+      expect(arg).toBe(q.toLowerCase());
     }
   });
 
-  it("multi-phrase queries: mode=plain, arg matches (tok & tok) | ... form", () => {
-    // The 3 canonical multi-role tests
-    const cases = [
-      ["Director of Security", "CISO"],
-      ["Director of Security", "CISO", "BISO", "Chief Security Officer", "Chief Information Security Officer"],
-      ["VP Marketing", "CMO", "Head of Growth"],
+  it("single multi-word queries → websearch mode, quoted phrase", () => {
+    for (const q of BASELINE_QUERIES.filter(x => /\s/.test(x))) {
+      const { arg, mode } = buildTsqueryArg([q]);
+      expect(mode).toBe("websearch");
+      expect(arg).toBe(`"${q.toLowerCase()}"`);
+    }
+  });
+
+  it("multi-phrase queries → websearch OR-joined, quoted where needed", () => {
+    const cases: Array<{ input: string[]; expected: string }> = [
+      { input: ["Director of Security", "CISO"],
+        expected: `"director of security" OR ciso` },
+      { input: ["VP Marketing", "CMO", "Head of Growth"],
+        expected: `"vp marketing" OR cmo OR "head of growth"` },
     ];
-    for (const roles of cases) {
-      const pre = preRefactorRolesFrag(roles.map(r => r.toLowerCase()));
-      const { arg, mode } = buildTsqueryArg(roles);
-      expect(mode).toBe("plain");
-      expect(arg).toBe(pre);
+    for (const { input, expected } of cases) {
+      const { arg, mode } = buildTsqueryArg(input);
+      expect(mode).toBe("websearch");
+      expect(arg).toBe(expected);
     }
   });
 
-  it("15-phrase cap matches (both truncate)", () => {
-    // Even before the fix, the effective input to Postgres was already
-    // bounded because the analysis showed we cap upstream. The buildTsqueryArg
-    // enforces the cap at construction time — this test proves it doesn't
-    // silently drop early phrases.
+  it("15-phrase cap enforced (PR #354 hang lesson, split on OR)", () => {
     const many = Array.from({ length: 20 }, (_, i) => `phrase${i}`);
-    const { arg } = buildTsqueryArg(many);
-    const parts = arg.split(" | ").filter(Boolean);
+    const { arg, mode } = buildTsqueryArg(many);
+    expect(mode).toBe("websearch");
+    const parts = arg.split(" OR ").filter(Boolean);
     expect(parts).toHaveLength(15);
-    // First 15 preserved
     for (let i = 0; i < 15; i++) {
       expect(parts[i]).toBe(`phrase${i}`);
     }
