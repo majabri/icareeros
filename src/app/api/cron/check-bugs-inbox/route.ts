@@ -16,11 +16,15 @@
  *     lets the /admin/system control center disable the cron without code
  *     changes.
  *
- * Env vars required:
- *   BUGS_EMAIL_HOST     – IMAP host (e.g. mail.icareeros.com)
- *   BUGS_EMAIL_PORT     – 993 (IMAP-SSL) or 143
- *   BUGS_EMAIL_USER     – bugs@icareeros.com
- *   BUGS_EMAIL_PASSWORD – mailbox password
+ * Env vars required — SINGLE SHARED CREDENTIAL for the bugs@icareeros.com
+ * mailbox, used by BOTH protocols (SMTP send via src/lib/mailer.ts on 465,
+ * IMAP read here on 993). Consolidated 2026-07-14 to eliminate the drift
+ * that caused the June-July 33-day outage (see docs/EMAIL_DELIVERABILITY.md
+ * Credential Rotation section):
+ *   BLUEHOST_SMTP_HOST  – IMAP + SMTP host (e.g. mail.icareeros.com)
+ *   BLUEHOST_IMAP_PORT  – 993 (IMAP-SSL) or 143 — defaults to 993
+ *   BLUEHOST_SMTP_USER  – bugs@icareeros.com (same value read by mailer.ts)
+ *   BLUEHOST_SMTP_PASS  – mailbox password (same value read by mailer.ts)
  *   ANTHROPIC_API_KEY   – already set (Haiku classification)
  *   GH_TOKEN            – already set (Issues: write scope on majabri/icareeros)
  */
@@ -62,13 +66,16 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) Env-var check
-  const host     = process.env.BUGS_EMAIL_HOST;
-  const portStr  = process.env.BUGS_EMAIL_PORT;
-  const user     = process.env.BUGS_EMAIL_USER;
-  const password = process.env.BUGS_EMAIL_PASSWORD;
-  if (!host || !portStr || !user || !password) {
+  // 2026-07-14 — read from the same BLUEHOST_SMTP_* family the mailer uses.
+  // One mailbox, one password, two protocols. Port differs (SMTP=465,
+  // IMAP=993) so BLUEHOST_IMAP_PORT is its own var, defaulting to 993.
+  const host     = process.env.BLUEHOST_SMTP_HOST;
+  const portStr  = process.env.BLUEHOST_IMAP_PORT ?? "993";
+  const user     = process.env.BLUEHOST_SMTP_USER;
+  const password = process.env.BLUEHOST_SMTP_PASS;
+  if (!host || !user || !password) {
     return NextResponse.json(
-      { error: "missing_env", message: "Set BUGS_EMAIL_HOST/PORT/USER/PASSWORD" },
+      { error: "missing_env", message: "Set BLUEHOST_SMTP_HOST/USER/PASS (BLUEHOST_IMAP_PORT defaults to 993)" },
       { status: 500 },
     );
   }
