@@ -228,3 +228,42 @@ describe("joinNaturally", () => {
     expect(joinNaturally(["a", "b", "c", "d"])).toBe("a, b, c, and d");
   });
 });
+
+
+describe("DeterministicFitResult.breakdown — UI-consumer shape guard", () => {
+  it("breakdown exposes the FitBreakdown fields the /evaluate/job-fit page reads", () => {
+    const r = computeDeterministicFit(ANY_JOB_TITLE, STRONG_MATCH_JD, ANY_COMPANY, baseProfile());
+    // The exact keys the page renders at lines 1045..1071:
+    //   result.breakdown.skillsCoverage
+    //   result.breakdown.seniorityFit
+    //   result.breakdown.locationFit
+    //   result.breakdown.experienceFit
+    //   result.breakdown.redFlagsFound
+    // If any of these were missing the page would ErrorBoundary out.
+    // This test is the regression guard for fix/jobs-fit-check-breakdown-shape.
+    expect(r.breakdown).toHaveProperty("skillsCoverage");
+    expect(r.breakdown).toHaveProperty("seniorityFit");
+    expect(r.breakdown).toHaveProperty("locationFit");
+    expect(r.breakdown).toHaveProperty("experienceFit");
+    expect(r.breakdown).toHaveProperty("redFlagsFound");
+    expect(Array.isArray(r.breakdown.redFlagsFound)).toBe(true);
+    // And the raw component scores stay available under componentScores.
+    expect(r.componentScores).toHaveProperty("skillsMatch");
+    expect(r.componentScores).toHaveProperty("seniorityMatch");
+    expect(r.componentScores).toHaveProperty("targetRoleMatch");
+    expect(r.componentScores).toHaveProperty("experienceMatch");
+    expect(r.componentScores).toHaveProperty("keywordDensity");
+  });
+
+  it("seniorityFit is a valid FitBreakdown union value, not a number", () => {
+    const r = computeDeterministicFit(ANY_JOB_TITLE, STRONG_MATCH_JD, ANY_COMPANY, baseProfile());
+    expect(["match", "overqualified", "underqualified", "unknown"]).toContain(r.breakdown.seniorityFit);
+  });
+
+  it("locationFit defaults to 'unknown' — we do not fabricate a value", () => {
+    // We don't have deterministic location signals yet; explicit 'unknown'
+    // is the correct choice per the no-fabrication rule.
+    const r = computeDeterministicFit(ANY_JOB_TITLE, STRONG_MATCH_JD, ANY_COMPANY, baseProfile());
+    expect(r.breakdown.locationFit).toBe("unknown");
+  });
+});

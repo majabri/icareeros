@@ -207,7 +207,7 @@ async function maybeSummary(args: {
   const jdSnippet = jobDescription.slice(0, 6000);
   const digest = [
     `Fit score: ${deterministic.fitScore}/100`,
-    `Skills coverage: ${deterministic.breakdown.skillsMatch}, Seniority match: ${deterministic.breakdown.seniorityMatch}, Experience match: ${deterministic.breakdown.experienceMatch}, Keyword density: ${deterministic.breakdown.keywordDensity}`,
+    `Skills coverage: ${deterministic.componentScores.skillsMatch}, Seniority match: ${deterministic.componentScores.seniorityMatch}, Experience match: ${deterministic.componentScores.experienceMatch}, Keyword density: ${deterministic.componentScores.keywordDensity}`,
     `Signals: ${deterministic.signals.targetRoleSignal} role match, ${deterministic.signals.senioritySignal} seniority`,
     `Top matched skills: ${deterministic.signals.matchedSkills.slice(0, 5).join(", ") || "(none)"}`,
     `Top missing skills: ${deterministic.signals.missingSkills.slice(0, 5).join(", ") || "(none)"}`,
