@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { inferSeniority, type UserProfile, type Seniority } from "./profileScorer";
+import { normalizeSkills } from "./skillsNormalizer";
 
 interface CareerProfileRow {
   target_roles?:    string[] | null;
@@ -66,7 +67,14 @@ export async function extractUserProfile(
 
 export function rowToProfile(row: CareerProfileRow): UserProfile {
   const targetRoles = (row.target_roles ?? []).filter(Boolean);
-  const skills = (row.skills ?? []).filter(Boolean);
+  // fix/jobs-skills-normalization — split punctuation-glued compounds
+  //   like "NIST CSF 2.0 · ISO/IEC 27001 · NIST 800-53" into ["NIST CSF",
+  //   "ISO 27001", "NIST 800-53"] and alias-map to canonical forms.
+  //   Every downstream consumer (curator, scorer, fit-check, opportunity
+  //   scoring) gets the same normalized list. Original raw list stays
+  //   available on the row for display purposes if needed.
+  const skillsRaw = (row.skills ?? []).filter(Boolean);
+  const skills    = normalizeSkills(skillsRaw);
   const summary = row.summary ?? "";
   const headline = row.headline ?? "";
 

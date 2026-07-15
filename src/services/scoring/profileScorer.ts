@@ -12,6 +12,7 @@
  *   keywordDensity     5%  — profile keywords in JD as a booster
  */
 import type { OpportunityResult } from "@/services/opportunityTypes";
+import { skillAppearsIn, normalizeSkills, canonicalize } from "./skillsNormalizer";
 
 export interface UserProfile {
   skills:            string[];
@@ -165,17 +166,21 @@ export function scoreSkillsMatch(
   }
   const matched: string[] = [];
   for (const skill of profile.skills) {
-    const s = skill.trim().toLowerCase();
-    if (!s) continue;
-    if (descLower.includes(s)) matched.push(skill);
+    if (!skill) continue;
+    // fix/jobs-skills-normalization — alias-aware match. profile.skills
+    //   arrives already normalized (via profileExtractor), so `skill`
+    //   is the canonical form. skillAppearsIn checks every alias of
+    //   the canonical form against the JD text (word-bounded).
+    if (skillAppearsIn(skill, descLower)) matched.push(skill);
   }
-  // Job-side skills: naive extraction — pick TitleCase phrases + comma
-  // separated words near "skills"/"requirements" sections. Cheap and
-  // returns a superset; we only use the SIZE not the accuracy.
-  const jobSkills = extractJobSkills(descLower);
-  const totalPool = Math.max(profile.skills.length, jobSkills.length, 1);
+  // Job-side skills: normalize what the naive extractor pulls so
+  // "missing" reads as canonical forms too ("ISO 27001", not "iso 27001").
+  const jobSkillsRaw   = extractJobSkills(descLower);
+  const jobSkillsNorm  = normalizeSkills(jobSkillsRaw);
+  const totalPool = Math.max(profile.skills.length, jobSkillsNorm.length, 1);
   const score = Math.min(100, Math.round((matched.length / totalPool) * 100));
-  const missing = jobSkills.filter(js => !matched.some(m => m.toLowerCase() === js));
+  const matchedCanonical = new Set(matched.map(m => canonicalize(m).toLowerCase()));
+  const missing = jobSkillsNorm.filter(js => !matchedCanonical.has(js.toLowerCase()));
   return { score, matched, missing };
 }
 
