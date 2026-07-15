@@ -1,56 +1,53 @@
+/**
+ * POST /api/resume/fit-check
+ *
+ * feat/jobs-fit-check-internal Task 2 — Tier A cost migration.
+ *
+ *   The score + all structured lists (strengths, gaps, missingSkills,
+ *   recommendations, keywordCoverage, breakdown) are now computed
+ *   DETERMINISTICALLY in-process by `computeDeterministicFit` — zero LLM
+ *   calls. The only LLM piece left is a 2-3 sentence holistic narrative
+ *   summary. That call is OPTIONAL: if it fails for ANY reason (billing,
+ *   timeout, 4xx, 5xx, malformed JSON, whatever) the deterministic body
+ *   ships anyway with { summary: null, summarySource: "unavailable" }.
+ *
+ *   This is a direct fix for the RBC BISO incident where an out-of-credits
+ *   Anthropic key surfaced its billing error text to the end user and blocked
+ *   the entire fit-check response.
+ *
+ *   PR history preserved in git — the pre-fix version's ~180-line prompt is
+ *   in b827eb6~1.
+ *
+ * Response shape (unchanged for the UI, plus one new field):
+ *   fitScore, breakdown, keywordCoverage, strengths, gaps, missingSkills,
+ *   recommendations, semanticScore, summary, summarySource
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createTracedClient } from "@/lib/observability/langfuse";
 import { compareTexts, cosineToScore } from "@/lib/embeddings/openai";
+import { computeDeterministicFit, type DeterministicFitResult, type KeywordCoverage, type FitBreakdown } from "@/services/scoring/deterministicFitCheck";
+import { extractUserProfile } from "@/services/scoring/profileExtractor";
+import { inferSeniority, type UserProfile } from "@/services/scoring/profileScorer";
 
-/**
- * POST /api/resume/fit-check
- *
- * 2026-06-19 (Brief Tasks 2 + 17) — extended return shape:
- *   - `breakdown` sub-scores: skillsCoverage, seniorityFit, locationFit,
- *     experienceFit, redFlagsFound — drive the labeled bars on /evaluate/job-fit
- *     and the compact tooltip on opportunity cards.
- *   - `keywordCoverage`: per-keyword presence with a coverage percentage,
- *     rendered as covered/missing tag clouds.
- */
+// Re-export for any legacy consumer still importing types from this route.
+export type { KeywordCoverage, FitBreakdown };
 
-export interface FitBreakdown {
-  /** 0-100 — proportion of JD-required skills present on the resume. */
-  skillsCoverage: number;
-  /** Seniority alignment vs JD seniority signals. */
-  seniorityFit: "match" | "overqualified" | "underqualified" | "unknown";
-  /** Location alignment — remote_ok captures remote-friendly JDs. */
-  locationFit: "match" | "remote_ok" | "mismatch" | "unknown";
-  /** 0-100 — years/depth of experience signal vs JD requirement. */
-  experienceFit: number;
-  /** Red flags present IN THE JD itself (unpaid, commission-only, etc). */
-  redFlagsFound: string[];
-}
-
-export interface KeywordCoverage {
-  /** JD keywords that ALSO appear in the resume (case-insensitive). */
-  covered: string[];
-  /** JD keywords NOT found on the resume. */
-  missing: string[];
-  /** 0-100 — covered.length / (covered+missing) total * 100. */
-  coverageScore: number;
-}
-
-export interface FitCheckResult {
-  fitScore: number;
-  summary: string;
-  strengths: string[];
-  gaps: string[];
-  missingSkills: string[];
-  recommendations: string[];
-  breakdown: FitBreakdown;
-  keywordCoverage: KeywordCoverage;
+export interface FitCheckResult extends DeterministicFitResult {
   /** 2026-06-28 — semantic similarity 0-100 from a local TF-IDF model.
-   *  Null when either input is empty/whitespace — UI hides
-   *  the tag in that case. */
+   *  Null when either input is empty/whitespace. */
   semanticScore?: number | null;
+  /** feat/jobs-fit-check-internal — the ONLY LLM-generated field. Null when
+   *  the LLM call failed or was skipped. */
+  summary: string | null;
+  /** "llm" (Haiku succeeded) | "unavailable" (call failed / no key / any error).
+   *  The UI reads this to decide whether to show the friendly note. */
+  summarySource: "llm" | "unavailable";
 }
+
+// ── Route ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -77,157 +74,178 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     resumeText    = (body.resumeText    ?? "").trim();
     jobDescription = (body.jobDescription ?? "").trim();
-
-    if (!resumeText)    return NextResponse.json({ error: "resumeText is required" },    { status: 400 });
+    if (!resumeText)     return NextResponse.json({ error: "resumeText is required" },     { status: 400 });
     if (!jobDescription) return NextResponse.json({ error: "jobDescription is required" }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const anthropic = createTracedClient(user.id, "resume/fit-check");
+  // ── Step 1: resolve the structured profile (deterministic scoring input).
+  //   The full career_profiles + user_profiles data is what
+  //   scoreOpportunityAgainstProfile expects. If a user hits this route
+  //   before saving their canonical profile, fall back to a minimal
+  //   profile derived from the pasted resume text so scoring still runs.
+  const profile = await resolveProfile(supabase, user.id, resumeText);
 
-  const prompt = `You are an expert career coach and ATS analyst. Assess how well a candidate's resume fits a job description.
+  // ── Step 2: compute the deterministic result. This is the source of
+  //   truth for fitScore + every structured list. NO LLM.
+  //   Job title + company are not passed by the client today; we accept
+  //   the JD's first line as a coarse title heuristic to keep scoring
+  //   sensible until the UI is extended to send them explicitly.
+  const jobTitle = coarseJobTitleFromJD(jobDescription);
+  const deterministic = computeDeterministicFit(jobTitle, jobDescription, /*company*/ "", profile);
 
-<resume>
-${resumeText}
-</resume>
-
-<job_description>
-${jobDescription}
-</job_description>
-
-Provide a detailed, explainable fit analysis. Respond ONLY with valid JSON in this exact format:
-{
-  "fitScore": <integer 0-100>,
-  "summary": "<2-3 sentence overall assessment>",
-  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-  "gaps": ["<gap 1>", "<gap 2>", "<gap 3>"],
-  "missingSkills": ["<skill 1>", "<skill 2>"],
-  "recommendations": ["<recommendation 1>", "<recommendation 2>", "<recommendation 3>"],
-  "breakdown": {
-    "skillsCoverage": <integer 0-100>,
-    "seniorityFit": "<one of: match | overqualified | underqualified | unknown>",
-    "locationFit":  "<one of: match | remote_ok | mismatch | unknown>",
-    "experienceFit": <integer 0-100>,
-    "redFlagsFound": ["<JD red flag 1>", "<JD red flag 2>"]
-  },
-  "keywordCoverage": {
-    "covered": ["<keyword 1>", "<keyword 2>"],
-    "missing": ["<keyword 1>", "<keyword 2>"],
-    "coverageScore": <integer 0-100>
-  }
-}
-
-Guidelines:
-- fitScore: 80-100 = strong fit, 60-79 = moderate fit, 40-59 = partial fit, below 40 = weak fit
-- strengths: 3-5 specific things the candidate has that match the job
-- gaps: 2-4 specific things the job requires that the candidate lacks or has weakly
-- missingSkills: concrete skills/tools/technologies in the JD not on the resume
-- recommendations: 2-4 actionable steps to improve this resume for this specific role
-- breakdown.skillsCoverage: count of REQUIRED skills present on resume / total REQUIRED * 100
-- breakdown.seniorityFit:
-    "match"            — candidate's seniority aligns with JD's
-    "overqualified"    — candidate is more senior than the role
-    "underqualified"   — candidate is less senior than the role
-    "unknown"          — neither resume nor JD declares seniority clearly
-- breakdown.locationFit:
-    "match"     — candidate's location matches the JD's hard location requirement
-    "remote_ok" — JD allows remote, regardless of candidate location
-    "mismatch"  — JD requires onsite in a different city/country
-    "unknown"   — JD or resume omits location
-- breakdown.experienceFit: 0-100 score on YEARS / DEPTH of experience vs JD requirement
-- breakdown.redFlagsFound: any RED FLAGS IN THE JD ITSELF (unpaid, equity-only, "competitive salary"
-  with no number, "commission only", "homework assignment", "working interview", MLM signals).
-  Empty array if none.
-- keywordCoverage.covered: distinct ATS-style keywords from the JD that ALSO appear on the resume (case-insensitive).
-- keywordCoverage.missing: distinct ATS-style keywords from the JD that DO NOT appear on the resume.
-- keywordCoverage.coverageScore: round(covered / (covered + missing) * 100). 0 when both are empty.
-- Aim for 8-15 keywords across covered + missing combined.`;
-
-  // fix/jobs-fit-check-500 (2026-06-29) — wrap in try/catch so an
-  // Anthropic-side failure returns a readable JSON body instead of a
-  // blank 500. Combining temperature + top_p triggered the prior 500.
-  let msg;
+  // ── Step 3: semantic score (TF-IDF, already deterministic, no external
+  //   API). Best-effort — null on unexpected failure.
+  let semanticScore: number | null = null;
   try {
-    msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
-      // Deterministic scoring (Fix C from #336). Only temperature is set —
-      // Anthropic recommends choosing ONE of temperature or top_p, not both.
-      // The prior #336 also set top_p: 1; that combination produced an
-      // unhandled SDK rejection in production. Dropping top_p preserves
-      // determinism (temperature: 0 alone is enough).
-      temperature: 0,
-      messages: [{ role: "user", content: prompt }],
-    });
-  } catch (e) {
-    const errMsg = e instanceof Error ? e.message : "Anthropic call failed";
-    console.error("[fit-check] anthropic.messages.create threw:", errMsg);
-    return NextResponse.json({ error: `Fit check service error: ${errMsg}` }, { status: 502 });
-  }
-
-  const raw = (msg.content[0] as { type: string; text: string }).text;
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    return NextResponse.json({ error: "AI response parse failed" }, { status: 500 });
-  }
-
-  try {
-    const result: FitCheckResult = JSON.parse(jsonMatch[0]);
-
-    // Defensive defaults so older client code that hasn't been updated to
-    // read the new fields doesn't crash on legacy-shape consumers.
-    if (!result.breakdown) {
-      result.breakdown = {
-        skillsCoverage: 0,
-        seniorityFit:   "unknown",
-        locationFit:    "unknown",
-        experienceFit:  0,
-        redFlagsFound:  [],
-      };
-    }
-    if (!result.keywordCoverage) {
-      result.keywordCoverage = { covered: [], missing: [], coverageScore: 0 };
-    }
-
-    // 2026-06-28 — semantic score (pgvector + OpenAI text-embedding-3-small).
-    // Best-effort: null on missing key, missing tables, or fetch failure.
-    try {
-      result.semanticScore = await computeSemanticScore(supabase, user.id, resumeText, jobDescription);
-    } catch {
-      result.semanticScore = null;
-    }
-
-    return NextResponse.json(result);
+    const cos = compareTexts(resumeText, jobDescription);
+    semanticScore = cos === null ? null : cosineToScore(cos);
   } catch {
-    return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
+    semanticScore = null;
   }
+
+  // ── Step 4: try the OPTIONAL narrative summary. If it fails for ANY
+  //   reason — billing (RBC incident), timeout, 4xx, 5xx, malformed
+  //   JSON — return the deterministic result with summary:null instead
+  //   of failing the whole request.
+  const { summary, summarySource } = await maybeSummary({
+    userId:     user.id,
+    jobTitle,
+    jobDescription,
+    deterministic,
+  });
+
+  const result: FitCheckResult = {
+    ...deterministic,
+    semanticScore,
+    summary,
+    summarySource,
+  };
+  return NextResponse.json(result);
 }
 
-// ── Semantic scoring helpers ─────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Compute a 0-100 semantic similarity score between resume text and
- * job-description text using a local TF-IDF + cosine similarity model.
- *
- * 2026-06-28 — replaces the previous external embeddings path (which
- * required a paid API key and returned null in production where the
- * key was never set). The new path runs entirely in-process with no
- * external API calls, no paid services, and no per-request DB round-trip.
- *
- * Returns null only when one of the inputs is empty/whitespace.
- *
- * Args are intentionally underscored — supabase/userId are no longer
- * needed (the storage round-trip is gone) but kept in the signature so
- * the caller site doesn't have to change.
+ * Best-effort profile resolver. Order:
+ *   1. career_profiles + user_profiles via extractUserProfile
+ *   2. Minimal profile built from the pasted resume text (skills=[],
+ *      currentTitle="", years=0, seniority='unknown'). Enough to run
+ *      scoreOpportunityAgainstProfile — most sub-scores will be neutral
+ *      or 0, which is the CORRECT behavior for a user who hasn't saved
+ *      their profile yet.
  */
-async function computeSemanticScore(
-  _supabase: unknown,
-  _userId:   string,
+async function resolveProfile(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
   resumeText: string,
-  jobDescription: string,
-): Promise<number | null> {
-  const cos = compareTexts(resumeText, jobDescription);
-  if (cos === null) return null;
-  return cosineToScore(cos);
+): Promise<UserProfile> {
+  try {
+    // Cast because extractUserProfile expects the supabase-js SupabaseClient
+    // type. The @supabase/ssr createServerClient returns a subtly different
+    // structural type; at runtime it's fine.
+    const p = await extractUserProfile(
+      supabase as unknown as import("@supabase/supabase-js").SupabaseClient,
+      userId,
+    );
+    if (p) return p;
+  } catch {
+    // fall through
+  }
+  // Fallback: derive whatever we can from resumeText alone.
+  return {
+    skills:          [],
+    targetRoles:     [],
+    targetSeniority: inferSeniority(resumeText),
+    currentTitle:    "",
+    yearsExperience: 0,
+    summary:         resumeText.slice(0, 500),
+    keywords:        [],
+  };
+}
+
+/**
+ * Very coarse first-line heuristic for job title. Doesn't need to be
+ * accurate — targetRoleMatch is best when the client sends the title
+ * explicitly; when they don't we fall back to "" and score 0 on that
+ * component (rather than pretending we know).
+ */
+function coarseJobTitleFromJD(jd: string): string {
+  const firstLine = jd.split(/\r?\n/).map(s => s.trim()).find(Boolean) ?? "";
+  // Keep only if it looks like a title (< 100 chars, no full-stops early).
+  if (firstLine.length < 100 && !/^[A-Z][^.]*\./.test(firstLine)) {
+    return firstLine;
+  }
+  return "";
+}
+
+/**
+ * Try to enrich the deterministic result with a 2-3 sentence holistic
+ * summary from Haiku. Every failure mode returns
+ * { summary: null, summarySource: "unavailable" } — the route never
+ * throws because of this call.
+ *
+ * The prompt input is intentionally a compact digest of the deterministic
+ * result plus the first 6k chars of the JD — NOT the full resume re-send.
+ * That's where the token savings come from.
+ */
+async function maybeSummary(args: {
+  userId:         string;
+  jobTitle:       string;
+  jobDescription: string;
+  deterministic:  DeterministicFitResult;
+}): Promise<{ summary: string | null; summarySource: "llm" | "unavailable" }> {
+  const { userId, jobTitle, jobDescription, deterministic } = args;
+
+  // No API key configured → gracefully skip. This is the same code path
+  // the RBC billing failure exercises after the SDK throws.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { summary: null, summarySource: "unavailable" };
+  }
+
+  const jdSnippet = jobDescription.slice(0, 6000);
+  const digest = [
+    `Fit score: ${deterministic.fitScore}/100`,
+    `Skills coverage: ${deterministic.breakdown.skillsMatch}, Seniority match: ${deterministic.breakdown.seniorityMatch}, Experience match: ${deterministic.breakdown.experienceMatch}, Keyword density: ${deterministic.breakdown.keywordDensity}`,
+    `Signals: ${deterministic.signals.targetRoleSignal} role match, ${deterministic.signals.senioritySignal} seniority`,
+    `Top matched skills: ${deterministic.signals.matchedSkills.slice(0, 5).join(", ") || "(none)"}`,
+    `Top missing skills: ${deterministic.signals.missingSkills.slice(0, 5).join(", ") || "(none)"}`,
+    `Strengths: ${deterministic.strengths.join(" | ") || "(none)"}`,
+    `Gaps: ${deterministic.gaps.join(" | ") || "(none)"}`,
+  ].join("\n");
+
+  const prompt = `You are a career coach. In 2-3 sentences write a holistic narrative summary of how this candidate fits this role. Base your summary ONLY on the deterministic analysis provided — do not invent facts.
+
+Job title: ${jobTitle || "(not specified)"}
+Job description (first 6000 chars):
+${jdSnippet}
+
+Deterministic fit analysis:
+${digest}
+
+Return ONLY the 2-3 sentence summary as plain text. No JSON, no markdown, no preamble.`;
+
+  try {
+    const anthropic = createTracedClient(userId, "resume/fit-check-summary");
+    const msg = await anthropic.messages.create({
+      model:       "claude-haiku-4-5-20251001",
+      max_tokens:  300,
+      temperature: 0,
+      messages:    [{ role: "user", content: prompt }],
+    });
+    const first = msg.content[0];
+    if (first?.type !== "text") {
+      return { summary: null, summarySource: "unavailable" };
+    }
+    const text = first.text.trim();
+    if (!text) return { summary: null, summarySource: "unavailable" };
+    return { summary: text, summarySource: "llm" };
+  } catch (e) {
+    // Do NOT surface the underlying error text (billing details, key
+    // hints, etc.) to the client. Log server-side and return null.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[fit-check] summary LLM call failed (deterministic body still returned):", msg);
+    return { summary: null, summarySource: "unavailable" };
+  }
 }

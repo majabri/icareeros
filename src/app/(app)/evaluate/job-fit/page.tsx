@@ -51,7 +51,10 @@ interface KeywordCoverage {
 
 interface FitCheckResult {
   fitScore: number;
-  summary: string;
+  // feat/jobs-fit-check-internal — summary is now the only LLM piece
+  // and can be null when the LLM call failed or is unavailable.
+  summary: string | null;
+  summarySource?: "llm" | "unavailable";
   strengths: string[];
   gaps: string[];
   missingSkills: string[];
@@ -1070,7 +1073,7 @@ export default function ResumeAdvisorPage() {
                       )}
                     </div>
                   )}
-                  <div className="flex-1"><h2 className="mb-2 text-base font-semibold text-gray-900">Overall Assessment</h2><p className="text-sm leading-relaxed text-gray-700">{result.summary}</p></div>
+                  <div className="flex-1"><h2 className="mb-2 text-base font-semibold text-gray-900">Overall Assessment</h2><p className="text-sm leading-relaxed text-gray-700">{result.summary ?? "The AI summary is temporarily unavailable — your fit analysis below is complete."}</p></div>
                 </div>
               </section>
 

@@ -2,9 +2,12 @@
  * POST /api/outreach
  *
  * Server-side endpoint for the Outreach Generator.
- * Given an opportunity id (and optionally a cycle_id for career context),
- * calls Claude Sonnet to generate a personalised outreach message the user
- * can send via LinkedIn or email to someone at the target company.
+ *
+ * feat/jobs-fit-check-internal Task 3 — added mode:"template"|"ai".
+ *   mode:"template" (DEFAULT) generates all three variants via
+ *     deterministic slot-filling — zero LLM cost. Uses top matched
+ *     skills, candidate headline, and role/company as fill signals.
+ *   mode:"ai" keeps the pre-existing Claude Sonnet path unchanged.
  *
  * Kept server-side so ANTHROPIC_API_KEY is never exposed to the browser.
  */
@@ -19,8 +22,8 @@ import { extractJson } from "@/lib/ai/extractJson";
 import type { OutreachResult } from "@/services/ai/outreachService";
 import type { EvaluationResult } from "@/services/ai/evaluateService";
 import { checkPlanLimit } from "@/lib/billing/checkPlanLimit";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { generateTemplateOutreach } from "@/services/outreach/templateOutreach";
+import { extractUserProfile } from "@/services/scoring/profileExtractor";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -41,8 +44,6 @@ async function makeSupabaseServer() {
     }
   );
 }
-
-// ── System prompt ─────────────────────────────────────────────────────────────
 
 const OUTREACH_SYSTEM = `You are an expert career coach specialising in professional networking inside iCareerOS — an AI-powered Career Operating System.
 
@@ -79,8 +80,6 @@ Rules:
 - Be concrete — reference the actual role title and company name from the context provided
 - If career profile context is available, weave in 1-2 relevant skills or achievements`;
 
-// ── Route handler ─────────────────────────────────────────────────────────────
-
 export async function POST(req: Request) {
   try {
     // 1. Auth
@@ -90,15 +89,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ── Plan limit check ──────────────────────────────────────────────────────
-    const limitBlock = await checkPlanLimit(supabase, user.id, "coverLetters");
-    if (limitBlock) return limitBlock;
-
-    // 2. Parse body
+    // 2. Parse body — mode defaults to "template" per Task 3.
     const body = await req.json().catch(() => ({})) as {
       opportunity_id?: string;
       cycle_id?: string;
+      mode?: "template" | "ai";
     };
+
+    const mode = body.mode ?? "template";
+
+    // Only the ai-mode path hits Anthropic — the template path is free
+    // and does not consume any plan limit.
+    if (mode === "ai") {
+      const limitBlock = await checkPlanLimit(supabase, user.id, "coverLetters");
+      if (limitBlock) return limitBlock;
+    }
 
     if (!body?.opportunity_id) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
@@ -106,12 +111,8 @@ export async function POST(req: Request) {
 
     const { opportunity_id, cycle_id } = body;
 
-    // 3. Load opportunity
-      // RLS fix (2026-05-11): `opportunities` is service-role-only for reads.
-      // Querying via the user-session client returns no rows and produces
-      // a misleading 'Opportunity not found' 404 even when the row exists.
-      // Use a service-role client for the lookup. The service key is the
-      // same one used elsewhere in this codebase (jobs/agent, jobs/search).
+    // 3. Load opportunity (service-role client — RLS on opportunities is
+    //    service-role-only; see 2026-05-11 note in git history).
     const { createClient: createServiceRoleClient } = await import("@supabase/supabase-js");
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const oppClient = serviceKey
@@ -131,7 +132,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
     }
 
-    // 4. Optionally load career profile for personalisation (best-effort)
+    // ── Template mode short-circuit — deterministic, zero-LLM path.
+    if (mode === "template") {
+      const profile = await extractUserProfile(
+        supabase as unknown as import("@supabase/supabase-js").SupabaseClient,
+        user.id,
+      );
+
+      const topSkills = (profile?.skills ?? []).slice(0, 3);
+      const result = generateTemplateOutreach({
+        jobTitle:            opp.title,
+        company:             opp.company,
+        jobUrl:              opp.url ?? "",
+        candidateHeadline:   profile?.currentTitle ?? "",
+        candidateTopSkills:  topSkills,
+      });
+
+      // Best-effort event log — same shape as ai-mode.
+      void supabase
+        .from("career_os_event_log")
+        .insert({
+          user_id: user.id,
+          cycle_id: cycle_id ?? null,
+          event_type: "ai_call",
+          event_data: {
+            function: "generate-outreach",
+            status: "completed",
+            mode: "template",
+            opportunity_id,
+            company: opp.company,
+            role: opp.title,
+          },
+        });
+
+      return NextResponse.json(result);
+    }
+
+    // ── ai-mode: preserved from the pre-refactor path ────────────
     let evaluation: EvaluationResult | null = null;
     if (cycle_id) {
       const { data: stageRow } = await supabase
@@ -148,7 +185,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Build user message
     const descriptionSnippet = opp.description
       ? opp.description.slice(0, 400) + (opp.description.length > 400 ? "…" : "")
       : "No description available.";
@@ -174,7 +210,6 @@ export async function POST(req: Request) {
       profileContext,
     ].join("\n");
 
-    // 6. Call Claude Sonnet
     const anthropic = createTracedClient(user.id, "outreach");
 
     const message = await anthropic.messages.create({
@@ -184,7 +219,6 @@ export async function POST(req: Request) {
       messages: [{ role: "user", content: userMessage }],
     });
 
-    // 7. Parse response
     const raw = message.content[0];
     if (raw.type !== "text") {
       throw new Error("Unexpected response type from Claude");
@@ -192,13 +226,11 @@ export async function POST(req: Request) {
 
     let result: OutreachResult;
     try {
-      // fix/jobs-smart-apply-issues Fix 2 — tolerate ```json fences.
       result = extractJson<OutreachResult>(raw.text);
     } catch {
       throw new Error("Claude returned non-JSON: " + raw.text.slice(0, 200));
     }
 
-    // Validate required fields
     if (
       !result.linkedin?.message ||
       !result.email?.subject ||
@@ -208,7 +240,6 @@ export async function POST(req: Request) {
       throw new Error("Claude response missing required fields");
     }
 
-    // 8. Log event (best-effort, non-blocking)
     void supabase
       .from("career_os_event_log")
       .insert({
@@ -218,6 +249,7 @@ export async function POST(req: Request) {
         event_data: {
           function: "generate-outreach",
           status: "completed",
+          mode: "ai",
           opportunity_id,
           company: opp.company,
           role: opp.title,
