@@ -239,3 +239,153 @@ export function buildTsqueryArgDeno(
     );
   return { arg: cleaned.join(" OR "), mode: "websearch" };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// fix/jobs-skills-normalization — Deno port of the skills normalizer.
+//
+// Kept in sync manually with src/services/scoring/skillsNormalizer.ts.
+// The parity test in
+//   src/services/retrieval/__tests__/expandQueries.deno-parity.test.ts
+// pattern is not applied here yet, but if skills-scoring drift becomes
+// a problem the same technique (import lib.ts from vitest via a
+// relative path) can guard it.
+//
+// This module is currently DEAD CODE from the edge function's
+// perspective — index.ts's scoreJob doesn't call it yet. It's here so
+// Platform can wire it in when they redeploy curate-user-
+// recommendations, in the same PR that switches Deno-side scoring to
+// alias-aware matching. Doing it code-only avoids a Platform deploy for
+// this PR.
+// ─────────────────────────────────────────────────────────────────────
+const ALIAS_GROUPS_DENO: string[][] = [
+  ["ISO 27001", "ISO/IEC 27001", "ISO27001"],
+  ["NIST CSF", "NIST CSF 2.0", "NIST Cybersecurity Framework"],
+  ["NIST 800-53", "NIST SP 800-53", "SP 800-53"],
+  ["SOC 2", "SOC2", "SOC II", "SOC 2 Type II"],
+  ["PCI DSS", "PCI-DSS", "PCI"],
+  ["GRC", "Governance Risk and Compliance"],
+  ["IAM", "Identity and Access Management"],
+  ["SIEM"],
+  ["Incident Response", "IR"],
+  ["Tabletop Exercises", "Tabletops", "Tabletop"],
+  ["BISO", "Business Information Security Officer", "Business Information Security"],
+  ["CISO", "Chief Information Security Officer", "Chief Security Officer"],
+  ["Disaster Recovery", "DR"],
+  ["Business Continuity", "BCP"],
+  ["Zero Trust", "Zero Trust Architecture", "ZTA"],
+  ["Cloud Security"],
+  ["DevOps"],
+  ["Kubernetes", "K8s"],
+  ["JavaScript", "JS"],
+  ["TypeScript", "TS"],
+  ["CI/CD", "CICD", "Continuous Integration"],
+  ["AWS", "Amazon Web Services"],
+  ["GCP", "Google Cloud"],
+  ["Azure", "Microsoft Azure"],
+  ["Machine Learning", "ML"],
+  ["Artificial Intelligence", "AI"],
+  ["P&L", "PnL", "Profit and Loss"],
+  ["GAAP"],
+  ["SOX", "Sarbanes-Oxley"],
+  ["FP&A", "FPA", "Financial Planning and Analysis"],
+  ["M&A", "Mergers and Acquisitions"],
+  ["HIPAA"],
+  ["EMR", "EHR", "Electronic Health Records"],
+  ["SEO", "Search Engine Optimization"],
+  ["SEM", "Search Engine Marketing"],
+  ["CRM", "Customer Relationship Management"],
+  ["GTM", "Go-to-market"],
+  ["PPC", "Pay-per-click"],
+  ["PM", "Project Management", "Product Management"],
+  ["GDPR"],
+  ["OCC"],
+  ["FFIEC"],
+  ["GLBA"],
+  ["NYDFS"],
+];
+
+const PROTECTED_SLASH_TOKENS_DENO = ["ISO/IEC 27001", "CI/CD", "TCP/IP", "BC/DR"];
+
+const ALIAS_LOOKUP_DENO: Map<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const group of ALIAS_GROUPS_DENO) {
+    const canonical = group[0];
+    for (const variant of group) m.set(variant.toLowerCase(), canonical);
+  }
+  return m;
+})();
+
+function escapeRegDeno(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function strictAliasHitDeno(raw: string): string | null {
+  const norm = raw.replace(/\s+&\s+/g, " and ").replace(/\s+/g, " ").trim().toLowerCase();
+  return ALIAS_LOOKUP_DENO.get(norm) ?? null;
+}
+
+function extractParensDeno(raw: string): { main: string; extras: string[] } {
+  const extras: string[] = [];
+  const main = raw
+    .replace(/[\(\[\{]([^)\]\}]+)[\)\]\}]/g, (_m: string, inner: string) => {
+      const t = inner.trim();
+      if (t.length >= 2) extras.push(t);
+      return " ";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+  return { main, extras };
+}
+
+function splitCompoundDeno(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const { main, extras } = extractParensDeno(trimmed);
+  const candidates: string[] = [...extras];
+  const wholeHit = strictAliasHitDeno(trimmed);
+  if (wholeHit) candidates.push(wholeHit);
+  const mainHit = strictAliasHitDeno(main);
+  if (mainHit) candidates.push(mainHit);
+  const protectedTokens: string[] = [];
+  let scratch = main;
+  for (let i = 0; i < PROTECTED_SLASH_TOKENS_DENO.length; i++) {
+    const tok = PROTECTED_SLASH_TOKENS_DENO[i];
+    const re  = new RegExp(escapeRegDeno(tok), "gi");
+    scratch = scratch.replace(re, () => {
+      const idx = protectedTokens.length;
+      protectedTokens.push(tok);
+      return `${idx}`;
+    });
+  }
+  const parts = scratch
+    .split(/[·•|,;/]|\s+&\s+|\s+\band\b\s+/i)
+    .map((p: string) => p.trim())
+    .map((p: string) => p.replace(/(\d+)/g, (_m: string, i: string) => protectedTokens[Number(i)]))
+    .filter(Boolean);
+  return [...candidates, ...parts];
+}
+
+export function canonicalizeDeno(raw: string): string {
+  const cleaned = raw.trim();
+  if (cleaned.length < 2) return "";
+  const hit = ALIAS_LOOKUP_DENO.get(cleaned.toLowerCase());
+  if (hit) return hit;
+  return cleaned;
+}
+
+export function normalizeSkillsDeno(raw: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    for (const piece of splitCompoundDeno(item)) {
+      const canonical = canonicalizeDeno(piece);
+      if (!canonical) continue;
+      const key = canonical.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(canonical);
+    }
+  }
+  return out;
+}
