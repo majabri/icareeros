@@ -57,9 +57,15 @@ export interface KeywordCoverage {
 export interface DeterministicFitResult {
   /** The authoritative score — from scoreOpportunityAgainstProfile, NOT the LLM. */
   fitScore: number;
-  /** ProfileFitScore breakdown carried through verbatim so the UI's BreakdownBar
-   *  can render the same components the recommendation ranker used. */
-  breakdown: ProfileFitScore["breakdown"];
+  /** UI-shaped breakdown consumed by /evaluate/job-fit's BreakdownBar +
+   *  BreakdownTag. This is the OLD FitBreakdown shape (skillsCoverage,
+   *  seniorityFit, locationFit, experienceFit, redFlagsFound) so the page
+   *  keeps rendering with zero changes. */
+  breakdown: FitBreakdown;
+  /** ProfileFitScore breakdown — the raw numeric components the composite
+   *  weight uses. Kept alongside `breakdown` for callers who want the
+   *  underlying weights (e.g. the recommendation ranker). */
+  componentScores: ProfileFitScore["breakdown"];
   /** 2-4 templated statements — every one traces to a real signal. */
   strengths: string[];
   /** 2-5 templated statements — same discipline as strengths. */
@@ -348,9 +354,21 @@ export function computeDeterministicFit(
   const gaps            = buildGaps(pfs, profile);
   const recommendations = buildRecommendations(pfs, keywordCoverage);
 
+  // Derive the UI-facing FitBreakdown from the ProfileFitScore. Location and
+  // red flags are NOT computed deterministically today — return sensible
+  // neutrals rather than fabricating.
+  const breakdown: FitBreakdown = {
+    skillsCoverage: pfs.breakdown.skillsMatch,
+    seniorityFit:   pfs.signals.senioritySignal,
+    locationFit:    "unknown",
+    experienceFit:  pfs.breakdown.experienceMatch,
+    redFlagsFound:  [],
+  };
+
   return {
     fitScore:        pfs.total,
-    breakdown:       pfs.breakdown,
+    breakdown,
+    componentScores: pfs.breakdown,
     strengths,
     gaps,
     missingSkills:   pfs.signals.missingSkills,
