@@ -72,17 +72,25 @@ function extractSkills(text: string): string[] {
 
 function inferSeniority(title: string): string {
   const t = (title ?? "").toLowerCase();
+  // fix/jobs-jd-extractor — Deno-side mirror of the Node change.
+  //   * "Managing Director" and "Executive Director" are exec-tier.
+  //   * BISO / "*-Officer" titles land at executive (was director; RBC
+  //     acceptance test proved that mis-classifies).
+  //   * "distinguished", "fellow" → principal.
+  if (/\bmanaging\s+director\b|\bexecutive\s+director\b/i.test(t)) return "executive";
   if (/\bintern\b/.test(t))                        return "intern";
   if (/\bjunior\b|\bjr\.?\b/.test(t))              return "junior";
   if (/\bassociate\b/.test(t))                     return "associate";
   if (/\bstaff\b/.test(t))                         return "staff";
+  if (/\bdistinguished\b|\bfellow\b/.test(t))     return "principal";
   if (/\bprincipal\b/.test(t))                     return "principal";
   if (/\bcto\b|\bceo\b|\bcio\b|\bciso\b|\bcfo\b|\bcoo\b|\bcso\b|\bcmo\b|\bcpo\b/i.test(t) ||
       /\bchief\b|\bpresident\b|\bexecutive\b/i.test(t)) return "executive";
-  if (/\bbiso\b|\bbusiness information security officer\b/i.test(t)) return "director";
-  if (/\bvp\b|\bvice president\b|\bsvp\b|\bevp\b/.test(t)) return "vp";
-  if (/\bdirector\b|\bhead of\b/.test(t))          return "director";
-  if (/\bsenior\b|\bsr\.?\b|\blead\b/.test(t))     return "senior";
+  if (/\bbiso\b|\bbusiness\s+information\s+security\s+officer\b/i.test(t)) return "executive";
+  if (/\b(?:security|compliance|information|data|privacy|technology|risk)\s+officer\b/i.test(t)) return "executive";
+  if (/\bvp\b|\bvice\s+president\b|\bsvp\b|\bevp\b/.test(t)) return "vp";
+  if (/\bdirector\b|\bhead\s+of\b/.test(t))       return "director";
+  if (/\bsenior\b|\bsr\.?\b|\blead\b/.test(t))    return "senior";
   if (/\bmanager\b/.test(t))                       return "mid";
   return "unknown";
 }

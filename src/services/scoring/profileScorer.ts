@@ -12,7 +12,8 @@
  *   keywordDensity     5%  — profile keywords in JD as a booster
  */
 import type { OpportunityResult } from "@/services/opportunityTypes";
-import { skillAppearsIn, normalizeSkills, canonicalize } from "./skillsNormalizer";
+import { skillAppearsIn, canonicalize } from "./skillsNormalizer";
+import { extractJDSkills } from "./jdExtractor";
 
 export interface UserProfile {
   skills:            string[];
@@ -67,12 +68,27 @@ export function scoreOpportunityAgainstProfile(
   const expScore        = scoreExperienceMatch(job, profile);
   const kwScore         = scoreKeywordDensity(job, profile);
 
+  // fix/jobs-jd-extractor Task 4 — weight redistribution.
+  //   An "unknown" signal should not act as a 50/100 penalty. Instead
+  //   we drop the unknown component's weight from the denominator
+  //   and renormalise across the KNOWN components. A candidate whose
+  //   seniority we can't infer scores based on target-role + skills
+  //   + experience + keywords ALONE, with those weights bumped
+  //   proportionally.
+  // Only `seniority` can be truly "unknown" (jobLevel or target unresolvable
+  // → we returned score:50 as a placeholder). Everything else has a real
+  // computed signal even at 0. Redistribute the seniority 20% when unknown.
+  const components: Array<{ score: number; weight: number; known: boolean }> = [
+    { score: targetRoleMatch.score, weight: 0.35, known: true },
+    { score: skillsScore.score,     weight: 0.30, known: true },
+    { score: senScore.score,        weight: 0.20, known: senScore.signal !== "unknown" },
+    { score: expScore,              weight: 0.10, known: true },
+    { score: kwScore,               weight: 0.05, known: true },
+  ];
+  const activeWeight = components.filter(c => c.known).reduce((a, c) => a + c.weight, 0);
+  const numerator    = components.filter(c => c.known).reduce((a, c) => a + c.score * c.weight, 0);
   const total = Math.max(0, Math.min(100, Math.round(
-    targetRoleMatch.score * 0.35 +
-    skillsScore.score     * 0.30 +
-    senScore.score        * 0.20 +
-    expScore              * 0.10 +
-    kwScore               * 0.05
+    activeWeight > 0 ? numerator / activeWeight : 0
   )));
 
   return {
@@ -173,14 +189,18 @@ export function scoreSkillsMatch(
     //   the canonical form against the JD text (word-bounded).
     if (skillAppearsIn(skill, descLower)) matched.push(skill);
   }
-  // Job-side skills: normalize what the naive extractor pulls so
-  // "missing" reads as canonical forms too ("ISO 27001", not "iso 27001").
-  const jobSkillsRaw   = extractJobSkills(descLower);
-  const jobSkillsNorm  = normalizeSkills(jobSkillsRaw);
+  // fix/jobs-jd-extractor — section-scoped, blocklist-aware,
+  //   pipeline-normalized. Replaces the naive comma-splitter that
+  //   was pulling in "competitive compensation", "collaborative",
+  //   and parser fragments like "nfa standards)".
+  const jobSkillsNorm = extractJDSkills(job.description ?? "");
   const totalPool = Math.max(profile.skills.length, jobSkillsNorm.length, 1);
   const score = Math.min(100, Math.round((matched.length / totalPool) * 100));
   const matchedCanonical = new Set(matched.map(m => canonicalize(m).toLowerCase()));
-  const missing = jobSkillsNorm.filter(js => !matchedCanonical.has(js.toLowerCase()));
+  // fix/jobs-jd-extractor — the extractor returns up to 25 candidates so
+  //   the pool is big enough to see genuine matches; the user-facing
+  //   `missing` list is capped at 12 for readability.
+  const missing = jobSkillsNorm.filter(js => !matchedCanonical.has(js.toLowerCase())).slice(0, 12);
   return { score, matched, missing };
 }
 
@@ -209,23 +229,30 @@ function positive(n: number): number { return n === -1 ? Number.MAX_SAFE_INTEGER
 
 export function inferSeniority(text: string): Seniority {
   const t = text.toLowerCase();
-  // fix/jobs-multi-target-roles Task 3 — expanded exec-tier keyword list.
-  // Adds CSO/CTO/CFO/CIO/COO/CEO acronyms + spelled-out variants +
-  // "President" so Chief-* titles + president-tier roles land as executive.
+  // fix/jobs-jd-extractor — extended patterns. Order matters: check
+  //   the most-specific / highest-band signals first.
+  //   "Managing Director" and "Executive Director" are executive-tier
+  //   in finance/legal circles, not director-tier.
+  if (/\bmanaging\s+director\b|\bexecutive\s+director\b/i.test(t)) return "executive";
   if (
     /\bcto\b|\bceo\b|\bcio\b|\bciso\b|\bcfo\b|\bcoo\b|\bcso\b|\bcmo\b|\bcpo\b/i.test(t) ||
     /\bchief\b|\bpresident\b|\bexecutive\b/i.test(t)
   ) return "executive";
-  if (/\bvp\b|vice president/i.test(t))       return "vp";
-  // Business Information Security Officer is director-tier (Amir's list).
-  if (/\bbiso\b|\bbusiness information security officer\b/i.test(t)) return "director";
-  if (/director|head of/i.test(t))            return "director";
-  if (/principal/i.test(t))                    return "principal";
-  if (/\bstaff\b/i.test(t))                    return "staff";
-  if (/\bsenior\b|\bsr\.?\b|\blead\b/i.test(t))return "senior";
-  if (/\bassociate\b/i.test(t))                return "associate";
-  if (/\bjunior\b|\bjr\.?\b|entry level|graduate/i.test(t)) return "junior";
-  if (/intern|internship/i.test(t))            return "intern";
+  // Any *SO acronym (BISO/CISO/CSO/CTO/etc.) or spelled-out
+  //   "* Officer" title lands at executive. The pre-fix code had BISO
+  //   at director; the RBC test proved that mis-classifies. Officer
+  //   in a title-position is a C-tier signal.
+  if (/\bbiso\b|\bbusiness\s+information\s+security\s+officer\b/i.test(t)) return "executive";
+  if (/\b(?:security|compliance|information|data|privacy|technology|risk)\s+officer\b/i.test(t)) return "executive";
+  if (/\bvp\b|\bvice\s+president\b|\bsvp\b|\bevp\b/i.test(t)) return "vp";
+  if (/\bdirector\b|\bhead\s+of\b/i.test(t)) return "director";
+  if (/\bdistinguished\b|\bfellow\b/i.test(t)) return "principal";
+  if (/\bprincipal\b/i.test(t)) return "principal";
+  if (/\bstaff\b/i.test(t)) return "staff";
+  if (/\bsenior\b|\bsr\.?\b|\blead\b/i.test(t)) return "senior";
+  if (/\bassociate\b/i.test(t)) return "associate";
+  if (/\bjunior\b|\bjr\.?\b|entry\s+level|graduate/i.test(t)) return "junior";
+  if (/intern|internship/i.test(t)) return "intern";
   if (/manager|engineer|analyst|specialist/i.test(t)) return "mid";
   return "unknown";
 }
