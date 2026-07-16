@@ -457,6 +457,16 @@ function clean(raw: string): string {
   const wordCount = s.split(/\s+/).filter(Boolean).length;
   if (wordCount > 6) return "";
 
+  // fix/jobs-seniority-wiring — generic prose patterns:
+  //   (A) First-person-plural culture prose. "We care about each other",
+  //       "our mission", "us as a team" — starts with we/our/us +
+  //       verb-ish word. Shape rule, not a keyword list.
+  //   (B) Prepositional-lead fragments. "at the management level",
+  //       "in the enterprise", "of our approach" — bare preposition
+  //       start followed by an article. Never a skill.
+  if (/^(?:we|our|us|ours)\s+\w/i.test(lower)) return "";
+  if (/^(?:at|in|on|of|from|by|for|to)\s+(?:the|a|an|our|your)\s+/i.test(lower)) return "";
+
   // Bare stopwords.
   if (BARE_STOPWORDS.has(lower)) return "";
 

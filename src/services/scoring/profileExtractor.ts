@@ -129,7 +129,15 @@ const STOP_WORDS = new Set([
   "including","various","strong","excellent","ability","able","company","role","position",
 ]);
 
-const SENIORITY_ORDER = ["intern","junior","associate","mid","senior","staff","principal","director","vp","executive","unknown"];
+// fix/jobs-seniority-wiring — "unknown" is the LOWEST rank (most
+// uncertain), not the highest. The prior placement at the end made
+// rank("unknown") === 10, higher than rank("executive") === 9, so
+// the derivation loop `if (rank(s) > rank(targetSeniority))` could
+// never advance past the initial "unknown" seed and every user's
+// targetSeniority came back as "unknown" regardless of target_roles.
+// This is the true root cause of the PR #382 "seniorityFit unknown"
+// residual — not adapter wiring, not a Vercel deploy issue.
+const SENIORITY_ORDER = ["unknown","intern","junior","associate","mid","senior","staff","principal","director","vp","executive"];
 function rank(s: Seniority): number { return SENIORITY_ORDER.indexOf(s); }
 
 function parseYearMonth(v: string | undefined): number | null {

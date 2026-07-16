@@ -300,3 +300,51 @@ describe("extractJDSkills — algebra", () => {
     expect(extractJDSkills(PLAIN_TEXT_JD).length).toBeGreaterThanOrEqual(3);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// fix/jobs-seniority-wiring — generic prose-pattern hygiene tests
+// ─────────────────────────────────────────────────────────────────────
+describe("extractJDSkills — generic prose patterns (not RBC-specific)", () => {
+  it("first-person-plural culture prose is dropped ('We care about...', 'our mission')", () => {
+    const jd = `Requirements
+- ISO 27001
+- We care about each other
+- We invest in our team
+- our mission is to serve customers
+- Kubernetes`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("ISO 27001");
+    expect(out).toContain("Kubernetes");
+    for (const s of out) {
+      expect(/^(?:we|our|us)\s/i.test(s)).toBe(false);
+    }
+  });
+
+  it("prepositional-lead fragments are dropped ('at the management level', 'in the enterprise')", () => {
+    const jd = `Requirements
+- HIPAA
+- at the management level
+- in the enterprise
+- of our approach
+- Python`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("HIPAA");
+    expect(out).toContain("Python");
+    for (const s of out) {
+      expect(/^(?:at|in|on|of|from|by|for)\s+(?:the|a|an|our|your)\s/i.test(s)).toBe(false);
+    }
+  });
+
+  it("cross-domain: same rules apply to finance/marketing/healthcare prose", () => {
+    const finance = `Requirements\n- GAAP\n- We're building a values-driven finance team\n- at the executive committee level\n- FP&A`;
+    const marketing = `Requirements\n- SEO\n- our mission is to grow\n- SEM`;
+    const healthcare = `Requirements\n- HIPAA\n- We deliver patient-first care\n- EMR`;
+    for (const jd of [finance, marketing, healthcare]) {
+      const out = extractJDSkills(jd);
+      for (const s of out) {
+        expect(/^(?:we|our|us)\s/i.test(s)).toBe(false);
+        expect(/^(?:at|in|on|of|from|by|for)\s+(?:the|a|an|our|your)\s/i.test(s)).toBe(false);
+      }
+    }
+  });
+});
