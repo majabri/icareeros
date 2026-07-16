@@ -499,7 +499,15 @@ export default function ResumeAdvisorPage() {
       const res = await fetch("/api/resume/fit-check", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ resumeText, jobDescription: jobText }),
+        body:    JSON.stringify({
+          resumeText,
+          jobDescription: jobText,
+          // fix/jobs-target-role-match — send the resolved title so
+          // targetRoleMatch has a real signal. URL mode fetches it from
+          // fetch-job-url's metadata; paste mode may leave it undefined
+          // and the route falls back to the coarse heuristic.
+          jobTitle: urlFetchMeta?.title,
+        }),
       });
       const data = await res.json().catch(() => ({} as { error?: string }));
       if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Fit check failed (HTTP ${res.status})`);

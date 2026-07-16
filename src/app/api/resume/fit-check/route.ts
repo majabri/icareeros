@@ -69,11 +69,17 @@ export async function POST(req: NextRequest) {
 
   let resumeText: string;
   let jobDescription: string;
+  let bodyJobTitle: string;
 
   try {
     const body = await req.json();
     resumeText    = (body.resumeText    ?? "").trim();
     jobDescription = (body.jobDescription ?? "").trim();
+    // fix/jobs-target-role-match — client may send jobTitle explicitly
+    //   (from urlFetchMeta.title on URL-mode fetches). When present, this
+    //   wins over the coarse first-line heuristic below, so targetRoleMatch
+    //   actually has a title to score against.
+    bodyJobTitle  = (body.jobTitle      ?? "").trim();
     if (!resumeText)     return NextResponse.json({ error: "resumeText is required" },     { status: 400 });
     if (!jobDescription) return NextResponse.json({ error: "jobDescription is required" }, { status: 400 });
   } catch {
@@ -92,7 +98,11 @@ export async function POST(req: NextRequest) {
   //   Job title + company are not passed by the client today; we accept
   //   the JD's first line as a coarse title heuristic to keep scoring
   //   sensible until the UI is extended to send them explicitly.
-  const jobTitle = coarseJobTitleFromJD(jobDescription);
+  // Prefer the client-supplied title over the coarse first-line
+  // heuristic. Long first lines (RBC-style 200-char intros) return
+  // "" from the fallback, which then zeros scoreTargetRoleMatch and
+  // drops 35% of the composite weight for no good reason.
+  const jobTitle = bodyJobTitle || coarseJobTitleFromJD(jobDescription);
   const deterministic = computeDeterministicFit(jobTitle, jobDescription, /*company*/ "", profile);
 
   // ── Step 3: semantic score (TF-IDF, already deterministic, no external

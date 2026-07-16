@@ -238,13 +238,19 @@ describe("multi-target-roles: scoreOpportunityAgainstProfile with multi-role tar
         "Chief Information Security Officer",
       ],
     });
-    // Word-overlap between "Chief Security Officer" and title = 3/3 → 100
+    // fix/jobs-target-role-match — under synonym-aware scoring, "CISO",
+    //   "Chief Security Officer", and "Chief Information Security Officer"
+    //   ALL resolve via the ciso family and all score 100 against a
+    //   "Chief Security Officer" title. The tie-break falls to first-seen
+    //   in profile.targetRoles order. Any of the three is a correct
+    //   bestMatch — assert against the family, not the specific label.
     const job = makeJob({
       title: "Chief Security Officer",
       description: "Skills required: python, aws.",
     });
     const r = scoreOpportunityAgainstProfile(job, profile);
     expect(r.total).toBeGreaterThan(50);
-    expect(r.signals.targetRoleBestMatch).toBe("Chief Security Officer");
+    expect(["CISO", "Chief Security Officer", "Chief Information Security Officer"])
+      .toContain(r.signals.targetRoleBestMatch);
   });
 });
