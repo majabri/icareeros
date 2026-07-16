@@ -239,8 +239,11 @@ export function extractJDSkills(text: string, opts: ExtractOptions = {}): string
   for (const w of HEADING_WORDS) {
     const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`([^\n])\\s+${esc}\\s*:`, "g");
-    preprocessed = preprocessed.replace(re, `$1\n\n${w}:`);
+    preprocessed = preprocessed.replace(re, `$1\n\n${w}:\n`);
   }
+  // Insert a newline before every " - " bullet marker so bullet items
+  // become their own lines. Common in HTML-stripped Ashby / Workday JDs.
+  preprocessed = preprocessed.replace(/([^\n])\s+-\s+/g, "$1\n- ");
 
   // 1. Locate section slices.
   const slices = findIncludeSlices(preprocessed);
