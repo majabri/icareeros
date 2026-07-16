@@ -37,7 +37,7 @@ function makeProfile(over: Partial<UserProfile> = {}): UserProfile {
   return {
     skills:          ["python", "aws"],
     targetRoles:     ["Director of Security", "CISO", "BISO"],
-    targetSeniority: "director",
+    targetSeniority: "executive",   // fix/jobs-jd-extractor — BISO/CISO both = executive; derived max
     currentTitle:    "Senior Security Engineer",
     yearsExperience: 9,
     summary:         "Security leader",

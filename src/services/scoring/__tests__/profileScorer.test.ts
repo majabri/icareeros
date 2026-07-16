@@ -205,9 +205,9 @@ describe("multi-target-roles: inferSeniority coverage for exec titles", () => {
       expect(inferSeniority(t)).toBe("executive");
     }
   });
-  it("BISO → director tier (per Amir 2026-07-03)", () => {
-    expect(inferSeniority("BISO")).toBe("director");
-    expect(inferSeniority("Business Information Security Officer")).toBe("director");
+  it("BISO → executive tier (fix/jobs-jd-extractor — was director pre-2026-07-15)", () => {
+    expect(inferSeniority("BISO")).toBe("executive");
+    expect(inferSeniority("Business Information Security Officer")).toBe("executive");
   });
   it("Chief / President / Executive keywords → executive", () => {
     expect(inferSeniority("Chief Security Officer")).toBe("executive");
