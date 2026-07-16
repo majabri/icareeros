@@ -209,8 +209,41 @@ export function extractJDSkills(text: string, opts: ExtractOptions = {}): string
   const cap = opts.cap ?? 25;
   if (!text || typeof text !== "string") return [];
 
+  // fix/jobs-jd-extractor — inline heading normalisation. Many ingested JDs
+  //   (Ashby, some Workday, older Greenhouse) come as HTML-stripped walls
+  //   of text where "RESPONSIBILITIES:" or "Qualifications:" appear inline
+  //   with no preceding newline. Insert `\n\n` before each known heading
+  //   word that is followed by a colon, so line-based heading detection
+  //   sees them as their own line.
+  const HEADING_WORDS = [
+    "REQUIREMENTS", "Requirements", "requirements",
+    "QUALIFICATIONS", "Qualifications", "qualifications",
+    "RESPONSIBILITIES", "Responsibilities", "responsibilities",
+    "WHO YOU ARE", "Who You Are",
+    "ABOUT YOU", "About You",
+    "YOUR BACKGROUND", "Your Background",
+    "MUST HAVE", "Must Have", "MUST HAVES",
+    "NICE TO HAVE", "Nice to Have",
+    "PREFERRED", "Preferred",
+    "KEY SKILLS", "Key Skills",
+    "SKILLS", "Skills",
+    "ABOUT US", "About Us",
+    "BENEFITS", "Benefits",
+    "COMPENSATION", "Compensation",
+    "WHAT WE OFFER", "What We Offer",
+    "OUR CULTURE", "Our Culture",
+    "EEO", "Equal Opportunity",
+    "HOW TO APPLY", "How to Apply",
+  ];
+  let preprocessed = text;
+  for (const w of HEADING_WORDS) {
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`([^\n])\\s+${esc}\\s*:`, "g");
+    preprocessed = preprocessed.replace(re, `$1\n\n${w}:`);
+  }
+
   // 1. Locate section slices.
-  const slices = findIncludeSlices(text);
+  const slices = findIncludeSlices(preprocessed);
 
   // 2. Split slices into candidate chunks.
   const rawCandidates: string[] = [];
