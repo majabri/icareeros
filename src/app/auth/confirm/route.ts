@@ -16,7 +16,11 @@
  *     — the link could be forwarded, the inbox could be on a shared device.
  *     Forcing a password sign-in after confirmation is the safer default.
  *
- *   - `magiclink`, `recovery`, `email_change`, `invite` and any other type:
+ *   - `recovery` (password reset): we keep the session (verifyOtp establishes
+ *     the recovery session so `updateUser({ password })` succeeds) and forward
+ *     to /auth/reset-password by default. Callers can still override via `next`.
+ *
+ *   - `magiclink`, `email_change`, `invite` and any other type:
  *     the user has actively initiated a sign-in / account-change flow and
  *     expects to be authenticated. Keep the session and forward to `next`.
  *
@@ -83,6 +87,19 @@ export async function GET(req: Request) {
     );
   }
 
-  // Magic link / recovery / invite / email_change → keep session, forward.
+  // Password recovery — keep session (so /auth/reset-password can call
+  // updateUser({password})) and land the user on the reset form unless
+  // the caller passed an explicit `next`. This branch is what makes
+  // `/auth/confirm?token_hash=...&type=recovery` a working destination
+  // for the Supabase Send Email Hook (feat/platform-auth-send-email-hook).
+  // The pre-existing `/auth/callback?type=recovery` PKCE path stays
+  // functional as a fallback for legacy links in flight and as an
+  // emergency roll-back surface if the hook needs to be disabled.
+  if (type === "recovery") {
+    const dest = url.searchParams.get("next") ?? "/auth/reset-password";
+    return NextResponse.redirect(new URL(dest, req.url));
+  }
+
+  // Magic link / invite / email_change → keep session, forward.
   return NextResponse.redirect(new URL(next, req.url));
 }

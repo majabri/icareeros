@@ -189,6 +189,108 @@ The five consolidated Vercel env vars for the mailbox — all `encrypted` type, 
 
 **Historical note:** the `BUGS_EMAIL_*` env-var family (which powered the IMAP read path) was deleted 2026-07-14 (PR #376). Both SMTP send and IMAP read now use the single `BLUEHOST_SMTP_*` family. See migration history at the bottom of this file.
 
+## GoTrue Send Email Hook (feat/platform-auth-send-email-hook)
+
+### Root cause the hook fixes
+
+Auth emails (recovery, signup confirmation, magic link) sent by GoTrue
+directly through Bluehost SMTP were DKIM-failing at every major receiver.
+Header evidence from a delivered reset email showed:
+
+```
+dkim=fail header.i=@icareeros.com header.s=default
+Message-ID: <kAMqwhzJUtyQ7kAMqw9Euk@eig-obgw-5001b.ext.cloudfilter.net>
+DKIM-Signature: ... h=...Message-ID:... (Message-ID inside signed set)
+Received: from ...supabase.co by box2355.bluehost.com
+```
+
+GoTrue generates each Message-ID from its container hostname (an internal
+Kubernetes name like `ip-10-0-x-x.us-east-2.compute.internal`). Bluehost's
+cloudfilter egress hop rewrites Message-IDs whose domain doesn't match a
+routable public hostname, replacing them with `@eig-obgw-*.ext.cloudfilter.net`.
+Because Message-ID is inside the DKIM-signed header set, the rewrite
+invalidates the signature at the receiver.
+
+App-sent transactional mail through `src/lib/mailer.ts` (nodemailer 9.0.1)
+does NOT hit this because nodemailer auto-generates Message-IDs of the
+form `<uuid@icareeros.com>` from the `From:` header domain — clean, publicly
+routable, and left untouched by cloudfilter. Verified end-to-end 2026-07-17
+by a live probe to majabri714@gmail.com with `dkim=pass`.
+
+### Architecture
+
+```
+GoTrue auth event
+  ↓
+Supabase Send Email Hook  (signed webhook, verified by our edge function)
+  ↓
+supabase/functions/send-email-hook/index.ts   (Deno; standardwebhooks verify)
+  ↓ POST + Bearer AUTH_HOOK_RELAY_SECRET
+Vercel /api/auth/send-email                    (Node; template + mailer)
+  ↓
+src/lib/mailer.ts sendMail() → nodemailer → mail.icareeros.com:465
+  ↓
+Bluehost cloudfilter (leaves @icareeros.com Message-ID intact)
+  ↓
+Receiver — dkim=pass
+```
+
+Why the two-hop shape (edge function → Vercel route) rather than sending
+SMTP straight from the edge function: reuses the exact `mailer.ts` path
+that already passes DKIM, keeps all SMTP credentials consolidated in
+Vercel (no Bluehost secrets exposed to Supabase's edge platform), and
+unifies auth + app email under one sender + one Message-ID scheme.
+
+### Confirmation URL shape
+
+All auth links land on `https://icareeros.com/auth/confirm?token_hash=<h>&type=<type>`.
+The confirm route calls `supabase.auth.verifyOtp({ type, token_hash })`
+server-side and routes per type:
+
+| type            | post-verify destination                     |
+|-----------------|---------------------------------------------|
+| `signup`        | sign out, redirect to `/auth/login?confirmed=true` |
+| `recovery`      | keep session, redirect to `/auth/reset-password`   |
+| `magiclink`     | keep session, redirect to `next` (default `/dashboard`) |
+| `email_change`  | keep session, redirect to `next` (default `/dashboard`) |
+| `invite`        | keep session, redirect to `next` (default `/dashboard`) |
+
+Users never see `supabase.co` in the URL bar at any point.
+
+### Fallback path — `/auth/callback?type=recovery`
+
+The legacy PKCE-code recovery path via `/auth/callback?type=recovery` is
+intentionally left intact by this PR. It stays functional as (a) a
+graceful fallback for any legacy links in flight when the hook activates,
+and (b) an emergency rollback surface — if the hook develops any issue,
+disabling it in the Supabase dashboard immediately reverts to
+GoTrue-native email (dkim=fail again, but auth continues working).
+Cleanup of the callback recovery branch is a separate follow-up PR after
+the hook has been production-verified for 30+ days.
+
+### Secrets
+
+Two secrets, each stored in two places:
+
+| Secret | Storage | Purpose |
+|---|---|---|
+| `SEND_EMAIL_HOOK_SECRET` | Supabase edge-function secret only | Supabase generates when the hook is created in the dashboard. Format `v1,whsec_<base64>` — the edge function strips the `v1,` prefix before handing to standardwebhooks. |
+| `AUTH_HOOK_RELAY_SECRET` | Vercel env (encrypted) AND Supabase edge-function secret | Shared secret between the edge function and the Vercel relay; the relay validates `Authorization: Bearer <secret>` on every request. |
+
+Generation for `AUTH_HOOK_RELAY_SECRET`: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` produces a 64-char URL-safe string with 384 bits of entropy — safe in HTTP headers, easy to paste.
+
+Do NOT put Bluehost SMTP credentials in the edge function. They stay in
+Vercel only, consumed only by `src/lib/mailer.ts`.
+
+### Verification (post-deploy, post-hook-enable)
+
+1. Trigger `resetPasswordForEmail("majabri714@gmail.com", {...})` from the app.
+2. Check the delivered email in Gmail → three-dot menu → Show original.
+3. Expected: `dkim=pass header.i=@icareeros.com` AND `Message-ID: <uuid@icareeros.com>`.
+
+If verified, mark this section as production-live and close the
+"GoTrue DKIM" open item in the runbook backlog.
+
 ### Still-open items
 
 - **Bluehost `cloudfilter` rewrites `Message-ID` after DKIM signing.** DKIM signature validation fails on receiving servers; mail may land in spam. Ticket open with Bluehost as of the June-July 2026 outage cycle. This is the one genuine Bluehost-side issue we have no fix for on our end. Session memory: `feedback_bluehost_cloudfilter_breaks_dkim`.
