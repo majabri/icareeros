@@ -4,7 +4,7 @@
  * function. Deterministic, regex-based, zero LLM.
  */
 
-import { ROLE_FAMILIES, expandTargetRoles } from "./roleFamilies";
+import { ROLE_FAMILIES } from "./roleFamilies";
 import type { Seniority } from "@/services/scoring/profileScorer";
 
 export type SeniorityTier =
@@ -258,7 +258,6 @@ export function normalizeTitle(title: string): string {
 }
 
 // Re-export for consumers that already imported role families here.
-export { expandTargetRoles };
 
 // Bridge to Seniority (the profileScorer enum lacks 'unknown' in its main map).
 export function tierToSeniority(t: SeniorityTier): Seniority {

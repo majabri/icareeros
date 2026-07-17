@@ -123,10 +123,9 @@ export function scoreTargetRoleMatch(
 ): { score: number; signal: "exact" | "adjacent" | "stretch" | "mismatch"; bestMatch: string; allScores: Record<string, number> } {
   const jobTitle = normalise(job.title || "");
   const allScores: Record<string, number> = {};
-  // fix/jobs-per-role-scoring — query origin hint. When queryJobsForRole
-  // tagged the job with matchedRole, treat that as strong signal for THAT
-  // specific target role only.
-  const hintedRole = (job as OpportunityResult & { matchedRole?: string }).matchedRole ?? "";
+  // fix/jobs-delete-dead-retrieval — matchedRole hint deleted. The
+  // curator no longer tags candidates with per-target-role provenance;
+  // retrieveByTitle carries `retrievedFor` labels instead.
   if (!jobTitle || profile.targetRoles.length === 0) {
     return { score: 0, signal: "mismatch", bestMatch: "", allScores };
   }
@@ -178,23 +177,14 @@ export function scoreTargetRoleMatch(
       }
       if (score > best) best = score;
     }
-    // The hinted role (from queryJobsForRole tagging) is strong evidence
-    // this specific job matched via THIS target. Elevate to a floor of 75.
-    if (hintedRole && normalise(hintedRole) === rawT) {
-      best = Math.max(best, 75);
-    }
     allScores[target] = best;
   }
-  // Pick highest — deterministic tie-break by preferring the hinted role.
-  // Compare case-insensitively for the tie-break so mixed-case profile
-  // labels don't silently lose their preference.
+  // Pick highest — first-seen wins on tie (deterministic per
+  // Object.entries insertion order).
   let best = 0;
   let bestMatch = "";
-  const hintedLc = hintedRole.toLowerCase();
   for (const [role, sc] of Object.entries(allScores)) {
-    if (sc > best || (sc === best && role.toLowerCase() === hintedLc)) {
-      best = sc; bestMatch = role;
-    }
+    if (sc > best) { best = sc; bestMatch = role; }
   }
   let signal: "exact" | "adjacent" | "stretch" | "mismatch";
   if (best >= 95)      signal = "exact";

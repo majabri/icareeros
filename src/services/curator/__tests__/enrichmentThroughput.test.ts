@@ -79,27 +79,6 @@ function makeChain(rows: unknown[], seen: string[]) {
   return chain;
 }
 
-describe("Fix 3 — queryJobsForRole degrade path (semantics test)", () => {
-  it("removes enrichment_status='complete' filter from the family fast-path", () => {
-    // Post-fix, the family-index query should NOT require complete status.
-    // If we grep the deployed queries.ts for the exact anchor and there's
-    // NO .eq("enrichment_status","complete") inside the family block,
-    // the degrade landed.
-    const q = require("fs").readFileSync(
-      "src/services/curator/queries.ts", "utf8",
-    );
-    // The family fast-path block should not have the complete filter
-    const familyBlock = q.match(/Indexed families fast-path[\s\S]*?limit\(limit\);/)?.[0] ?? "";
-    expect(familyBlock).not.toContain(`.eq("enrichment_status", "complete")`);
-  });
-  it("adds a title_unenriched third fallback after enriched-title 0", () => {
-    const q = require("fs").readFileSync(
-      "src/services/curator/queries.ts", "utf8",
-    );
-    expect(q).toContain('queryMethod: "title_unenriched"');
-    expect(q).toContain("Final fallback");
-  });
-});
 
 // ── Fix 4 — widened security_architect synonyms ───────────────────────
 describe("Fix 4 — security_architect widened synonyms", () => {
