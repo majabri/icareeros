@@ -13,6 +13,7 @@
  */
 import type { OpportunityResult } from "@/services/opportunityTypes";
 import { skillAppearsIn, canonicalize } from "./skillsNormalizer";
+import { synonymsForExact } from "@/services/retrieval/expandQueries";
 import { extractJDSkills } from "./jdExtractor";
 
 export interface UserProfile {
@@ -129,31 +130,69 @@ export function scoreTargetRoleMatch(
   if (!jobTitle || profile.targetRoles.length === 0) {
     return { score: 0, signal: "mismatch", bestMatch: "", allScores };
   }
-  // Populate allScores by comparing each target role independently.
+  // fix/jobs-target-role-match — score each target against the family
+  //   synonym set from expandQueries.ts (one source of truth with the
+  //   curator's retrieval engine). "biso" now expands to "business
+  //   information security officer" etc., so the RBC BISO title
+  //   ("Business Information Security Officer (Global Security)") scores
+  //   100 against Amir's "biso" target instead of 0.
+  //
+  // For every target: consider [target itself, ...synonymsForExact(target)]
+  // as candidate phrases. For each candidate:
+  //   - if normalised job title EQUALS candidate      → 100 (exact)
+  //   - else if job title CONTAINS candidate phrase   →  95 (phrase hit)
+  //   - else if all tokens of candidate present in    →  90 (all-tokens)
+  //   - else fall back to per-token word-overlap ratio (legacy behavior)
+  // Take max across the candidate set as the target's score.
+  const jobTokens = new Set(jobTitle.split(" ").filter(w => w.length >= 2));
+  const jobTitleLower = jobTitle;   // already normalised (lowercase, punct stripped)
   for (const target of profile.targetRoles) {
-    const t = normalise(target);
-    if (!t) { allScores[target] = 0; continue; }
-    if (t === jobTitle) { allScores[target] = 100; continue; }
-    const jw = new Set(jobTitle.split(" ").filter(w => w.length >= 3));
-    const tw = new Set(t.split(" ").filter(w => w.length >= 3));
-    if (tw.size === 0) { allScores[target] = 0; continue; }
-    let shared = 0;
-    for (const w of tw) if (jw.has(w)) shared++;
-    const ratio = shared / tw.size;
-    let score = Math.round(ratio * 100);
-    // The hinted role (from queryJobsForRole tagging) is strong evidence
-    // this specific job matched via THIS target. Elevate to a floor of 75
-    // so it wins over incidental title-token overlap with other roles.
-    if (hintedRole && normalise(hintedRole) === t) {
-      score = Math.max(score, 75);
+    const rawT = normalise(target);
+    if (!rawT) { allScores[target] = 0; continue; }
+    // Build candidate phrases from expandQueries.synonymsForExact.
+    // If the taxonomy doesn't know the target, fall back to just the raw
+    // normalised phrase — retrieval on the literal role still works.
+    const rawCandidates = [target, ...synonymsForExact(target)];
+    let best = 0;
+    for (const rawCand of rawCandidates) {
+      const cand = normalise(rawCand);
+      if (!cand) continue;
+      let score = 0;
+      if (cand === jobTitleLower) {
+        score = 100;
+      } else if (containsPhrase(jobTitleLower, cand)) {
+        score = 95;
+      } else {
+        const candTokens = cand.split(" ").filter(w => w.length >= 2);
+        if (candTokens.length > 0 && candTokens.every(w => jobTokens.has(w))) {
+          score = 90;
+        } else {
+          // Word-overlap ratio fallback (legacy behaviour)
+          const tw = new Set(candTokens.filter(w => w.length >= 3));
+          if (tw.size > 0) {
+            let shared = 0;
+            for (const w of tw) if (jobTokens.has(w)) shared++;
+            score = Math.round((shared / tw.size) * 100);
+          }
+        }
+      }
+      if (score > best) best = score;
     }
-    allScores[target] = score;
+    // The hinted role (from queryJobsForRole tagging) is strong evidence
+    // this specific job matched via THIS target. Elevate to a floor of 75.
+    if (hintedRole && normalise(hintedRole) === rawT) {
+      best = Math.max(best, 75);
+    }
+    allScores[target] = best;
   }
   // Pick highest — deterministic tie-break by preferring the hinted role.
+  // Compare case-insensitively for the tie-break so mixed-case profile
+  // labels don't silently lose their preference.
   let best = 0;
   let bestMatch = "";
+  const hintedLc = hintedRole.toLowerCase();
   for (const [role, sc] of Object.entries(allScores)) {
-    if (sc > best || (sc === best && role === hintedRole)) {
+    if (sc > best || (sc === best && role.toLowerCase() === hintedLc)) {
       best = sc; bestMatch = role;
     }
   }
@@ -313,6 +352,33 @@ export function scoreKeywordDensity(
 }
 
 // ── Utilities ────────────────────────────────────────────────────────────
+
+/**
+ * fix/jobs-target-role-match — word-bounded phrase match. A candidate
+ * phrase is a hit inside the job title only when every token appears
+ * as a whole word in the title AND in the same order (allowing extra
+ * tokens between them). Prevents "java" matching "javascript" and
+ * "cfo" matching "recfo" while allowing "business information security
+ * officer" to match "business information security officer (global
+ * security)" after normalise() has stripped the punctuation.
+ */
+function containsPhrase(haystack: string, needle: string): boolean {
+  if (!haystack || !needle) return false;
+  if (haystack === needle) return true;
+  const hTokens = haystack.split(" ").filter(Boolean);
+  const nTokens = needle.split(" ").filter(Boolean);
+  if (nTokens.length === 0) return false;
+  if (nTokens.length > hTokens.length) return false;
+  // Sliding window over haystack tokens.
+  for (let i = 0; i + nTokens.length <= hTokens.length; i++) {
+    let match = true;
+    for (let j = 0; j < nTokens.length; j++) {
+      if (hTokens[i + j] !== nTokens[j]) { match = false; break; }
+    }
+    if (match) return true;
+  }
+  return false;
+}
 
 function normalise(s: string): string {
   return s.toLowerCase()
