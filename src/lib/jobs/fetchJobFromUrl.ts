@@ -82,7 +82,7 @@ function jobNotListedError(): FetchedJobError {
 
 export interface FetchedJob {
   ok:          true;
-  source:      "greenhouse" | "lever" | "ashby" | "workday" | "html" | "jsonld" | "html_container";
+  source:      "corpus" | "greenhouse" | "lever" | "ashby" | "workday" | "html" | "jsonld" | "html_container";
   title?:      string;
   company?:    string;
   location?:   string;
@@ -98,7 +98,10 @@ export type FetchJobResult = FetchedJob | FetchedJobError;
 
 // ── Public entry point ────────────────────────────────────────────────────
 
-export async function fetchJobFromUrl(rawUrl: string): Promise<FetchJobResult> {
+export async function fetchJobFromUrl(
+  rawUrl: string,
+  opts?: { supabase?: { from: (t: string) => any } },
+): Promise<FetchJobResult> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -107,6 +110,17 @@ export async function fetchJobFromUrl(rawUrl: string): Promise<FetchJobResult> {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return { ok: false, error: "Only http(s) URLs are supported." };
+  }
+
+  // fix/jobs-ashby-url-fetch Part 1 — CORPUS-FIRST resolution. Before any
+  // external fetch, check ats_jobs by apply_url + normalised variants. On
+  // hit, serve the row directly. Fixes Ashby (SPA — external fetch would
+  // yield garbage) and makes every fit-check against a corpus job instant
+  // with zero external round-trip. 50k+ jobs are in our DB; refetching them
+  // from the internet is wasted work.
+  if (opts?.supabase) {
+    const corpusHit = await lookupCorpusJob(opts.supabase, url);
+    if (corpusHit) return corpusHit;
   }
 
   // Fix 1 — known login-walled / SPA-only hosts: reject upfront with a useful
@@ -246,35 +260,121 @@ function tryLever(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null
   })();
 }
 
-// ── Ashby: jobs.ashbyhq.com/<org>/<id> — no public API, parse HTML ───────
+// ── Corpus-first lookup ─────────────────────────────────────────────
+
+/**
+ * URL normalisation for corpus lookup. Two URLs that differ only in a
+ * trailing slash or in tracking query params should match the same row.
+ *
+ * Rules:
+ *   - lowercase the hostname
+ *   - drop utm_*, gh_*, ref, source, campaign query params
+ *   - drop the URL fragment
+ *   - drop a trailing slash on the path (unless the path is just "/")
+ *
+ * Returns a small set of variants to try in order of most-likely-match.
+ */
+export function normaliseJobUrl(u: URL): string[] {
+  const variants = new Set<string>();
+  const push = (v: string) => variants.add(v);
+  // Canonical form: lowercase host, filter query, drop fragment, drop trailing slash
+  const cleanQ = new URLSearchParams();
+  for (const [k, v] of u.searchParams) {
+    if (/^(?:utm_|gh_|ref|source|campaign)/i.test(k)) continue;
+    cleanQ.append(k, v);
+  }
+  const host = u.hostname.toLowerCase();
+  let path = u.pathname;
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  const q = cleanQ.toString();
+  const base = `${u.protocol}//${host}${path}`;
+  push(base + (q ? `?${q}` : ""));
+  push(base);                    // stripped of every query
+  push(base + "/");              // with trailing slash
+  // Also try the raw URL as-is (last-resort — if apply_url was ingested
+  // verbatim with tracking params, this catches it).
+  push(u.toString());
+  return Array.from(variants);
+}
+
+async function lookupCorpusJob(
+  supabase: { from: (t: string) => any },
+  u: URL,
+): Promise<FetchJobResult | null> {
+  const variants = normaliseJobUrl(u);
+  try {
+    const { data } = await supabase
+      .from("ats_jobs")
+      .select("id, title, company, location, description, apply_url, source, is_active")
+      .in("apply_url", variants)
+      .limit(1);
+    if (!data || data.length === 0) return null;
+    const row = data[0] as {
+      title: string | null; company: string | null; location: string | null;
+      description: string | null; source: string | null; is_active: boolean;
+    };
+    if (!row.description || row.description.trim().length < 80) return null;
+    return {
+      ok:          true,
+      source:      "corpus",
+      title:       row.title ?? undefined,
+      company:     row.company ?? undefined,
+      location:    row.location ?? undefined,
+      description: truncate(row.description, MAX_CHARS),
+    };
+  } catch {
+    // Corpus lookup is a best-effort optimisation. Any error means we
+    // fall through to the external fetch path — the user still gets a
+    // result, just via the slower road.
+    return null;
+  }
+}
+
+// ── Ashby: jobs.ashbyhq.com/<org>/<id> — public posting API ────────────
 
 function tryAshby(u: URL): Promise<Partial<FetchedJob> | FetchedJobError> | null {
   if (u.hostname !== "jobs.ashbyhq.com" && u.hostname !== "ashbyhq.com") return null;
+
   // Fix 3 — org-root URL like jobs.ashbyhq.com/<org> with no posting slug
   const orgOnly = u.pathname.match(/^\/([^/]+)\/?$/);
   if (orgOnly) return Promise.resolve(orgRootError("Ashby"));
-  // Ashby is a SPA; the SSR'd HTML carries the job text inside a script tag
-  // as `window.__APP_DATA__ = {...}`. We can pluck it out with a regex.
+
+  // fix/jobs-ashby-url-fetch Part 2 — Ashby's PUBLIC POSTING API.
+  //   URL pattern: jobs.ashbyhq.com/{org}/{uuid}
+  //   API endpoint: https://api.ashbyhq.com/posting-api/job-board/{org}
+  //     returns { jobs: [ { id, title, location, descriptionHtml, descriptionPlain, department, employmentType, ... } ] }
+  //   Same pattern as our existing Greenhouse/Lever adapters — pull the
+  //   whole board, then find the posting whose id matches the URL UUID.
+  //
+  //   The prior implementation tried to scrape the SPA HTML for a JSON
+  //   blob; Ashby ships fully client-rendered pages so no such blob is
+  //   present in the initial HTML. That's why every Ashby fetch since
+  //   the icareeros rebuild returned `Could not extract a usable job
+  //   description from this URL` — the fallback stripHtml() produced
+  //   only the loading-shell + JS bundle tags.
+  const pathMatch = u.pathname.match(/^\/([^/]+)\/([0-9a-f-]{8,})/i);
+  if (!pathMatch) return Promise.resolve({ ok: false, error: "Ashby: could not parse org + UUID from URL." } as FetchedJobError);
+  const [, org, uuid] = pathMatch;
+
   return (async () => {
     try {
-      const res = await fetchWithTimeout(u.toString());
-      // Fix 4 — translate 404 to "job no longer listed"
-      if (res.status === 404) return jobNotListedError();
-      if (!res.ok) return { ok: false, error: `Ashby: HTTP ${res.status}` } as FetchedJobError;
-      const html = await res.text();
-      // Cheap structured extraction: look for a JSON blob containing
-      // descriptionHtml or descriptionPlain.
-      const titleM = html.match(/<title>([^<]+)<\/title>/i);
-      const descM  = html.match(/"descriptionPlain":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-      const locM   = html.match(/"locationName":\s*"([^"]+)"/);
-      const orgM   = u.pathname.match(/^\/([^/]+)\//);
-      const description = descM
-        ? decodeJsonString(descM[1])
-        : stripHtml(html);   // last-resort: strip the whole HTML
+      const apiUrl = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(org)}?includeCompensation=false`;
+      const res = await fetchWithTimeout(apiUrl);
+      if (res.status === 404) return { ok: false, error: `Ashby: no public job board for "${org}".` } as FetchedJobError;
+      if (!res.ok) return { ok: false, error: `Ashby API: HTTP ${res.status}` } as FetchedJobError;
+      const j = await res.json() as { jobs?: Array<{
+        id: string; title: string; location?: string; department?: string;
+        employmentType?: string; descriptionPlain?: string; descriptionHtml?: string;
+      }> };
+      const jobs = Array.isArray(j.jobs) ? j.jobs : [];
+      const posting = jobs.find(p => p.id === uuid);
+      if (!posting) return jobNotListedError();
+      const description = posting.descriptionPlain
+        ?? (posting.descriptionHtml ? stripHtml(posting.descriptionHtml) : "");
       return {
-        title:       titleM?.[1]?.replace(/\s*\|.*$/, "").trim(),
-        company:     orgM ? capitalize(orgM[1]) : undefined,
-        location:    locM?.[1],
+        title:       posting.title,
+        company:     capitalize(org),
+        location:    posting.location,
         description,
       };
     } catch (e) {
