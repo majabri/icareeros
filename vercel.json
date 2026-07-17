@@ -63,6 +63,18 @@
     {
       "path": "/api/cron/curate-user-recommendations",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/enrich-jobs",
+      "schedule": "30 */4 * * *"
+    },
+    {
+      "path": "/api/cron/validate-job-urls",
+      "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-dead-jobs",
+      "schedule": "0 5 * * *"
     }
   ]
 }
