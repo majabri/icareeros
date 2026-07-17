@@ -115,9 +115,28 @@ function scoreJob(job: any, profile: any): {
 }
 
 function classify(total: number, origin: "exact" | "adjacent" | "skills"): "strongMatch" | "worthConsidering" | "stretch" | null {
+  // fix/jobs-classify-thresholds — lower stretch threshold 30 → 24.
+  //   Baseline simulation against Amir's real 27-row retrieval pool
+  //   (user_id b40f764f-8e8b-4f8d-b3a7-9e993e57f15a, live SQL 2026-07-17)
+  //   under the CURRENT Deno scoreJob showed the target-acceptance role
+  //   ("Senior Director, CISO Healthcare West" [zscaler]) scoring 24, and
+  //   the target-rejection rows (Pfizer Executive Assistant + Pfizer
+  //   Administrative Assistant) scoring 17. Threshold 24 lets the
+  //   director-level borderlines clear while keeping admin/EA + null-
+  //   seniority IC rows filtered.
+  //
+  // strongMatch (>=65) and worthConsidering (>=45) thresholds unchanged.
+  //
+  // NOTE — this tuning is against the CURRENT Deno scoring. PR #384's
+  //   synonym-aware ladder is Node-only; porting it to Deno makes scoring
+  //   too permissive against admin/EA titles containing "CISO" as a bare
+  //   token. Discussed the port + rejected it for this PR in favour of
+  //   the surgical threshold tune (Amir's rule: "tune only what's still
+  //   stuck"). Follow-up PR after Platform reviews the Deno port trade-
+  //   offs.
   if (origin === "exact" && total >= 65) return "strongMatch";
   if (total >= 45 && total < 65) return "worthConsidering";
-  if (total >= 30) return "stretch";
+  if (total >= 24) return "stretch";
   return null;
 }
 
