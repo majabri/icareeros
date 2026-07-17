@@ -5,13 +5,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractUserProfile } from "@/services/scoring/profileExtractor";
 import { scoreOpportunityAgainstProfile, inferSeniority } from "@/services/scoring/profileScorer";
-import { expandTargetRoles } from "./roleFamilies";
 import { extractSkillsFingerprint, type WorkEntry } from "./skillsFingerprint";
 import { buildExclusions, seniorityIndex } from "./exclusions";
-import {
-  queryExactRoleMatches, queryAdjacentTitles, querySkillBasedMatches,
-  queryByRoleFamilies, queryJobsForRole,
-} from "./queries";
 import { retrieveByTitle, type Candidate } from "@/services/retrieval/retrieveByTitle";
 import { expandQueries } from "@/services/retrieval/expandQueries";
 import {
@@ -61,8 +56,7 @@ export async function curateForYou(
     ? ((cpRow as { work_experience: unknown[] }).work_experience as WorkEntry[])
     : [];
 
-  // 2. Expansion + fingerprint + exclusions
-  const { expanded: expandedRoles } = expandTargetRoles(profile.targetRoles);
+  // 2. Exclusions (expansion happens inside expandQueries; skills fingerprint below)
   const skills                       = extractSkillsFingerprint(profile, workExperience);
   const exclusions                   = await buildExclusions(userId, profile, skills, supabase);
 
@@ -73,10 +67,7 @@ export async function curateForYou(
   //    provenance. NO family fast-path, NO matchedRole tag (the +75
   //    floor in profileScorer becomes a no-op).
   //
-  //    Legacy per-role/adjacent/skill queries are kept in ./queries.ts
-  //    for PR 4's deletion sweep; they're not called here anymore.
-  void expandedRoles; void queryJobsForRole; void queryByRoleFamilies;
-  void queryAdjacentTitles; void querySkillBasedMatches;
+  //    PR 4 deletion sweep executed (chore/jobs-delete-dead-retrieval).
 
   const groups = expandQueries(profile.targetRoles);
   const engineCandidates = await retrieveByTitle(
@@ -164,7 +155,10 @@ export async function curateForYou(
     tierExplanations,
     totalCandidates: deduped.length,
     metadata: {
-      expandedRoles,
+      // fix/jobs-delete-dead-retrieval — expandTargetRoles was deleted; the
+      //   response metadata still carries the raw target roles (retrievedFor
+      //   tags on individual candidates are the real provenance signal now).
+      expandedRoles: profile.targetRoles.slice(),
       skillsUsed:        skills.coreSkills,
       exclusionsApplied: exclusions.excludeCompanies.length + exclusions.excludeTitleKeywords.length,
     },
