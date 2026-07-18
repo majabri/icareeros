@@ -307,12 +307,25 @@ async function lookupCorpusJob(
       .from("ats_jobs")
       .select("id, title, company, location, description, apply_url, source, is_active")
       .in("apply_url", variants)
+      // Filter to live rows only. A corpus row marked inactive means our
+      // ingest saw the posting closed, moved, or replaced — its cached
+      // description is stale and MUST NOT be served in place of the
+      // current external posting. Inactive matches fall through to the
+      // ATS/generic paths below via the null return + caller loop.
+      .eq("is_active", true)
       .limit(1);
     if (!data || data.length === 0) return null;
     const row = data[0] as {
       title: string | null; company: string | null; location: string | null;
       description: string | null; source: string | null; is_active: boolean;
     };
+    // Belt-and-suspenders. The .eq("is_active", true) above should have
+    // filtered inactive rows at the DB, but this guard survives someone
+    // accidentally dropping the query filter in a future refactor.
+    // Returning null keeps the corpus lookup non-committal: the caller
+    // continues to the external fetch, which is the fresh source of
+    // truth for a posting we've marked closed.
+    if (row.is_active !== true) return null;
     if (!row.description || row.description.trim().length < 80) return null;
     return {
       ok:          true,

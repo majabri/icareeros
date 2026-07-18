@@ -390,14 +390,23 @@ describe("fetchJobFromUrl — Workday (2026-06-30, fix/jobs-fetch-workday)", () 
 import { normaliseJobUrl } from "../fetchJobFromUrl";
 
 function mockSupabase(rows: any[]) {
+  // Chain shape mirrors the production query:
+  //   supabase.from().select().in().eq("is_active", true).limit()
+  // .eq() is a NEW step required by the review fix — before this PR the
+  // production query didn't filter is_active. Every test fixture below
+  // now includes is_active on its rows and the mock respects both filters.
   return {
     from: (_t: string) => ({
       select: (_cols: string) => ({
         in: (_col: string, values: string[]) => ({
-          limit: async (_n: number) => {
-            const matching = rows.filter(r => values.includes(r.apply_url));
-            return { data: matching.slice(0, 1) };
-          },
+          eq: (col: string, val: unknown) => ({
+            limit: async (_n: number) => {
+              const matching = rows.filter(
+                r => values.includes(r.apply_url) && (r as any)[col] === val,
+              );
+              return { data: matching.slice(0, 1) };
+            },
+          }),
         }),
       }),
     }),
@@ -516,6 +525,67 @@ describe("fetchJobFromUrl — corpus-first resolution", () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.source).toBe("corpus");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("inactive corpus row → falls through to external fetch (stale row NOT served)", async () => {
+    // Review fix (2026-07-17): if the corpus row exists but is_active=false,
+    // the resolver MUST NOT serve the stale description. It falls through to
+    // the ATS-specific / generic external path, which is the fresh source
+    // of truth for a posting we've marked closed. Inactive-in-corpus may
+    // just mean our ingest saw stale-ness before the real posting moved.
+    const freshDescription =
+      "Fresh live description from the Ashby posting API with enough " +
+      "content to pass the 80-character length gate for substantive job text.";
+    const fetchSpy = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          jobs: [
+            {
+              id:               "abcd1234",
+              title:            "Fresh Title (live)",
+              location:         "Toronto",
+              descriptionPlain: freshDescription,
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    // Corpus row is present + matches on apply_url + has substantive
+    // description — the ONLY thing making it not-a-hit is is_active=false.
+    const supabase = mockSupabase([
+      {
+        apply_url:   "https://jobs.ashbyhq.com/cohere/abcd1234",
+        title:       "Stale Title (closed)",
+        company:     "cohere",
+        location:    "Old Location",
+        description:
+          "This stale description would pass the 80-character length gate " +
+          "if the resolver returned it — but the posting has been marked " +
+          "closed, so the resolver MUST NOT serve this stale row.",
+        source:      "ashby",
+        is_active:   false,           // ← the point
+      },
+    ]);
+
+    const res = await fetchJobFromUrl(
+      "https://jobs.ashbyhq.com/cohere/abcd1234",
+      { supabase } as any,
+    );
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.source).not.toBe("corpus");   // NOT the stale corpus row
+      expect(res.source).toBe("ashby");        // The fresh external fetch
+      expect(res.title).toBe("Fresh Title (live)");
+      expect(res.description).toContain("Fresh live description");
+      expect(res.description).not.toContain("stale description");
+    }
+
+    // Confirm the external fetch was actually called
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it("no corpus hit → falls through to external fetch (Ashby API in this case)", async () => {
