@@ -200,6 +200,11 @@ export default function ResumeAdvisorPage() {
   // Job source
   const [jobSource, setJobSource] = useState<JobSource>("paste");
   const [jobDescription, setJobDescription] = useState("");
+  // fix/jobs-paste-mode-title — optional user-entered title for paste mode.
+  // When present, this wins over server-side inference and eliminates the
+  // "targetRoleMatch stuck at 0" gap surfaced by the 2026-07-18 UI
+  // acceptance (Cohere CISO composite came in at 30 instead of ~79).
+  const [pasteJobTitle, setPasteJobTitle] = useState("");
   // feat/jobs-smart-apply Feature 3 — lazy why-these-experiences rationale
   const [whyExperiences, setWhyExperiences] = useState<string | null>(null);
   const [whyLoading, setWhyLoading] = useState(false);
@@ -504,9 +509,12 @@ export default function ResumeAdvisorPage() {
           jobDescription: jobText,
           // fix/jobs-target-role-match — send the resolved title so
           // targetRoleMatch has a real signal. URL mode fetches it from
-          // fetch-job-url's metadata; paste mode may leave it undefined
-          // and the route falls back to the coarse heuristic.
-          jobTitle: urlFetchMeta?.title,
+          // fetch-job-url's metadata; paste mode uses the optional title
+          // input, then falls back to server-side JD inference when both
+          // are absent.
+          jobTitle: jobSource === "paste"
+            ? (pasteJobTitle.trim() || undefined)
+            : urlFetchMeta?.title,
         }),
       });
       const data = await res.json().catch(() => ({} as { error?: string }));
@@ -964,7 +972,24 @@ export default function ResumeAdvisorPage() {
               <button onClick={() => { setJobSource("paste"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${jobSource === "paste" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>✏️ Paste description</button>
               <button onClick={() => { setJobSource("url"); setResult(null); }} className={`flex-1 rounded-md py-2 text-sm font-medium ${jobSource === "url" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>🔗 Job URL</button>
             </div>
-            {jobSource === "paste" ? <textarea value={jobDescription} onChange={(e) => { setJobDescription(e.target.value); setResult(null); }} placeholder="Paste the full job description here…" rows={8} className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+            {jobSource === "paste" ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={pasteJobTitle}
+                  onChange={(e) => { setPasteJobTitle(e.target.value); setResult(null); }}
+                  placeholder="Job title (optional — e.g. Chief Information Security Officer)"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+                <textarea
+                  value={jobDescription}
+                  onChange={(e) => { setJobDescription(e.target.value); setResult(null); }}
+                  placeholder="Paste the full job description here…"
+                  rows={8}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+              </div>
+            )
             : <div className="space-y-2">
                 <input
                   type="url"
