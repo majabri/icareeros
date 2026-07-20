@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const result = await fetchJobFromUrl(url);
+  const result = await fetchJobFromUrl(url, { supabase });
   if (!result.ok) {
     return NextResponse.json(result, { status: 422 });
   }

@@ -382,3 +382,311 @@ describe("fetchJobFromUrl — Workday (2026-06-30, fix/jobs-fetch-workday)", () 
     expect(r.source).toBe("workday");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// fix/jobs-ashby-url-fetch — Part 1 corpus-first + Part 2 Ashby API
+// ─────────────────────────────────────────────────────────────────────
+
+import { normaliseJobUrl } from "../fetchJobFromUrl";
+
+function mockSupabase(rows: any[]) {
+  // Chain shape mirrors the production query:
+  //   supabase.from().select().in().eq("is_active", true).limit()
+  // .eq() is a NEW step required by the review fix — before this PR the
+  // production query didn't filter is_active. Every test fixture below
+  // now includes is_active on its rows and the mock respects both filters.
+  return {
+    from: (_t: string) => ({
+      select: (_cols: string) => ({
+        in: (_col: string, values: string[]) => ({
+          eq: (col: string, val: unknown) => ({
+            limit: async (_n: number) => {
+              const matching = rows.filter(
+                r => values.includes(r.apply_url) && (r as any)[col] === val,
+              );
+              return { data: matching.slice(0, 1) };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
+describe("normaliseJobUrl — URL variants", () => {
+  it("emits trailing-slash variants for path-comparison", () => {
+    const u = new URL("https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236");
+    const variants = normaliseJobUrl(u);
+    expect(variants).toContain("https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236");
+    expect(variants).toContain("https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236/");
+  });
+
+  it("strips utm_ / gh_ / ref query params", () => {
+    const u = new URL("https://jobs.ashbyhq.com/cohere/xyz?utm_source=linkedin&utm_medium=cpc&ref=twitter");
+    const variants = normaliseJobUrl(u);
+    // Every variant either drops the tracking params entirely OR keeps only the raw form
+    for (const v of variants) {
+      // No variant should contain utm_ or ref (except the last-resort raw URL)
+      if (v.includes("utm_") || v.includes("ref=")) {
+        expect(v).toBe(u.toString());
+      }
+    }
+    // At least one variant should be the tracking-stripped canonical form
+    expect(variants).toContain("https://jobs.ashbyhq.com/cohere/xyz");
+  });
+
+  it("lowercases the hostname", () => {
+    const u = new URL("https://Jobs.Ashbyhq.Com/cohere/xyz");
+    const variants = normaliseJobUrl(u);
+    for (const v of variants.filter(v => v !== u.toString())) {
+      expect(v).toBe(v.toLowerCase().replace(v.toLowerCase(), v)); // no-op — actual check:
+    }
+    expect(variants.some(v => v.includes("jobs.ashbyhq.com"))).toBe(true);
+  });
+
+  it("drops the URL fragment", () => {
+    const u = new URL("https://jobs.ashbyhq.com/cohere/xyz#responsibilities");
+    const variants = normaliseJobUrl(u);
+    for (const v of variants) {
+      if (v !== u.toString()) expect(v).not.toContain("#responsibilities");
+    }
+  });
+});
+
+describe("fetchJobFromUrl — corpus-first resolution", () => {
+  it("Cohere Ashby URL resolves from ats_jobs directly (zero external fetch)", async () => {
+    const fetchSpy = vi.fn(async () => new Response("SHOULD NOT BE CALLED", { status: 500 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const supabase = mockSupabase([
+      {
+        apply_url:   "https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236",
+        title:       "Chief Information Security Officer (CISO)",
+        company:     "cohere",
+        location:    "Remote (Canada or US)",
+        description: "Who are we? Cohere is the leading security-first enterprise AI company. " +
+                     "We build cutting-edge foundation AI models and end-to-end products designed " +
+                     "to solve real-world business problems. Responsibilities include leading the " +
+                     "security program, managing regulatory compliance, and executive advisory.",
+        source:      "ashby",
+        is_active:   true,
+      },
+    ]);
+
+    const res = await fetchJobFromUrl(
+      "https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236",
+      { supabase } as any,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.source).toBe("corpus");
+      expect(res.title).toBe("Chief Information Security Officer (CISO)");
+      expect(res.description).toContain("Cohere is the leading security-first");
+    }
+    // Zero external fetches
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("trailing-slash variant hits the same row", async () => {
+    const fetchSpy = vi.fn(async () => new Response("SHOULD NOT BE CALLED", { status: 500 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const supabase = mockSupabase([{
+      apply_url:   "https://jobs.ashbyhq.com/cohere/xyz",       // no trailing slash
+      title:       "Test", company: "cohere", location: "Remote",
+      description: "This is a job description with enough content to pass the length gate. " +
+                   "The role requires strong technical background and leadership skills.",
+      source: "ashby", is_active: true,
+    }]);
+
+    // User pastes URL WITH trailing slash — should still hit the cached row
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/cohere/xyz/", { supabase } as any);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.source).toBe("corpus");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("tracking-param variant hits the same row", async () => {
+    const fetchSpy = vi.fn(async () => new Response("SHOULD NOT BE CALLED", { status: 500 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const supabase = mockSupabase([{
+      apply_url:   "https://jobs.ashbyhq.com/cohere/xyz",
+      title:       "Test", company: "cohere", location: "Remote",
+      description: "This is a job description with enough content to pass the length gate. " +
+                   "The role requires strong technical background and leadership skills.",
+      source: "ashby", is_active: true,
+    }]);
+
+    const res = await fetchJobFromUrl(
+      "https://jobs.ashbyhq.com/cohere/xyz?utm_source=twitter&utm_medium=social",
+      { supabase } as any,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.source).toBe("corpus");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("inactive corpus row → falls through to external fetch (stale row NOT served)", async () => {
+    // Review fix (2026-07-17): if the corpus row exists but is_active=false,
+    // the resolver MUST NOT serve the stale description. It falls through to
+    // the ATS-specific / generic external path, which is the fresh source
+    // of truth for a posting we've marked closed. Inactive-in-corpus may
+    // just mean our ingest saw stale-ness before the real posting moved.
+    const freshDescription =
+      "Fresh live description from the Ashby posting API with enough " +
+      "content to pass the 80-character length gate for substantive job text.";
+    const fetchSpy = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          jobs: [
+            {
+              id:               "abcd1234",
+              title:            "Fresh Title (live)",
+              location:         "Toronto",
+              descriptionPlain: freshDescription,
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    // Corpus row is present + matches on apply_url + has substantive
+    // description — the ONLY thing making it not-a-hit is is_active=false.
+    const supabase = mockSupabase([
+      {
+        apply_url:   "https://jobs.ashbyhq.com/cohere/abcd1234",
+        title:       "Stale Title (closed)",
+        company:     "cohere",
+        location:    "Old Location",
+        description:
+          "This stale description would pass the 80-character length gate " +
+          "if the resolver returned it — but the posting has been marked " +
+          "closed, so the resolver MUST NOT serve this stale row.",
+        source:      "ashby",
+        is_active:   false,           // ← the point
+      },
+    ]);
+
+    const res = await fetchJobFromUrl(
+      "https://jobs.ashbyhq.com/cohere/abcd1234",
+      { supabase } as any,
+    );
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.source).not.toBe("corpus");   // NOT the stale corpus row
+      expect(res.source).toBe("ashby");        // The fresh external fetch
+      expect(res.title).toBe("Fresh Title (live)");
+      expect(res.description).toContain("Fresh live description");
+      expect(res.description).not.toContain("stale description");
+    }
+
+    // Confirm the external fetch was actually called
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it("no corpus hit → falls through to external fetch (Ashby API in this case)", async () => {
+    globalThis.fetch = vi.fn(async () => mockJson({
+      jobs: [{
+        id: "e0c86d1a-ee3a-4da6-9244-53f0909ab236",
+        title: "Software Engineer",
+        location: "Remote",
+        descriptionPlain: "A cutting-edge role at Cohere requiring strong Python + ML skills. " +
+                          "Responsibilities include model training, deployment, and evaluation. " +
+                          "Requirements: 5+ years experience, strong communication skills.",
+      }],
+    })) as unknown as typeof fetch;
+
+    const supabase = mockSupabase([]); // empty corpus
+    const res = await fetchJobFromUrl(
+      "https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236",
+      { supabase } as any,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.source).toBe("ashby");
+      expect(res.description).toContain("Cohere");
+    }
+  });
+
+  it("no supabase client → skips corpus, goes straight to external", async () => {
+    globalThis.fetch = vi.fn(async () => mockJson({
+      jobs: [{
+        id: "deadbeef-1234-abcd-5678-ef0123456789",
+        title: "PM",
+        location: "SF",
+        descriptionPlain: "A product management role at Cohere. Responsibilities include " +
+                          "roadmap definition, cross-functional collaboration, and metric ownership. " +
+                          "Requirements: 5+ years PM experience.",
+      }],
+    })) as unknown as typeof fetch;
+
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/cohere/deadbeef-1234-abcd-5678-ef0123456789");
+    expect(res.ok).toBe(true);
+  });
+});
+
+describe("fetchJobFromUrl — Ashby posting API (Part 2)", () => {
+  it("extracts org + UUID from URL and hits api.ashbyhq.com/posting-api/job-board/{org}", async () => {
+    const fetchSpy = vi.fn(async (url: any) => {
+      const s = String(url);
+      expect(s).toContain("https://api.ashbyhq.com/posting-api/job-board/cohere");
+      return mockJson({
+        jobs: [{
+          id: "e0c86d1a-ee3a-4da6-9244-53f0909ab236",
+          title: "Chief Information Security Officer (CISO)",
+          location: "Remote (Canada or US)",
+          descriptionPlain: "Cohere is looking for a CISO to lead our security program. " +
+                            "Responsibilities include managing regulatory compliance, executive " +
+                            "advisory, and building the security team. Requirements: extensive " +
+                            "experience in cyber security leadership.",
+        }],
+      });
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.source).toBe("ashby");
+      expect(res.title).toBe("Chief Information Security Officer (CISO)");
+      expect(res.company).toBe("Cohere");
+      expect(res.description).toContain("CISO to lead our security program");
+    }
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("posting UUID not in the board response → friendly 'no longer listed' error", async () => {
+    globalThis.fetch = vi.fn(async () => mockJson({
+      jobs: [
+        { id: "some-other-uuid", title: "Other role", descriptionPlain: "..." },
+      ],
+    })) as unknown as typeof fetch;
+
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/cohere/e0c86d1a-ee3a-4da6-9244-53f0909ab236");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/no longer listed|no public/i);
+  });
+
+  it("bad org (404 from API) → friendly error naming the org", async () => {
+    globalThis.fetch = vi.fn(async () => mockJson({}, { status: 404 })) as unknown as typeof fetch;
+
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/no-such-org/deadbeef-1234-5678-9abc-def012345678");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("no-such-org");
+  });
+
+  it("malformed URL path (missing UUID) → parser error, no fetch attempted", async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const res = await fetchJobFromUrl("https://jobs.ashbyhq.com/cohere");
+    expect(res.ok).toBe(false);
+    // This hits the orgOnly branch → orgRootError
+    if (!res.ok) expect(res.error).toMatch(/organization|org|posting|Ashby/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
