@@ -114,7 +114,7 @@ Note: `smtp.ok` only confirms Vercel-side send. It does **not** confirm Supabase
 
 ### Supabase management API gotchas
 
-These four cost several hours during the 2026-07-14 recovery. Document all four so the next rotation is a checklist, not a debug session.
+These seven cost several hours across the 2026-07-14 recovery and the 2026-07-17 Send Email Hook rollout. Document all so the next rotation is a checklist, not a debug session.
 
 #### 1. Atomic config block — always send the FULL SMTP + rate-limit set
 
@@ -146,6 +146,56 @@ These four cost several hours during the 2026-07-14 recovery. Document all four 
 #### 4. Auth logs are dashboard-only
 
 `auth.audit_log_entries` is **empty** on this project (verified: 0 rows lifetime as of 2026-07-14). GoTrue's actual SMTP send outcomes — success, EAUTH, rate-limit rejects — are only visible via **Supabase Dashboard → Project → Logs → Auth Logs**. Filter for `smtp` to see send events. No public API endpoint exposes this stream (`/v1/projects/.../analytics/endpoints/auth.logs` returns 404).
+
+#### 5. `/secrets` POST can return misleading status (400-but-wrote, 201-but-verify)
+
+`POST /v1/projects/{ref}/secrets` is where edge-function secrets go. Observed HTTP responses in one session for identical body shape (`[{"name": ..., "value": ...}]`):
+
+- Once: **HTTP 400** with body `{"message":": Expected array, received object"}` — despite the body being a valid JSON array — but the subsequent GET showed the secret was **written successfully**.
+- Once: **HTTP 201** — clean write, subsequent GET confirmed.
+
+**Never gate on the POST's HTTP code.** Always gate on the immediate follow-up `GET /v1/projects/{ref}/secrets` and check the name appears in the returned list. Secret values are write-only (redacted on read) so a name-present check is the strongest signal available.
+
+#### 6. `rate_limit_email_sent` cannot be PATCHed in isolation
+
+Sending `{"rate_limit_email_sent": 100}` alone returns `HTTP 401 {"message":"Custom SMTP required to configure SMTP_SENDER_NAME or RATE_LIMIT_EMAIL_SENT. Missing SMTP_ADMIN_EMAIL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS fields."}`. The API refuses to touch rate-limit fields unless the SMTP block is present in the same PATCH.
+
+**Consequence:** you cannot scope-test "does the API preserve unmentioned fields?" via `rate_limit_email_sent` alone. Any preservation experiment has to bundle the full SMTP block, so the answer is always "we don't know" for the isolated-field case. In practice, treat every auth-config PATCH as if it must carry the full SMTP block + rate limit, per gotcha #1.
+
+#### 7. Dashboard hook-panel Save wipes the SMTP block — and hook-enabled means NO SMTP fallback
+
+Two failure modes, one dashboard interaction:
+
+**7a — SMTP wipe.** Every observed Save on Dashboard → Authentication → Hooks → Send Email Hook (toggle, URL edit, or "Generate Secret") issued a PATCH that only carried the `hook_send_email_*` fields. Per gotcha #1, the atomic PATCH sets every unmentioned field to null. Result: `smtp_host`, `smtp_user`, `smtp_pass`, `smtp_admin_email`, `smtp_sender_name`, `smtp_port` all went `None`, and `rate_limit_email_sent` collapsed to 2. Happened twice on 2026-07-17 before we understood the pattern.
+
+**7b — No SMTP fallback when the hook is enabled.** GoTrue does NOT fall back to `smtp_*` when the Send Email Hook is enabled and returns non-2xx. When `hook_send_email_enabled = true`, the hook IS the mail path — full stop. If the hook fails, the mail is dropped, not retried via SMTP. The `smtp_*` block only matters when the hook is **disabled**. This contradicts the intuition that "belt and suspenders" applies to hook + SMTP simultaneously.
+
+### Standing rule — auth-config changes via atomic API PATCH ONLY, never the dashboard UI
+
+Locked in during the 2026-07-17 recovery. Rules:
+
+- Every change to `/config/auth` (SMTP fields, `rate_limit_email_sent`, hook enablement, hook URI, hook secrets) goes through a single atomic PATCH via the management API. Never the dashboard UI.
+- Every PATCH body must be built server-side, written to a temp file, and gated with `wc -c` (non-empty guard) before curl: `SZ=$(wc -c < body.json); [ "$SZ" -gt 300 ] || abort`. This catches the "Python subprocess couldn't read the env var so the body is empty" class of bug — `curl --data-binary @empty` silently sends nothing and gets a misleading 200.
+- Every PATCH must include the complete SMTP block per gotcha #1, even if only a hook field is being changed.
+- After every PATCH, re-fetch `/config/auth` and compare all 10 relevant fields (6 SMTP + `rate_limit_email_sent` + 3 hook fields) against expected values. Do not gate on the PATCH's HTTP code.
+- Every new edge-function secret write via `/secrets` gets a GET verification per gotcha #5.
+
+### Recovery pattern that worked on 2026-07-17 — Option C-revised
+
+The pattern that closed the 2026-07-17 incident, when the hook secret was write-only and couldn't be round-tripped:
+
+1. Generate a fresh `v1,whsec_<base64>` secret in-process: `HOOK_SECRET="v1,whsec_$(openssl rand -base64 24 | tr -d '=')"`. Use standard `+/` base64 (not URL-safe `-_`) — Supabase's validator regex rejects URL-safe.
+2. Fetch `smtp_pass` from Vercel by-ID (`GET /v1/projects/icareeros/env/zydLa4Et5tYDu44k`) in-process, `export`-ed so subprocess Python can see it.
+3. Build one atomic 10-field PATCH body via `python3` heredoc → temp file (mode 0600).
+4. `wc -c` guard the body — abort if < 300 bytes.
+5. Send the PATCH via `curl --data-binary @body.json`.
+6. `shred -uz` the temp file immediately after.
+7. `POST` the same `HOOK_SECRET` value to `/secrets` as `SEND_EMAIL_HOOK_SECRET`. Do not gate on HTTP status.
+8. `unset` all secret env vars.
+9. Verify by fresh `GET /config/auth` — every field checked against expected. Verify `GET /secrets` — both `AUTH_HOOK_RELAY_SECRET` + `SEND_EMAIL_HOOK_SECRET` names present.
+10. Probe the deployed edge function with an intentionally invalid signature. Expected: `HTTP 401 {"error":"invalid signature"}` — this proves both env secrets loaded and the handler reached the signature-verification step. Any other response means the config didn't land the way we expect.
+
+Only when all three (config verify + secrets verify + probe) pass, declare green.
 
 ### Rate limit note — `rate_limit_email_sent` must be 300
 

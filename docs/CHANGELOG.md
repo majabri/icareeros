@@ -4,6 +4,21 @@ Notable shipped work. Most recent first.
 
 ---
 
+## 2026-07-17 — GoTrue DKIM fixed end-to-end + corpus-first URL fetch
+
+**`main` HEAD after this run: `c8cc593`**
+
+Two major landings today. GoTrue auth emails (recovery, signup confirm, magic link) that had been failing DKIM for weeks now pass `dkim=pass` at every major receiver via a new Supabase Send Email Hook that routes auth mail through `src/lib/mailer.ts` (nodemailer, `<uuid@icareeros.com>` Message-ID, survives cloudfilter). Verified live end-to-end with a reset to `majabri714@gmail.com`: From `bugs@icareeros.com`, Message-ID `<ab408bb2-…@icareeros.com>` intact, all three of dkim/spf/dmarc pass. Separately, the corpus-first URL-fetch path for job postings shipped, resolving `ats_jobs` rows by `apply_url` before any external round-trip — captured `source: "corpus"` in 618ms with zero external fetch against the Cohere CISO URL post-deploy.
+
+### Platform — GoTrue Send Email Hook (email incident closed)
+
+- **#385** `feat/platform-auth-send-email-hook` — feat(platform): GoTrue Send Email Hook — route auth emails through mailer.ts (dkim=pass fix). Root cause: GoTrue generates Message-IDs from its container hostname (`ip-10-0-x-x.us-east-2.compute.internal`), Bluehost's cloudfilter rewrites Message-IDs whose domain doesn't resolve publicly, and Message-ID is inside the DKIM-signed header set — so signatures fail at every receiver. Fix: intercept the send via Supabase's Send Email Hook (Deno edge function at `supabase/functions/send-email-hook/`), verify the webhook signature, relay to a new Vercel POST route at `/api/auth/send-email` (bearer-secret gated, template selection by `emailActionType`), which calls the existing `sendMail()`. Nodemailer 9.0.1 auto-derives `<uuid@icareeros.com>` Message-IDs from the `From:` domain — these survive cloudfilter intact. The `/auth/callback?type=recovery` PKCE path stays intact as a rollback surface. Confirmation URLs land on `/auth/confirm` (never routes through `supabase.co`). 5 files (+827/-2), 16 vitest cases, deno check clean. Post-merge: edge function deployed (`--no-verify-jwt`), hook enabled + wired end-to-end. Verified with reset email showing `dkim=pass`.
+- Follow-up doc PR (this PR) — three new gotchas (#5–#7) added to `docs/EMAIL_DELIVERABILITY.md § Supabase management API gotchas`, plus the standing rule (auth-config via atomic API PATCH only, never the dashboard UI) and the Option-C-revised recovery pattern captured verbatim.
+
+### Jobs — corpus-first URL fetch + Ashby posting API + is_active safety
+
+- **#391** `fix/jobs-ashby-url-fetch` — fix(jobs): corpus-first URL fetch + Ashby posting API fallback. Adds `lookupCorpusJob()` at the top of the URL-resolver dispatcher: hits `ats_jobs` by `apply_url` (with URL variants — trailing slash, tracking-param strip, hostname lowercase, fragment drop) before any external round-trip. On corpus hit, returns the cached row directly. Also rewrites the Ashby adapter to hit their public posting API (`api.ashbyhq.com/posting-api/job-board/{org}`) instead of scraping SPA HTML that was returning garbage. Platform review layer added `.eq("is_active", true)` filter + defensive post-fetch guard so a stale description from a closed job is never served in place of the current external posting — inactive matches fall through to the ATS-specific / generic path. 36 vitest cases including one for the inactive-corpus fallthrough. Captured live: Cohere URL `source: "corpus"`, 618ms, zero external fetch.
+
 
 ## 2026-05-22 — hire.* token migration + middleware / sidebar catch-up
 
