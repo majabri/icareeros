@@ -31,6 +31,9 @@ import { compareTexts, cosineToScore } from "@/lib/embeddings/openai";
 import { computeDeterministicFit, type DeterministicFitResult, type KeywordCoverage, type FitBreakdown } from "@/services/scoring/deterministicFitCheck";
 import { extractUserProfile } from "@/services/scoring/profileExtractor";
 import { inferSeniority, type UserProfile } from "@/services/scoring/profileScorer";
+// fix/jobs-paste-mode-title — conservative JD → title inference for the
+// paste-mode case (client-supplied `jobTitle` still wins when present).
+import { inferJobTitleFromJD } from "@/services/scoring/inferJobTitleFromJD";
 
 // Re-export for any legacy consumer still importing types from this route.
 export type { KeywordCoverage, FitBreakdown };
@@ -102,7 +105,7 @@ export async function POST(req: NextRequest) {
   // heuristic. Long first lines (RBC-style 200-char intros) return
   // "" from the fallback, which then zeros scoreTargetRoleMatch and
   // drops 35% of the composite weight for no good reason.
-  const jobTitle = bodyJobTitle || coarseJobTitleFromJD(jobDescription);
+  const jobTitle = bodyJobTitle || inferJobTitleFromJD(jobDescription);
   const deterministic = computeDeterministicFit(jobTitle, jobDescription, /*company*/ "", profile);
 
   // ── Step 3: semantic score (TF-IDF, already deterministic, no external
@@ -173,21 +176,6 @@ async function resolveProfile(
     summary:         resumeText.slice(0, 500),
     keywords:        [],
   };
-}
-
-/**
- * Very coarse first-line heuristic for job title. Doesn't need to be
- * accurate — targetRoleMatch is best when the client sends the title
- * explicitly; when they don't we fall back to "" and score 0 on that
- * component (rather than pretending we know).
- */
-function coarseJobTitleFromJD(jd: string): string {
-  const firstLine = jd.split(/\r?\n/).map(s => s.trim()).find(Boolean) ?? "";
-  // Keep only if it looks like a title (< 100 chars, no full-stops early).
-  if (firstLine.length < 100 && !/^[A-Z][^.]*\./.test(firstLine)) {
-    return firstLine;
-  }
-  return "";
 }
 
 /**
