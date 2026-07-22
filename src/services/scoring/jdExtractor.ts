@@ -29,6 +29,8 @@
  */
 
 import { normalizeSkills } from "./skillsNormalizer";
+// fix/jobs-jd-extractor-location-noise — geography backstop.
+import { isPureGeography, stripLocationSentences } from "./geoTokens";
 
 // ── Section headings ─────────────────────────────────────────────────
 
@@ -241,6 +243,13 @@ export function extractJDSkills(text: string, opts: ExtractOptions = {}): string
     const re = new RegExp(`([^\n])\\s+${esc}\\s*:`, "g");
     preprocessed = preprocessed.replace(re, `$1\n\n${w}:\n`);
   }
+  // fix/jobs-jd-extractor-location-noise — strip "offices in …",
+  //   "headquartered in …", "hubs in …", "we hire in …" sentences
+  //   BEFORE bullet reflow + section slicing. Location prose leaks
+  //   city / country / state names into missing_skills otherwise
+  //   (see Cohere CISO capture 2026-07-20 for the motivating case).
+  preprocessed = stripLocationSentences(preprocessed);
+
   // Insert a newline before every " - " bullet marker so bullet items
   // become their own lines. Common in HTML-stripped Ashby / Workday JDs.
   preprocessed = preprocessed.replace(/([^\n])\s+-\s+/g, "$1\n- ");
@@ -473,6 +482,13 @@ function clean(raw: string): string {
   // Sanity: drop candidates that are purely numeric or years-of-experience
   // phrases ("5+ years", "10+ years experience", "5-7 years").
   if (/^\d+\s*[-\+]?\s*\d*\s*(?:years?|yrs?)\b/i.test(s)) return "";
+
+  // fix/jobs-jd-extractor-location-noise — geography backstop.
+  //   Kills pure-geo candidates ("New York City", "Montreal", "Seoul")
+  //   that survived the paragraph-level strip. Compound candidates
+  //   like "New York SHIELD Act" or "AWS Seoul region" survive because
+  //   they contain at least one non-geo token — see geoTokens.ts.
+  if (isPureGeography(s)) return "";
 
   return s;
 }
