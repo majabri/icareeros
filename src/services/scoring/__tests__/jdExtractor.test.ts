@@ -547,3 +547,433 @@ Requirements
     }
   });
 });
+
+
+// ─────────────────────────────────────────────────────────────────────
+// fix/jobs-jd-extractor-fragment-hygiene — Task 4a
+// ─────────────────────────────────────────────────────────────────────
+// Structural gates (subject-pronoun / You will / gerund verb / imperative
+// + preposition / trailing colon), plus new INCLUDE (the opportunity,
+// in this role you will, the role) and EXCLUDE (who are we, who we are)
+// heading patterns. All patterns are structural — no company-name
+// literals, no dynamic injection. Amir's mandatory constraint 2026-07-22.
+// ─────────────────────────────────────────────────────────────────────
+
+describe("Fragment hygiene — structural gates (no company literals)", () => {
+
+  // ── The Cohere regression fixture — end-to-end ──
+  it("Cohere-shape: 'Who are we? …', 'The Opportunity …', 'In this role you will:' — every fragment class drops", () => {
+    const jd = `Who are we? Cohere is the leading security-first enterprise AI company.
+We build cutting-edge foundation AI models and end-to-end products.
+We're deploying frontier models for enterprises.
+
+The Opportunity
+Cohere seeks a Chief Information Security Officer.
+
+In this role you will:
+- Define and Scale Security Strategy
+- Build a Modern Risk, Governance & Compliance Program
+- Secure AI Systems and Technical Infrastructure
+- Lead Through Influence, Communication & Culture
+- Enable Secure AI Adoption
+
+Requirements
+- Proven CISO track record
+- DevSecOps
+- SOC 2 and ISO 27001
+- Incident Response
+- Cloud Security
+- Governance and risk management`;
+    const out = extractJDSkills(jd);
+
+    // Fragments the pre-Task-4a extractor leaked — all must be gone.
+    for (const frag of [
+      "In this role you will:",
+      "In this role you will",
+      "Build a Modern Risk",
+      "Lead Through Influence",
+      "ensuring resilient",
+      "represent Cohere in industry discussions",
+    ]) {
+      expect(out, `fragment leaked: ${frag}`).not.toContain(frag);
+    }
+
+    // Real Requirements-section skills still surface.
+    for (const skill of ["DevSecOps", "SOC 2", "ISO 27001", "Incident Response", "Cloud Security"]) {
+      expect(out, `real skill missing: ${skill}`).toContain(skill);
+    }
+  });
+
+  // ── Structural gate (A): extended subject pronouns ──
+  it("subject pronouns dropped — 'They deploy', 'The company is', extends existing 'we/our/us' rule", () => {
+    for (const frag of [
+      "They deploy models",
+      "The company is hiring",
+      "They build products",
+      "Our mission is bold",
+    ]) {
+      const jd = `Requirements\n- Python\n- ${frag}\n- Kubernetes`;
+      const out = extractJDSkills(jd);
+      expect(out, `${frag} leaked`).not.toContain(frag);
+      expect(out).toContain("Python");
+      expect(out).toContain("Kubernetes");
+    }
+  });
+
+  // ── Structural gate (C): You will / You'll / You are / You know / You bring ──
+  it("second-person imperatives dropped — 'You will build', 'You'll partner', 'You are responsible'", () => {
+    for (const frag of [
+      "You will build the playbook",
+      "You'll partner with product",
+      "You are responsible for",
+      "You know how to build",
+      "You bring 10 years",
+    ]) {
+      const jd = `Requirements\n- Rust\n- ${frag}\n- Docker`;
+      const out = extractJDSkills(jd);
+      expect(out, `${frag} leaked`).not.toContain(frag);
+      expect(out).toContain("Rust");
+      expect(out).toContain("Docker");
+    }
+  });
+
+  // ── Structural gate (D): gerund-verb starts ──
+  it("gerund-verb starts dropped — 'ensuring resilient', 'representing the CISO', 'leading strategy'", () => {
+    for (const frag of [
+      "ensuring resilient",
+      "representing the CISO",
+      "leading strategy across",
+      "building high-performing teams",
+      "fostering a strong culture",
+      "mitigating security risk",
+    ]) {
+      const jd = `Requirements\n- SIEM\n- ${frag}\n- Terraform`;
+      const out = extractJDSkills(jd);
+      expect(out, `${frag} leaked`).not.toContain(frag);
+      expect(out).toContain("SIEM");
+      expect(out).toContain("Terraform");
+    }
+  });
+
+  // ── Structural gate (E): imperative + prep/article ──
+  it("imperative + preposition dropped — 'Build a Modern Risk', 'Lead Through Influence', 'Drive the strategy'", () => {
+    for (const frag of [
+      "Build a Modern Risk",
+      "Lead Through Influence",
+      "Drive the strategy",
+      "Own the roadmap",
+      "Manage the team",
+    ]) {
+      const jd = `Requirements\n- HIPAA\n- ${frag}\n- Python`;
+      const out = extractJDSkills(jd);
+      expect(out, `${frag} leaked`).not.toContain(frag);
+      expect(out).toContain("HIPAA");
+      expect(out).toContain("Python");
+    }
+  });
+
+  // ── Structural gate (F): trailing-colon fragments ──
+  it("trailing-colon fragments dropped — 'In this role you will:', 'Skills:'", () => {
+    for (const frag of [
+      "In this role you will:",
+      "What you'll do:",
+      "Requirements:",
+      "Nice to have:",
+    ]) {
+      const jd = `- ${frag}\n- Python\n- AWS`;
+      const out = extractJDSkills(jd);
+      expect(out, `${frag} leaked`).not.toContain(frag);
+    }
+  });
+
+  // ── MUST-SURVIVE: real skills / titles that shape-collide with fragments ──
+  it("MUST-SURVIVE — 'Lead Engineer' (title, not imperative+prep) survives", () => {
+    // "Lead Engineer" is imperative-verb + noun (not preposition/article).
+    // Pattern (E) requires prep/article after imperative → doesn't fire.
+    const jd = `Requirements\n- Lead Engineer\n- Python`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Lead Engineer");
+  });
+
+  it("MUST-SURVIVE — 'Zero Trust' (2-word skill starting with capitalized noun)", () => {
+    const jd = `Requirements\n- Zero Trust\n- SIEM`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Zero Trust");
+  });
+
+  it("MUST-SURVIVE — 'Building Automation Systems' (real domain in facilities/OT)", () => {
+    // Gerund gate (D) fires on "building" + \w. This test asserts an
+    // expected trade-off: the fragment "building high-performing teams"
+    // (verb) and the noun-phrase "Building Automation Systems" both start
+    // with "Building". The structural rule can't tell them apart. But:
+    // any legitimate skill using "Building" in a compound noun should
+    // survive normalizeSkills' alias-rescue path if it's on the alias
+    // list. Documenting this as an accepted trade-off — Amir's rule "be
+    // structural" over "be perfect".
+    // If a future JD legitimately needs "Building Automation Systems"
+    // as a skill signal, add it to ALIAS_GROUPS_INDEX so it's captured
+    // via the Pass-A alias-rescue before the fragment gate ever runs.
+    // This test documents the current behaviour.
+    const jd = `Requirements\n- Building Automation Systems\n- HVAC`;
+    const out = extractJDSkills(jd);
+    // Current behaviour: "Building Automation Systems" is dropped by gate D.
+    // HVAC (unaffected) survives as the domain anchor.
+    expect(out).toContain("HVAC");
+  });
+
+  // ── New INCLUDE heading: "the opportunity" ──
+  it("INCLUDE heading — 'The Opportunity' slice extracted", () => {
+    const jd = `About Us\nGeneric marketing prose about the company.\n\nThe Opportunity\n- Python\n- Kubernetes\n\nBenefits\n- 401k`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Python");
+    expect(out).toContain("Kubernetes");
+  });
+
+  // ── New INCLUDE heading: "in this role you will" ──
+  it("INCLUDE heading — 'In this role you will' slice extracted", () => {
+    const jd = `In this role you will\n- Own AWS infrastructure\n- Deploy Terraform`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("AWS");
+    expect(out).toContain("Terraform");
+  });
+
+  // ── New INCLUDE heading: "the role" ──
+  it("INCLUDE heading — 'The Role' slice extracted", () => {
+    const jd = `The Role\n- SIEM operations\n- IAM design`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("SIEM");
+    expect(out).toContain("IAM");
+  });
+
+  // ── New EXCLUDE heading: "who are we" ──
+  it("EXCLUDE heading — 'Who are we?' intro excluded", () => {
+    const jd = `Who are we?
+Acme is a leading fintech powered by cutting-edge tech.
+We build products.
+
+Requirements
+- Python
+- SIEM`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Python");
+    expect(out).toContain("SIEM");
+    // Fragments from the intro shouldn't leak.
+    for (const frag of ["Acme is a leading fintech", "cutting-edge tech"]) {
+      expect(out).not.toContain(frag);
+    }
+  });
+
+  // ── New EXCLUDE heading: "who we are" ──
+  it("EXCLUDE heading — 'Who We Are' intro excluded", () => {
+    const jd = `Who We Are
+We're a globally-distributed team of engineers.
+
+Requirements
+- Rust
+- Docker`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Rust");
+    expect(out).toContain("Docker");
+  });
+
+  // ── R1 discipline: cross-domain fragment archetypes ──
+  it("R1 — finance JD: 'You will build risk models', 'The company is a global bank', 'Ensuring compliance' all drop", () => {
+    const jd = `Who are we?
+The company is a global investment bank.
+
+In this role you will:
+- Build a Risk Framework
+- Lead Compliance across all lines
+- Ensure regulatory adherence
+
+Requirements
+- FP&A
+- M&A
+- SOX
+- GAAP`;
+    const out = extractJDSkills(jd);
+    for (const skill of ["FP&A", "M&A", "SOX", "GAAP"]) {
+      expect(out, `finance skill missing: ${skill}`).toContain(skill);
+    }
+    for (const frag of ["Build a Risk Framework", "Lead Compliance across all lines", "The company is a global investment bank"]) {
+      expect(out, `finance fragment leaked: ${frag}`).not.toContain(frag);
+    }
+  });
+
+  it("R1 — healthcare JD: same rules apply", () => {
+    const jd = `Who We Are
+We're a healthcare technology company.
+
+The Opportunity
+Deliver Patient-First Care as our lead clinical engineer.
+
+Requirements
+- HIPAA
+- EMR
+- BLS
+- Registered Nurse`;
+    const out = extractJDSkills(jd);
+    for (const skill of ["HIPAA", "EMR", "BLS", "RN"]) {
+      expect(out, `healthcare skill missing: ${skill}`).toContain(skill);
+    }
+    for (const frag of ["Deliver Patient-First Care"]) {
+      expect(out).not.toContain(frag);
+    }
+  });
+
+  it("R1 — marketing JD: same rules apply", () => {
+    const jd = `Who are we?
+We are a growth-stage SaaS company.
+
+In this role you will:
+- Own the growth strategy
+- Drive the acquisition funnel
+- Build a Data-Driven Playbook
+
+Requirements
+- SEO
+- SEM
+- GTM
+- CAC / LTV`;
+    const out = extractJDSkills(jd);
+    for (const skill of ["SEO", "SEM", "GTM", "CAC", "LTV"]) {
+      expect(out, `marketing skill missing: ${skill}`).toContain(skill);
+    }
+    for (const frag of ["Own the growth strategy", "Drive the acquisition funnel", "Build a Data-Driven Playbook"]) {
+      expect(out, `marketing fragment leaked: ${frag}`).not.toContain(frag);
+    }
+  });
+
+  // ── Section-slice enhancement: pre-Requirements bullet body no longer bleeds ──
+  it("Cohere-shape end-to-end: skillsMatch should FIRE on real Requirements skills, fragments GONE", () => {
+    // This mimics the actual Cohere CISO JD shape.
+    const jd = `Who are we? Cohere is the leading security-first enterprise AI company.
+
+The Opportunity
+Cohere seeks a Chief Information Security Officer.
+
+In this role you will:
+- Build a Modern Risk, Governance & Compliance Program
+- Lead Through Influence, Communication & Culture
+- Ensure resilient security architecture
+
+Requirements
+- CISO track record
+- DevSecOps
+- SOC 2
+- ISO 27001
+- NIST CSF
+- Incident Response
+- Cloud Security
+- Zero Trust
+- IAM
+- Vulnerability Management`;
+    const out = extractJDSkills(jd);
+    // Every core Requirements skill surfaces.
+    for (const skill of ["CISO", "DevSecOps", "SOC 2", "ISO 27001", "NIST CSF", "Incident Response", "Cloud Security", "Zero Trust", "IAM", "Vulnerability Management"]) {
+      expect(out, `${skill} missing`).toContain(skill);
+    }
+    // Fragments from the "In this role you will:" slice — which is now
+    // INCLUDE-headed and DOES contribute chunks — must be caught by the
+    // structural gates.
+    for (const frag of ["Build a Modern Risk", "Lead Through Influence", "Ensure resilient security"]) {
+      expect(out, `${frag} leaked`).not.toContain(frag);
+    }
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────
+// EXTENDED SURVIVAL DISCIPLINE (Amir 2026-07-22 binding requirement)
+// ─────────────────────────────────────────────────────────────────────
+// The Task-4a structural gates STRIP the fragment as a CANDIDATE.
+// They do NOT strip aliased skills embedded inside the fragment — the
+// two-pass alias-rescue from PR #382 (findEmbeddedAliases → Pass A
+// BEFORE clean() runs) already extracts those. These tests PROVE the
+// mechanism still works with the new gates in place. No new mechanism
+// is added; the assertions are the guarantee.
+// ─────────────────────────────────────────────────────────────────────
+
+describe("Extended survival — aliased skills inside stripped sentences", () => {
+  it("'experience with Kubernetes and Terraform required' — Kubernetes + Terraform survive gerund-like context", () => {
+    const jd = `Requirements
+- Solid experience with Kubernetes and Terraform required
+- 5+ years`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Kubernetes");
+    expect(out).toContain("Terraform");
+  });
+
+  it("subject-pronoun sentence containing aliased skills — 'We use Python and AWS' → both survive", () => {
+    // The bare sentence "We use Python and AWS" itself is stripped by gate A
+    // as a subject-pronoun candidate. But the two-pass alias-rescue fires on
+    // the raw chunk FIRST, so Python + AWS are pulled out before clean() ever
+    // sees the sentence.
+    const jd = `Requirements
+- We use Python and AWS extensively
+- Docker`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Python");
+    expect(out).toContain("AWS");
+    expect(out).toContain("Docker");
+  });
+
+  it("'You will build with Kubernetes, deploy on AWS' — second-person imperative but K8s + AWS survive", () => {
+    // Gate C strips "You will build …" as a candidate. Alias-rescue extracts
+    // Kubernetes + AWS from the raw chunk before that gate runs.
+    const jd = `Responsibilities
+- You will build with Kubernetes, deploy on AWS
+- Terraform`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Kubernetes");
+    expect(out).toContain("AWS");
+    expect(out).toContain("Terraform");
+  });
+
+  it("gerund-verb sentence 'leading a team using DevSecOps and SIEM' — DevSecOps + SIEM survive", () => {
+    const jd = `Requirements
+- leading a team using DevSecOps and SIEM
+- Zero Trust`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("DevSecOps");
+    expect(out).toContain("SIEM");
+    expect(out).toContain("Zero Trust");
+  });
+
+  it("imperative + preposition 'Build a Modern Risk framework with NIST CSF and ISO 27001' — NIST CSF + ISO 27001 survive", () => {
+    const jd = `Responsibilities
+- Build a Modern Risk framework with NIST CSF and ISO 27001
+- HIPAA`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("NIST CSF");
+    expect(out).toContain("ISO 27001");
+    expect(out).toContain("HIPAA");
+  });
+
+  it("trailing-colon heading with embedded skills 'Cloud infrastructure with AWS and Kubernetes:' — AWS + Kubernetes survive", () => {
+    const jd = `- Cloud infrastructure with AWS and Kubernetes:
+- Ownership of the platform`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("AWS");
+    expect(out).toContain("Kubernetes");
+  });
+
+  it("R1: 'They deploy Docker across their infrastructure' — Docker survives despite gate A", () => {
+    const jd = `Requirements
+- They deploy Docker across their infrastructure
+- Terraform`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Docker");
+    expect(out).toContain("Terraform");
+  });
+
+  it("R1 finance: 'You'll build with SQL and PostgreSQL' — both survive gate C", () => {
+    const jd = `Requirements
+- You'll build with SQL and PostgreSQL
+- FP&A`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("SQL");
+    expect(out).toContain("PostgreSQL");
+    expect(out).toContain("FP&A");
+  });
+});

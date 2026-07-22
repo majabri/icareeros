@@ -49,6 +49,14 @@ const INCLUDE_HEADINGS: RegExp[] = [
   /\babout\s+you\b/i,
   /\byour\s+background\b/i,
   /\bkey\s+(?:responsibilities|skills)\b/i,
+  // fix/jobs-jd-extractor-fragment-hygiene — Task 4a. Cohere-shape
+  //   JDs used none of the standard headings; the responsibilities
+  //   section went unrecognised and its bullets leaked as prose
+  //   fragments into missing_skills. These three are universal JD
+  //   conventions (not company-specific strings).
+  /\bthe\s+opportunity\b/i,
+  /\bin\s+this\s+role\s+you\s+will\b/i,
+  /\bthe\s+role\b/i,
 ];
 
 const EXCLUDE_HEADINGS: RegExp[] = [
@@ -66,6 +74,11 @@ const EXCLUDE_HEADINGS: RegExp[] = [
   /\baccommodation(?:s)?\b/i,
   /\bhow\s+to\s+apply\b/i,
   /\bapplication\s+process\b/i,
+  // fix/jobs-jd-extractor-fragment-hygiene — Task 4a. Cohere
+  //   opens with "Who are we?" — question-headline JDs need this
+  //   to route the intro paragraph into the exclude bucket.
+  /\bwho\s+are\s+we\b/i,
+  /\bwho\s+we\s+are\b/i,
 ];
 
 // ── Blocklist ─────────────────────────────────────────────────────────
@@ -473,8 +486,51 @@ function clean(raw: string): string {
   //   (B) Prepositional-lead fragments. "at the management level",
   //       "in the enterprise", "of our approach" — bare preposition
   //       start followed by an article. Never a skill.
-  if (/^(?:we|our|us|ours)\s+\w/i.test(lower)) return "";
+  // fix/jobs-jd-extractor-fragment-hygiene — Task 4a. All structural,
+  //   no company-name literals, no dynamic injection. Amir's spec: "purely
+  //   structural detection". These fire AFTER the ≤6-word cap so a real
+  //   short skill like "IAM" or "Zero Trust" is never even considered.
+  //
+  // (A) Subject-pronoun starts. Extended from the pre-#394 "we/our/us"
+  //     rule to add "they" and "the company" — same idea, wider net.
+  //     "We build models", "Our mission", "They deploy", "The company is"
+  //     → all body prose, never a skill.
+  if (/^(?:we|our|us|ours|they|the\s+company)\s+\w/i.test(lower)) return "";
+  //
+  // (B) Prepositional-lead fragments — pre-existing rule, kept as-is.
   if (/^(?:at|in|on|of|from|by|for|to)\s+(?:the|a|an|our|your)\s+/i.test(lower)) return "";
+  //
+  // (C) Second-person imperatives / statements. "You will build the
+  //     playbook", "You'll partner with…", "You are responsible" — always
+  //     JD prose, never a skill.
+  if (/^(?:you\s+will|you'll|you\s+are|you\s+know|you\s+bring)\b/i.test(lower)) return "";
+  //
+  // (D) Gerund-verb starts. Job-description bullets like "ensuring
+  //     resilient", "representing the CISO", "leading strategy across…"
+  //     have a distinctive shape: -ing verb at position 0. This list is
+  //     the ~40 verbs that recur in JD action-item bullets. Structural,
+  //     not company-specific.
+  if (/^(?:ensuring|representing|leading|building|managing|driving|working|delivering|creating|developing|deploying|implementing|maintaining|architecting|designing|owning|scaling|supporting|enabling|coordinating|collaborating|partnering|reporting|fostering|mitigating|assessing|identifying|shaping|executing|planning|conducting|monitoring|reviewing|analyzing|advocating|educating|mentoring|hiring|recruiting|guiding|championing|overseeing)\s+\w/i.test(lower)) return "";
+  //
+  // (E) Imperative verb + preposition/article. "Build a Modern Risk",
+  //     "Lead Through Influence", "Drive the strategy". The article /
+  //     preposition after the verb marks it as a sentence, not a title.
+  //     Bare "Lead Engineer" (title) doesn't match because "Engineer" is
+  //     not in the follower list.
+  if (/^(?:lead|build|manage|drive|own|ensure|represent|foster|deliver|create|develop|design|implement|maintain|architect|scale|support|enable|coordinate|monitor|report|advocate|mentor|partner|collaborate|guide|champion|oversee|shape|execute|conduct|review|analyze|advise|educate|train|train)\s+(?:the|a|an|through|for|to|our|your|via|in|on|of|with|across|by)\b/i.test(lower)) return "";
+  //
+  // (E-bis) Imperative verb + noun + preposition — e.g. "Lead Compliance
+  //     across all lines", "Build Trust with customers", "Drive Growth
+  //     through automation". The trailing preposition is what marks it
+  //     as a sentence rather than a compound noun-title. 2-word titles
+  //     like "Lead Engineer" don't match (no 3rd token, no prep).
+  if (/^(?:lead|build|manage|drive|own|ensure|represent|foster|deliver|create|develop|design|implement|maintain|architect|scale|support|enable|coordinate|monitor|report|advocate|mentor|partner|collaborate|guide|champion|oversee|shape|execute|conduct|review|analyze|advise|educate|train)\s+\S+\s+(?:across|through|via|for|with|by|from|around|between|during|throughout|within|per|among|alongside|in|on|of|to|at)\b/i.test(lower)) return "";
+  //
+  // (F) Heading-with-trailing-colon fragments — "In this role you will:",
+  //     "Build a Modern Risk, Governance & Compliance Program:", "Skills:".
+  //     A bare-colon suffix is ALWAYS a heading, never a skill. Real
+  //     skill acronyms don't end in colons.
+  if (/:\s*$/.test(s)) return "";
 
   // Bare stopwords.
   if (BARE_STOPWORDS.has(lower)) return "";
