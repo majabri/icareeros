@@ -348,3 +348,202 @@ describe("extractJDSkills — generic prose patterns (not RBC-specific)", () => 
     }
   });
 });
+
+
+// ─────────────────────────────────────────────────────────────────────
+// fix/jobs-jd-extractor-location-noise — location prose + geo backstop
+// ─────────────────────────────────────────────────────────────────────
+
+describe("Location noise — R1 discipline across archetypes", () => {
+  // ── The Cohere regression fixture ──
+  it("Cohere-shape: 'we have offices in NYC, Montreal, Seoul, Germany, Paris' — MUST drop every city AND keep the real requirements", () => {
+    const jd = `Who are we? Cohere is the leading security-first enterprise AI company.
+We have offices in New York City, Montreal, Seoul, Germany, Paris. We work
+across timezones.
+
+The Opportunity
+Cohere seeks a Chief Information Security Officer.
+
+Requirements
+- Proven CISO track record
+- Cloud Security
+- DevSecOps
+- SOC 2 and ISO 27001
+- Incident Response
+- Governance and risk management`;
+    const out = extractJDSkills(jd);
+    for (const city of ["New York City", "New York", "Montreal", "Seoul", "Germany", "Paris"]) {
+      expect(out).not.toContain(city);
+    }
+    // Real requirements still surface.
+    expect(out).toContain("Cloud Security");
+    expect(out).toContain("DevSecOps");
+    expect(out).toContain("SOC 2");
+    expect(out).toContain("ISO 27001");
+    expect(out).toContain("Incident Response");
+  });
+
+  it("European offices list — drops all EU cities, keeps skills", () => {
+    const jd = `About Us
+Acme is a fintech with hubs in London, Berlin, and Singapore, all working
+in unison.
+
+Requirements
+- Python
+- AWS
+- Kubernetes`;
+    const out = extractJDSkills(jd);
+    for (const city of ["London", "Berlin", "Singapore"]) {
+      expect(out).not.toContain(city);
+    }
+    expect(out).toContain("Python");
+    expect(out).toContain("AWS");
+    expect(out).toContain("Kubernetes");
+  });
+
+  it("US state list — 'we hire in California, Texas, New York, Florida' drops every state", () => {
+    const jd = `About Us
+We hire in California, Texas, New York, Florida. We are fully remote.
+
+Requirements
+- TypeScript
+- PostgreSQL
+- Docker`;
+    const out = extractJDSkills(jd);
+    for (const state of ["California", "Texas", "New York", "Florida"]) {
+      expect(out).not.toContain(state);
+    }
+    expect(out).toContain("TypeScript");
+    expect(out).toContain("PostgreSQL");
+    expect(out).toContain("Docker");
+  });
+
+  it("regulation containing a place name — 'New York SHIELD Act' MUST SURVIVE", () => {
+    const jd = `Requirements
+- HIPAA
+- New York SHIELD Act compliance
+- California CCPA
+- Illinois BIPA
+- Python`;
+    const out = extractJDSkills(jd);
+    // Regulations are compound — non-geo tokens present → survive.
+    expect(out.some(s => /SHIELD/i.test(s))).toBe(true);
+    expect(out.some(s => /CCPA/i.test(s))).toBe(true);
+    expect(out.some(s => /BIPA/i.test(s))).toBe(true);
+    expect(out).toContain("HIPAA");
+    expect(out).toContain("Python");
+    // Bare "New York" should NOT appear on its own.
+    expect(out).not.toContain("New York");
+  });
+
+  it("cloud region — 'AWS Seoul region' MUST SURVIVE", () => {
+    const jd = `Requirements
+- Deploy to AWS Seoul region
+- Familiarity with Azure US East
+- Python`;
+    const out = extractJDSkills(jd);
+    // "AWS" survives; the region compound is a survivable non-geo phrase.
+    expect(out).toContain("AWS");
+    expect(out).toContain("Python");
+    // Bare cities dropped.
+    expect(out).not.toContain("Seoul");
+    expect(out).not.toContain("US East");
+  });
+
+  it("'headquartered in Zurich' — sentence strip fires", () => {
+    const jd = `About Us
+Acme is headquartered in Zurich and works globally.
+
+Requirements
+- Rust
+- Go`;
+    const out = extractJDSkills(jd);
+    expect(out).not.toContain("Zurich");
+    expect(out).toContain("Rust");
+    // normalizeSkills canonicalizes "Golang" → "Go"; we assert the
+    // canonical form so this doesn't drift.
+    expect(out).toContain("Go");
+  });
+
+  it("'based in Tokyo' — sentence strip fires", () => {
+    const jd = `About Us
+Our team is based in Tokyo, working across APAC.
+
+Requirements
+- Kubernetes
+- Terraform`;
+    const out = extractJDSkills(jd);
+    expect(out).not.toContain("Tokyo");
+    expect(out).toContain("Kubernetes");
+    expect(out).toContain("Terraform");
+  });
+
+  it("no location prose at all — extraction unchanged (nothing to strip)", () => {
+    const jd = `Requirements
+- Python
+- SIEM
+- IAM
+- Kubernetes`;
+    const out = extractJDSkills(jd);
+    expect(out).toContain("Python");
+    expect(out).toContain("SIEM");
+    expect(out).toContain("IAM");
+    expect(out).toContain("Kubernetes");
+  });
+
+  it("location prose with the token backstop as double-cover (defence-in-depth)", () => {
+    // Requirements section explicitly LISTS cities as bullets — a rare
+    // shape where the sentence-strip doesn't fire but the token backstop
+    // must. Real skill requirements around them still survive.
+    const jd = `Requirements
+- Python
+- Toronto
+- New York City
+- Montreal
+- Kubernetes
+- Seoul
+- AWS`;
+    const out = extractJDSkills(jd);
+    expect(out).not.toContain("Toronto");
+    expect(out).not.toContain("New York City");
+    expect(out).not.toContain("Montreal");
+    expect(out).not.toContain("Seoul");
+    expect(out).toContain("Python");
+    expect(out).toContain("Kubernetes");
+    expect(out).toContain("AWS");
+  });
+
+  it("R1 cross-domain: same rules apply to finance / healthcare / marketing JDs", () => {
+    const finance = `About Us
+We have offices in London and New York.
+Requirements
+- FP&A
+- M&A
+- SOX`;
+    const healthcare = `About Us
+We have clinics in Boston and Chicago.
+Requirements
+- HIPAA
+- EMR
+- BLS`;
+    const marketing = `About Us
+Our hubs in Austin and Denver serve the US.
+Requirements
+- SEO
+- SEM
+- GTM`;
+    for (const [name, jd, cities, skills] of [
+      ["finance",    finance,    ["London", "New York"],  ["FP&A", "M&A", "SOX"]],
+      ["healthcare", healthcare, ["Boston", "Chicago"],    ["HIPAA", "EMR", "BLS"]],
+      ["marketing",  marketing,  ["Austin", "Denver"],     ["SEO", "SEM", "GTM"]],
+    ] as const) {
+      const out = extractJDSkills(jd);
+      for (const city of cities) {
+        expect(out, `${name}: city ${city} leaked`).not.toContain(city);
+      }
+      for (const skill of skills) {
+        expect(out, `${name}: skill ${skill} missing`).toContain(skill);
+      }
+    }
+  });
+});
