@@ -194,6 +194,11 @@ export function scoreTargetRoleMatch(
   return { score: best, signal, bestMatch, allScores };
 }
 
+// ADR-0006 F4 formula — see docs/adr/0006-skillsmatch-denominator-redesign.md.
+//   All skillsMatch scoring on Node + Deno sides funnels through
+//   f4SkillsScore. DO NOT compute the score inline.
+import { f4SkillsScore } from "./f4Denominator";
+
 // ── scoreSkillsMatch ─────────────────────────────────────────────────────
 
 /**
@@ -223,8 +228,10 @@ export function scoreSkillsMatch(
   //   was pulling in "competitive compensation", "collaborative",
   //   and parser fragments like "nfa standards)".
   const jobSkillsNorm = extractJDSkills(job.description ?? "");
-  const totalPool = Math.max(profile.skills.length, jobSkillsNorm.length, 1);
-  const score = Math.min(100, Math.round((matched.length / totalPool) * 100));
+  // ADR-0006 §3.6 — F4: denom = max(min(profile, jd), 10). Ships in tandem
+  //   with the Deno-side change so both sides produce byte-identical
+  //   skillsMatch on the same inputs. See f4Denominator.ts.
+  const score = f4SkillsScore(matched.length, profile.skills.length, jobSkillsNorm.length);
   const matchedCanonical = new Set(matched.map(m => canonicalize(m).toLowerCase()));
   // fix/jobs-jd-extractor — the extractor returns up to 25 candidates so
   //   the pool is big enough to see genuine matches; the user-facing

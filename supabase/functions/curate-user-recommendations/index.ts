@@ -36,6 +36,11 @@
 // esm.sh (see ingest-ats-direct, support-resolver, support-action-runner);
 // this file matches that pattern so CI per-function `deno check` is clean
 // out-of-the-box.
+// ADR-0006 F4 — Deno curator uses the SAME extractor + formula as the
+//   Node fit-check route. Vendored under _shared/scoring/ so both sides
+//   are byte-identical on the same inputs.
+import { extractJDSkills } from "../_shared/scoring/jdExtractor.ts";
+import { f4SkillsScore } from "../_shared/scoring/f4Denominator.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -98,7 +103,12 @@ function scoreJob(job: any, profile: any): {
     if (jobSkillsLower.includes(s) || desc.includes(s)) matched.push(s);
     else missing.push(s);
   }
-  const skillsScore = skills.length ? Math.round((matched.length / skills.length) * 100) : 0;
+  // ADR-0006 §3.6 F4 — same formula as Node scoreSkillsMatch. Deno now
+  //   computes its own jdSkillsNorm via the vendored extractor (was
+  //   relying on job.extracted_skills which is 98% empty across the
+  //   corpus — see ADR-0006 §1.4).
+  const jdSkillsNorm = extractJDSkills(job.description ?? "");
+  const skillsScore = f4SkillsScore(matched.length, skills.length, jdSkillsNorm.length);
 
   const senMatch = profile.targetSeniority && job.extracted_seniority === profile.targetSeniority;
   const seniorityScore = senMatch ? 100 : 50;

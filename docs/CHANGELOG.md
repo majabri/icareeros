@@ -4,6 +4,20 @@ Notable shipped work. Most recent first.
 
 ---
 
+## 2026-07-23 — Sprint H3 close + ADR-0006 accepted
+
+**`main` HEAD after this run: `6ba61f9`** (F4 rollout begins on the next branch)
+
+Three PRs shipped after the 2026-07-17 batch, plus the sprint-closing ADR:
+
+- **#397** `fix/jobs-jd-extractor-fragment-hygiene` — precision-only fragment strip. 22 structural gates added to `jdExtractor` (subject-pronoun / You will / gerund / imperative-plus-preposition / trailing-colon), 3 new INCLUDE headings, 2 new EXCLUDE headings, extended-survival assertions proving alias-rescue from PR #382 still fires on real skills embedded in stripped sentences. Post-deploy acceptance matched all four predicted values exactly: composite 65 unchanged, zero cities, exactly the 3 documented residuals, cleaner missing_skills feeding recommendations. Merged as squash `5ffce92`. Platform accepted the 3 residuals as known-limits (Option 1) — scope extension for a ProperNoun+is-verb gate was declined because the required patterns risk killing real skills like `Cohere Command R` / `Snowflake Arctic` / `Experience Platform`.
+- **#398** `feat/jobs-search-db-rpc-rank` — `GET /api/jobs/search-db` swapped from `.textSearch("title", …)` to `.rpc("search_jobs_ranked", {…})`. Two SDK queries collapse to one; `total` now sourced from `rows[0].total_count`. Live-SQL proofs: RPC returns non-zero ranked rows for `python engineer` (top 0.178, bottom 0.102), ordering demonstrably differs from `posted_at DESC` on every row of the top 10. Response contract byte-identical. Merged as squash `6ba61f9`.
+- **ADR-0006** — `skillsMatch` denominator redesign, Jobs-authored, Platform-approved 2026-07-23. Six decisions ruled: F4 (`max(min(profile, jd), 10)`) as the formula, floor 10 empirically anchored, two-phase backfill, replay-gated threshold reset (must re-derive #387's stretch=24 under the new scorer), Node/Deno single PR with byte-identity test as the centerpiece, adjacents split (desc-empty ingest bug filed separately as priority; `extracted_skills` population as candidate ADR-007).
+
+Sprint arc closes at composite 65 for Cohere × Amir under F1 with the calibration stop-rule invoked; F4 rollout begins next.
+
+---
+
 ## 2026-07-17 — GoTrue DKIM fixed end-to-end + corpus-first URL fetch
 
 **`main` HEAD after this run: `c8cc593`**
