@@ -19,6 +19,19 @@
 //  ambient in the edge runtime.)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// #400 description backfill — per-source detail fetchers, rate pacer, and
+// circuit breaker. See detailFetchers.ts for the vendor endpoints and the
+// contract; each source has a pure parse function that's unit-tested.
+import {
+  pickFetcher,
+  sleep,
+  CircuitBreaker,
+  DEFAULT_RATE_CONFIG,
+  DEFAULT_CIRCUIT_CONFIG,
+  type AtsJobRow as DetailAtsJobRow,
+  type FetcherName,
+} from "./detailFetchers.ts";
+
 // ── Skill inference (shared with the Next.js side; kept in-file so the
 //    edge bundle has no external deps beyond @supabase/supabase-js) ──────
 const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
@@ -338,6 +351,12 @@ function classifyRoleFamilies(title: string): string[] {
 
 // ── Batch orchestration ─────────────────────────────────────────────────
 const BATCH_SIZE       = 250;   // Fix 1 — raised from 100
+// #400 — separate cap for the description-fetch phase because it makes
+// external HTTP calls (250ms pacing → ~50 rows/source keeps us < 15s
+// per invocation). Runs BEFORE the skills/families phase so a row that
+// gets its description this tick still gets extracted the same tick if
+// there's budget left.
+const DESC_FETCH_TOTAL_CAP = 100;
 const WORKER_COUNT     = 5;
 const MAX_RETRIES      = 3;
 const MAX_CHAIN_DEPTH  = 40;    // Fix 1 — hard stop on self-invoke chain
@@ -389,6 +408,149 @@ async function processJob(supabase: any, job: JobRow): Promise<void> {
     patch.enrichment_status      = nextRetry >= MAX_RETRIES ? "failed" : "pending";
   }
   await supabase.from("ats_jobs").update(patch).eq("id", job.id);
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// #400 description backfill — fetches missing descriptions from vendor
+// per-posting endpoints, then flips status back to 'pending' so the
+// existing skills/families phase re-enriches on the same or next tick.
+//
+// Status transitions:
+//   needs_description ──(fetch ok)──> pending         (description written)
+//                     ──(fetch fail, retryable, retries<MAX)──> needs_description
+//                     ──(fetch fail, non-retryable OR retries≥MAX)──> description_failed
+//                     ──(source circuit tripped)──> needs_description (untouched, retryable next tick)
+//
+// Per Platform 2026-07-23:
+//   - reuse per-posting endpoints from URL-fetch path
+//   - per-source rate-pacing + inter-request delay
+//   - per-source error budgets + circuit breaker
+//   - #389 status-honesty: failed rows are marked, never silently skipped
+// ─────────────────────────────────────────────────────────────────────
+
+interface DescFetchStats {
+  bySource:     Record<string, { attempted: number; ok: number; failed: number; tripped: boolean }>;
+  totalOk:      number;
+  totalFailed:  number;
+  totalSkipped: number;   // rows we didn't touch because circuit was open
+  durationMs:   number;
+}
+
+async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> {
+  const startedAt = Date.now();
+  const stats: DescFetchStats = {
+    bySource:     {},
+    totalOk:      0,
+    totalFailed:  0,
+    totalSkipped: 0,
+    durationMs:   0,
+  };
+
+  // Pull up to DESC_FETCH_TOTAL_CAP rows across all sources. Deterministic
+  // ordering (posted_at DESC nulls-last, then id) so retries don't shuffle.
+  const { data: rows, error } = await supabase
+    .from("ats_jobs")
+    .select("id, source, external_id, company, apply_url, enrichment_retry_count")
+    .eq("enrichment_status", "needs_description")
+    .eq("is_active", true)
+    .lt("enrichment_retry_count", MAX_RETRIES)
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true })
+    .limit(DESC_FETCH_TOTAL_CAP);
+  if (error) throw error;
+  const queue = (rows ?? []) as Array<DetailAtsJobRow & { enrichment_retry_count: number | null }>;
+
+  // Per-source circuit breakers + last-request timestamps for pacing.
+  const breakers: Record<FetcherName, CircuitBreaker> = {
+    greenhouse:      new CircuitBreaker(DEFAULT_CIRCUIT_CONFIG),
+    smartrecruiters: new CircuitBreaker(DEFAULT_CIRCUIT_CONFIG),
+    workday:         new CircuitBreaker(DEFAULT_CIRCUIT_CONFIG),
+  };
+  const lastRequestAt: Record<FetcherName, number> = {
+    greenhouse: 0, smartrecruiters: 0, workday: 0,
+  };
+  const perSourceCount: Record<FetcherName, number> = {
+    greenhouse: 0, smartrecruiters: 0, workday: 0,
+  };
+
+  for (const row of queue) {
+    const dispatch = pickFetcher(row.source);
+    if (!dispatch) {
+      // Not a source we handle — mark description_failed non-retryably.
+      await supabase.from("ats_jobs")
+        .update({
+          enrichment_status:      "description_failed",
+          enrichment_retry_count: MAX_RETRIES,
+        })
+        .eq("id", row.id);
+      stats.totalFailed++;
+      continue;
+    }
+    const src = dispatch.name;
+    const bucket = stats.bySource[src] ??= { attempted: 0, ok: 0, failed: 0, tripped: false };
+
+    // Circuit tripped for this source? Leave the row alone; a later
+    // invocation retries.
+    if (breakers[src].isTripped()) {
+      stats.totalSkipped++;
+      bucket.tripped = true;
+      continue;
+    }
+    // Per-invocation cap for this source?
+    const cfg = DEFAULT_RATE_CONFIG[src] ?? { interRequestMs: 250, maxPerInvocation: 50 };
+    if (perSourceCount[src] >= cfg.maxPerInvocation) {
+      stats.totalSkipped++;
+      continue;
+    }
+
+    // Inter-request delay for this source.
+    const elapsed = Date.now() - lastRequestAt[src];
+    if (elapsed < cfg.interRequestMs) {
+      await sleep(cfg.interRequestMs - elapsed);
+    }
+    lastRequestAt[src] = Date.now();
+    perSourceCount[src]++;
+    bucket.attempted++;
+
+    const result = await dispatch.fetch(row);
+
+    if (result.ok) {
+      // Success — write the description and flip status back to 'pending'
+      // so the existing skills/families phase re-enriches. Reset retry
+      // count so a downstream skills-extraction failure gets fresh budget.
+      await supabase.from("ats_jobs")
+        .update({
+          description:            result.description,
+          enrichment_status:      "pending",
+          enrichment_retry_count: 0,
+          enriched_at:            new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      bucket.ok++;
+      stats.totalOk++;
+      breakers[src].onSuccess();
+    } else {
+      const nextRetry = (row.enrichment_retry_count ?? 0) + 1;
+      const tripped   = breakers[src].onFailure();
+      if (tripped) bucket.tripped = true;
+
+      const nonRetryable = !result.retryable;
+      const outOfBudget  = nextRetry >= MAX_RETRIES;
+      const nextStatus   = nonRetryable || outOfBudget ? "description_failed" : "needs_description";
+      await supabase.from("ats_jobs")
+        .update({
+          enrichment_status:      nextStatus,
+          enrichment_retry_count: nextRetry,
+        })
+        .eq("id", row.id);
+      bucket.failed++;
+      stats.totalFailed++;
+    }
+  }
+
+  stats.durationMs = Date.now() - startedAt;
+  return stats;
 }
 
 async function runBatch(
@@ -497,16 +659,34 @@ Deno.serve(async (req: Request) => {
 
   try {
     const started = Date.now();
+
+    // #400 — description-fetch phase runs FIRST. Rows that transition to
+    // 'pending' this tick are eligible for the skills/families phase
+    // below (same invocation) — no wait for the next cron tick.
+    const descStats = await runDescriptionFetchPhase(supabase);
+
     const result  = await runBatch(supabase, { priorityTitleFilter });
     const durationMs = Date.now() - started;
 
-    // Fix 1 — self-invoke if pending remains, unless we hit the depth cap.
-    if (result.remainingPending > 0 && result.processed > 0) {
+    // #400 — chain if either phase has pending remaining. runBatch returns
+    // remainingPending for the skills phase; count needs_description rows
+    // separately for the description phase.
+    const { count: descRemaining } = await supabase
+      .from("ats_jobs")
+      .select("id", { count: "estimated", head: true })
+      .eq("enrichment_status", "needs_description")
+      .eq("is_active", true)
+      .lt("enrichment_retry_count", MAX_RETRIES);
+
+    const anyPending = result.remainingPending > 0 || (descRemaining ?? 0) > 0;
+    if (anyPending && (result.processed > 0 || descStats.totalOk + descStats.totalFailed > 0)) {
       await selfInvokeIfPending(chainDepth, priorityTitleFilter);
     }
 
     return new Response(JSON.stringify({
       ...result,
+      descFetch:      descStats,
+      descRemaining:  descRemaining ?? 0,
       chainDepth,
       durationMs,
     }), {
