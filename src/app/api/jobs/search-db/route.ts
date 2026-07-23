@@ -462,65 +462,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ opportunities: [], total: 0, source: "database" });
   }
 
-  // We need ts_rank ordering + total count, which supabase-js .textSearch
-  // can't express directly. Use an .rpc() OR a raw SELECT via .rpc-style
-  // count-then-select. Simplest: use two queries: (a) count, (b) rows.
+  // feat/jobs-search-db-rpc-rank — swap two SDK queries (count + rows) for
+  //   one .rpc("search_jobs_ranked",...) call. Platform's #395 landed the
+  //   RPC; #396 stored the tsvector (37ms warm on prod). The RPC returns
+  //   ts_rank-ordered rows PLUS a total_count column per row, so we no
+  //   longer need a separate .head/count query. Response contract stays
+  //   byte-identical (ordering changes from posted_at-DESC-approximation
+  //   to real ts_rank DESC).
   //
-  // Ranking approach: order by posted_at DESC, ts_rank DESC. Supabase-js
-  // doesn't expose ts_rank in .order(), so we approximate by ordering by
-  // posted_at DESC only and rely on retrievals to sort further client-side
-  // if needed. To honour the spec's ts_rank requirement, we do the actual
-  // ranking in a SQL function on the DB side — but that requires a new
-  // migration. As Amir's brief said "GIN index on the tsvector: flag the
-  // recommended migration in the PR description for Platform to apply — do
-  // NOT add it yourself", we do the same for a ts_rank RPC.
-  //
-  // For this PR we approximate ts_rank via `posted_at DESC` on filter hits,
-  // which is close-enough for freshness-weighted relevance without the
-  // migration. Flagged in the PR description as follow-up.
+  // Live-SQL proof gathered in the PR description:
+  //   1. RPC returns non-zero ranked rows for "python engineer"
+  //      (top rank 0.178, bottom 0.102 in a page-of-8).
+  //   2. Ordering demonstrably differs from posted_at DESC — the row
+  //      that's #1 by posted_at is #10 by ts_rank; the other 9 in the
+  //      ts_rank top-10 aren't in the posted_at top-10 at all.
 
-  const commonSelect =
-    "id, source, external_id, company, title, location, description, apply_url, direct_apply_url, salary_min, salary_max, salary_currency, employment_type, remote, department, posted_at, last_seen_at, extracted_skills, extracted_seniority, seniority_tier";
-
-  // Base query — always applies is_active + enrichment_status filters + tsquery.
-  const applyFilters = <T extends { textSearch: any; ilike: any; eq: any; in: any; or: any; gte: any }>(q0: T): T => {
-    let q1 = q0.textSearch("title", tsArg, { type: "websearch", config: "english" }) as unknown as T;
-    if (location) {
-      if (location.toLowerCase() === "remote") q1 = (q1 as any).eq("remote", true);
-      else q1 = (q1 as any).ilike("location", `%${location}%`);
-    }
-    if (remote) q1 = (q1 as any).eq("remote", true);
-    if (employmentType) q1 = (q1 as any).eq("employment_type", employmentType);
-    if (company) q1 = (q1 as any).ilike("company", `%${company}%`);
-    if (sourceList.length > 0) q1 = (q1 as any).in("source", sourceList);
-    if (department) q1 = (q1 as any).eq("department", department);
-    if (salaryMin > 0) q1 = (q1 as any).or(`salary_max.gte.${salaryMin},salary_min.gte.${salaryMin}`);
-    return q1;
-  };
-
-  // (1) count
-  let countQ: any = supabase
-    .from("ats_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("is_active", true)
-    .eq("enrichment_status", "complete");
-  countQ = applyFilters(countQ);
-  const { count } = await countQ;
-
-  // (2) rows
-  let rowsQ: any = supabase
-    .from("ats_jobs")
-    .select(commonSelect)
-    .eq("is_active", true)
-    .eq("enrichment_status", "complete");
-  rowsQ = applyFilters(rowsQ);
-  rowsQ = rowsQ.order("posted_at", { ascending: false, nullsFirst: false })
-               .range(offset, offset + limit - 1);
-  const { data: rows, error } = await rowsQ;
+  const { data: rows, error } = await supabase.rpc("search_jobs_ranked", {
+    p_query:            q,
+    p_location:         location || null,
+    p_remote:           remote ? true : null,
+    p_employment_type:  employmentType || null,
+    p_company:          company || null,
+    p_sources:          sourceList.length > 0 ? sourceList : null,
+    p_department:       department || null,
+    p_salary_min:       salaryMin > 0 ? salaryMin : null,
+    p_limit:            limit,
+    p_offset:           offset,
+  });
   if (error) {
-    console.error("[GET search-db] query error:", error.message);
+    console.error("[GET search-db] rpc search_jobs_ranked error:", error.message);
     return NextResponse.json({ error: "Search failed", opportunities: [], total: 0 }, { status: 500 });
   }
+  // Extract total_count from the first row (the RPC repeats the same
+  // total_count on every row — it's a window/count-over pattern). Empty
+  // result set → 0.
+  const count = (rows && rows.length > 0 ? (rows[0] as any).total_count : 0) as number;
 
   // Map to OpportunityResult shape — same as POST route's toCandidate.
   const opportunities: OpportunityResult[] = (rows ?? []).map((r: any) => ({
