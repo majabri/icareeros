@@ -491,14 +491,30 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
 
   // Pull up to DESC_FETCH_TOTAL_CAP rows across all sources. Deterministic
   // ordering (posted_at DESC nulls-last, then id) so retries don't shuffle.
+  // v11 timeout fix — ORDER BY posted_at forced Postgres to materialize
+  //   all ~48k matching rows before top-N sorting, exceeding the edge-
+  //   function 11.2s statement timeout (see PR body EXPLAIN ANALYZE:
+  //   14,346ms with ORDER BY vs 81ms without). Dropping the ORDER BY
+  //   lets the index scan on ats_jobs_enrichment_idx short-circuit at
+  //   the LIMIT.
+  //
+  // Ordering signal lost: the phase no longer processes newer postings
+  //   first within a tick. This is acceptable because the chain-invoke
+  //   pattern re-selects on every tick and successful rows flip out of
+  //   'needs_description', so the pool naturally drains over ticks. If
+  //   we want ordered processing back, request a composite partial index
+  //   (Platform-owned):
+  //     CREATE INDEX CONCURRENTLY ats_jobs_needs_desc_ordered_idx
+  //       ON public.ats_jobs (enrichment_status, posted_at DESC NULLS LAST, id)
+  //       WHERE is_active = true AND enrichment_retry_count < 3;
+  //   That would let an ordered LIMIT 100 return in single-digit ms.
+  //   NOT self-applied — flagged in the PR body for Platform's queue.
   const { data: rows, error: selErr } = await supabase
     .from("ats_jobs")
     .select("id, source, external_id, company, apply_url, enrichment_retry_count")
     .eq("enrichment_status", "needs_description")
     .eq("is_active", true)
     .lt("enrichment_retry_count", MAX_RETRIES)
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .order("id", { ascending: true })
     .limit(DESC_FETCH_TOTAL_CAP);
   if (selErr) {
     console.error(tag(null, null, "queue_select_failed", {
