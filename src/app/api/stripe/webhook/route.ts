@@ -37,20 +37,32 @@ function adminClient() {
   );
 }
 
-function mapStripeStatus(s: Stripe.Subscription.Status): SubscriptionStatus {
-  // Stripe statuses: trialing, active, incomplete, incomplete_expired,
-  // past_due, canceled, unpaid, paused
-  switch (s) {
-    case "active":
-    case "trialing":
-    case "past_due":
-    case "canceled":
-    case "unpaid":
-    case "paused":
-      return s;
-    default:
-      return "canceled"; // incomplete / incomplete_expired collapse to canceled
-  }
+// fix/platform-stripe-types-lockfile — the parameter type is `string`, not
+// Stripe.Subscription.Status, because Stripe evolves that union across SDK
+// versions (22.4.0 added `OtherString` — an intentional escape hatch for
+// forward compat that widens the union to any string and breaks discriminated-
+// union narrowing). Taking `string` here plus an explicit set-membership
+// check + logged warning on the miss path makes us tolerant of any future
+// status Stripe adds — the row just gets `canceled` and we get a log line
+// so we notice a value we should add explicit handling for.
+const KNOWN_SUBSCRIPTION_STATUSES: readonly SubscriptionStatus[] = [
+  "active", "trialing", "past_due", "canceled", "unpaid", "paused",
+] as const;
+
+function isKnownSubscriptionStatus(s: string): s is SubscriptionStatus {
+  return (KNOWN_SUBSCRIPTION_STATUSES as readonly string[]).includes(s);
+}
+
+function mapStripeStatus(s: string): SubscriptionStatus {
+  if (isKnownSubscriptionStatus(s)) return s;
+  // Unknown status — log it (so we notice + can add explicit handling later)
+  // and route to "canceled" as the safest default. Historical incompletes
+  // (`incomplete`, `incomplete_expired`) also fall through here.
+  console.warn(
+    `[stripe.webhook] unknown Stripe subscription status "${s}" — mapping to "canceled". ` +
+    `Add explicit handling in KNOWN_SUBSCRIPTION_STATUSES if this is a real new state.`,
+  );
+  return "canceled";
 }
 
 async function handleCheckoutCompleted(
@@ -120,7 +132,7 @@ async function handleCheckoutCompleted(
     {
       user_id: userId,
       plan,
-      status: "active" as SubscriptionStatus,
+      status: "active" satisfies SubscriptionStatus,
       stripe_customer_id: customerId,
       stripe_price_id: priceId,
       updated_at: new Date().toISOString(),
