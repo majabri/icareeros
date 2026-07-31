@@ -437,6 +437,48 @@ interface DescFetchStats {
   durationMs:   number;
 }
 
+/**
+ * Tag every log line + thrown object with source + row_id. "Untagged
+ * thrown object" cost us the v9 smoke gate — a v10 crash must be
+ * diagnosable from the log alone.
+ */
+function tag(src: string | null, rowId: string | null, msg: string, extra?: Record<string, unknown>): string {
+  const parts = [`phase=description_fetch`];
+  if (src)   parts.push(`source=${src}`);
+  if (rowId) parts.push(`row_id=${rowId}`);
+  parts.push(`msg=${JSON.stringify(msg)}`);
+  if (extra) for (const [k, v] of Object.entries(extra)) parts.push(`${k}=${JSON.stringify(v)}`);
+  return parts.join(" ");
+}
+
+/**
+ * Wrap a Supabase update. Returns { ok, err } — NEVER throws. Item 2 from
+ * Platform's #401 post-mortem: check `.error` on every update; a CHECK-
+ * violation or RLS-deny that returns `.error` was silently ignored before.
+ */
+async function safeUpdate(
+  supabase: any,
+  rowId: string,
+  patch: Record<string, unknown>,
+  ctx: { source: string | null; op: string },
+): Promise<{ ok: boolean; err?: unknown }> {
+  try {
+    const { error } = await supabase.from("ats_jobs").update(patch).eq("id", rowId);
+    if (error) {
+      console.error(tag(ctx.source, rowId, "supabase_update_error", {
+        op: ctx.op, code: (error as any)?.code ?? null, message: (error as any)?.message ?? String(error),
+      }));
+      return { ok: false, err: error };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error(tag(ctx.source, rowId, "supabase_update_threw", {
+      op: ctx.op, message: (e as Error)?.message ?? String(e),
+    }));
+    return { ok: false, err: e };
+  }
+}
+
 async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> {
   const startedAt = Date.now();
   const stats: DescFetchStats = {
@@ -449,16 +491,39 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
 
   // Pull up to DESC_FETCH_TOTAL_CAP rows across all sources. Deterministic
   // ordering (posted_at DESC nulls-last, then id) so retries don't shuffle.
-  const { data: rows, error } = await supabase
+  // v11 timeout fix — ORDER BY posted_at forced Postgres to materialize
+  //   all ~48k matching rows before top-N sorting, exceeding the edge-
+  //   function 11.2s statement timeout (see PR body EXPLAIN ANALYZE:
+  //   14,346ms with ORDER BY vs 81ms without). Dropping the ORDER BY
+  //   lets the index scan on ats_jobs_enrichment_idx short-circuit at
+  //   the LIMIT.
+  //
+  // Ordering signal lost: the phase no longer processes newer postings
+  //   first within a tick. This is acceptable because the chain-invoke
+  //   pattern re-selects on every tick and successful rows flip out of
+  //   'needs_description', so the pool naturally drains over ticks. If
+  //   we want ordered processing back, request a composite partial index
+  //   (Platform-owned):
+  //     CREATE INDEX CONCURRENTLY ats_jobs_needs_desc_ordered_idx
+  //       ON public.ats_jobs (enrichment_status, posted_at DESC NULLS LAST, id)
+  //       WHERE is_active = true AND enrichment_retry_count < 3;
+  //   That would let an ordered LIMIT 100 return in single-digit ms.
+  //   NOT self-applied — flagged in the PR body for Platform's queue.
+  const { data: rows, error: selErr } = await supabase
     .from("ats_jobs")
     .select("id, source, external_id, company, apply_url, enrichment_retry_count")
     .eq("enrichment_status", "needs_description")
     .eq("is_active", true)
     .lt("enrichment_retry_count", MAX_RETRIES)
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .order("id", { ascending: true })
     .limit(DESC_FETCH_TOTAL_CAP);
-  if (error) throw error;
+  if (selErr) {
+    console.error(tag(null, null, "queue_select_failed", {
+      code: (selErr as any)?.code ?? null, message: (selErr as any)?.message ?? String(selErr),
+    }));
+    stats.durationMs = Date.now() - startedAt;
+    return stats;   // #401 post-mortem item 1 — do NOT throw. Phase returns
+                    // empty stats; skills phase still runs.
+  }
   const queue = (rows ?? []) as Array<DetailAtsJobRow & { enrichment_retry_count: number | null }>;
 
   // Per-source circuit breakers + last-request timestamps for pacing.
@@ -475,77 +540,148 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
   };
 
   for (const row of queue) {
-    const dispatch = pickFetcher(row.source);
-    if (!dispatch) {
-      // Not a source we handle — mark description_failed non-retryably.
-      await supabase.from("ats_jobs")
-        .update({
+    // #401 post-mortem item 1 — per-row try/catch. A single bad row must
+    // never kill the phase. Any thrown / caught error tags itself with
+    // source + row_id per item (b).
+    try {
+      const dispatch = pickFetcher(row.source);
+      if (!dispatch) {
+        const upd = await safeUpdate(supabase, row.id, {
           enrichment_status:      "description_failed",
           enrichment_retry_count: MAX_RETRIES,
-        })
-        .eq("id", row.id);
-      stats.totalFailed++;
-      continue;
-    }
-    const src = dispatch.name;
-    const bucket = stats.bySource[src] ??= { attempted: 0, ok: 0, failed: 0, tripped: false };
+        }, { source: row.source, op: "unhandled_source_mark_failed" });
+        if (!upd.ok) {
+          // Update failed too — count against a synthetic bucket for observability.
+          const bucket = stats.bySource[row.source] ??= { attempted: 0, ok: 0, failed: 0, tripped: false };
+          bucket.failed++;
+        }
+        stats.totalFailed++;
+        continue;
+      }
+      const src = dispatch.name;
+      const bucket = stats.bySource[src] ??= { attempted: 0, ok: 0, failed: 0, tripped: false };
 
-    // Circuit tripped for this source? Leave the row alone; a later
-    // invocation retries.
-    if (breakers[src].isTripped()) {
-      stats.totalSkipped++;
-      bucket.tripped = true;
-      continue;
-    }
-    // Per-invocation cap for this source?
-    const cfg = DEFAULT_RATE_CONFIG[src] ?? { interRequestMs: 250, maxPerInvocation: 50 };
-    if (perSourceCount[src] >= cfg.maxPerInvocation) {
-      stats.totalSkipped++;
-      continue;
-    }
+      // Circuit tripped for this source? Leave the row alone; next tick retries.
+      if (breakers[src].isTripped()) {
+        stats.totalSkipped++;
+        bucket.tripped = true;
+        continue;
+      }
+      // Per-invocation cap for this source?
+      const cfg = DEFAULT_RATE_CONFIG[src] ?? { interRequestMs: 250, maxPerInvocation: 50 };
+      if (perSourceCount[src] >= cfg.maxPerInvocation) {
+        stats.totalSkipped++;
+        continue;
+      }
 
-    // Inter-request delay for this source.
-    const elapsed = Date.now() - lastRequestAt[src];
-    if (elapsed < cfg.interRequestMs) {
-      await sleep(cfg.interRequestMs - elapsed);
-    }
-    lastRequestAt[src] = Date.now();
-    perSourceCount[src]++;
-    bucket.attempted++;
+      // Inter-request delay.
+      const elapsed = Date.now() - lastRequestAt[src];
+      if (elapsed < cfg.interRequestMs) {
+        await sleep(cfg.interRequestMs - elapsed);
+      }
+      lastRequestAt[src] = Date.now();
+      perSourceCount[src]++;
+      bucket.attempted++;
 
-    const result = await dispatch.fetch(row);
+      const result = await dispatch.fetch(row);
 
-    if (result.ok) {
-      // Success — write the description and flip status back to 'pending'
-      // so the existing skills/families phase re-enriches. Reset retry
-      // count so a downstream skills-extraction failure gets fresh budget.
-      await supabase.from("ats_jobs")
-        .update({
-          description:            result.description,
+      // #401 post-mortem item 3 — malformed-result guard. `result.ok` truthy
+      // but description missing/empty MUST NOT write undefined.
+      const goodDesc = result.ok
+        && typeof (result as { description?: unknown }).description === "string"
+        && (result as { description: string }).description.length > 0;
+
+      if (result.ok && !goodDesc) {
+        console.error(tag(src, row.id, "malformed_ok_result", {
+          desc_type: typeof (result as { description?: unknown }).description,
+          desc_length: typeof (result as { description?: unknown }).description === "string"
+            ? (result as { description: string }).description.length
+            : null,
+        }));
+        // Coerce into a failed transition. Count against the source budget
+        // per item 2 — an adapter that returns garbage IS a failure.
+        const tripped = breakers[src].onFailure();
+        if (tripped) bucket.tripped = true;
+        const nextRetry  = (row.enrichment_retry_count ?? 0) + 1;
+        const outOfBudget = nextRetry >= MAX_RETRIES;
+        const upd = await safeUpdate(supabase, row.id, {
+          enrichment_status:      outOfBudget ? "description_failed" : "needs_description",
+          enrichment_retry_count: nextRetry,
+        }, { source: src, op: "malformed_result_mark_failed" });
+        if (!upd.ok) {
+          // Failed status write is a failure — item 2 counts it.
+          bucket.failed++;
+          // Trip too, to avoid a stuck loop on a persistently broken column.
+          breakers[src].onFailure();
+        }
+        bucket.failed++;
+        stats.totalFailed++;
+        continue;
+      }
+
+      if (goodDesc) {
+        // Success — write the description and flip status back to 'pending'
+        // so the existing skills/families phase re-enriches. Reset retry
+        // count so a downstream skills-extraction failure gets fresh budget.
+        const desc = (result as { description: string }).description;
+        const upd = await safeUpdate(supabase, row.id, {
+          description:            desc,
           enrichment_status:      "pending",
           enrichment_retry_count: 0,
           enriched_at:            new Date().toISOString(),
-        })
-        .eq("id", row.id);
-      bucket.ok++;
-      stats.totalOk++;
-      breakers[src].onSuccess();
-    } else {
-      const nextRetry = (row.enrichment_retry_count ?? 0) + 1;
-      const tripped   = breakers[src].onFailure();
-      if (tripped) bucket.tripped = true;
-
-      const nonRetryable = !result.retryable;
-      const outOfBudget  = nextRetry >= MAX_RETRIES;
-      const nextStatus   = nonRetryable || outOfBudget ? "description_failed" : "needs_description";
-      await supabase.from("ats_jobs")
-        .update({
+        }, { source: src, op: "success_flip_to_pending" });
+        if (!upd.ok) {
+          // #401 post-mortem item 2 — status write failure is a failure.
+          bucket.failed++;
+          stats.totalFailed++;
+          const tripped = breakers[src].onFailure();
+          if (tripped) bucket.tripped = true;
+          continue;
+        }
+        bucket.ok++;
+        stats.totalOk++;
+        breakers[src].onSuccess();
+      } else {
+        // Fetch failed (result.ok === false)
+        const errResult = result as { ok: false; error: string; retryable: boolean };
+        const nextRetry   = (row.enrichment_retry_count ?? 0) + 1;
+        const tripped     = breakers[src].onFailure();
+        if (tripped) bucket.tripped = true;
+        const nonRetryable = !errResult.retryable;
+        const outOfBudget  = nextRetry >= MAX_RETRIES;
+        const nextStatus   = nonRetryable || outOfBudget ? "description_failed" : "needs_description";
+        const upd = await safeUpdate(supabase, row.id, {
           enrichment_status:      nextStatus,
           enrichment_retry_count: nextRetry,
-        })
-        .eq("id", row.id);
-      bucket.failed++;
+        }, { source: src, op: `fetch_failed:${errResult.error.slice(0, 40)}` });
+        if (!upd.ok) {
+          // Item 2 — status write failure is a failure.
+          bucket.failed++;
+        }
+        bucket.failed++;
+        stats.totalFailed++;
+      }
+    } catch (e) {
+      // #401 post-mortem item 1 — per-row try/catch catch-all. Log,
+      // count, continue. Never let a single row kill the phase.
+      const src = row.source ?? null;
+      console.error(tag(src, row.id, "row_processing_threw", {
+        error_type: typeof e,
+        error_message: (e as Error)?.message ?? String(e),
+        error_name: (e as Error)?.name ?? null,
+      }));
       stats.totalFailed++;
+      const bucket = stats.bySource[row.source] ??= { attempted: 0, ok: 0, failed: 0, tripped: false };
+      bucket.failed++;
+      // Attempt a best-effort status write. If IT also throws, swallow —
+      // the row will simply retry next tick.
+      await safeUpdate(supabase, row.id, {
+        enrichment_status:      "needs_description",   // keep retryable
+        enrichment_retry_count: (row.enrichment_retry_count ?? 0) + 1,
+      }, { source: row.source, op: "row_threw_mark_retryable" });
+      // Also register the failure against the source breaker.
+      const fname = pickFetcher(row.source)?.name;
+      if (fname) breakers[fname].onFailure();
     }
   }
 
