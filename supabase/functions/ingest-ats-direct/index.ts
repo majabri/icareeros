@@ -139,7 +139,7 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
         raw: j,
         last_seen_at: new Date().toISOString(),
         is_active: true,
-        enrichment_status: "pending",
+        enrichment_status: "needs_description"  // #400 backfill sources — list endpoint returns no description, description-fetch phase in enrich-jobs populates it,
       }));
       if (rows.length === 0) return 0;
       const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
@@ -271,7 +271,7 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
         raw: p,
         last_seen_at: new Date().toISOString(),
         is_active: true,
-        enrichment_status: "pending",
+        enrichment_status: "needs_description"  // #400 backfill sources — list endpoint returns no description, description-fetch phase in enrich-jobs populates it,
       };
     }).filter((r: any) => r !== null);
     if (rows.length > 0) {
@@ -347,7 +347,7 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
           raw: p,
           last_seen_at: new Date().toISOString(),
           is_active: true,
-          enrichment_status: "pending",
+          enrichment_status: "needs_description"  // #400 backfill sources — list endpoint returns no description, description-fetch phase in enrich-jobs populates it,
         };
       }).filter((r: any) => r !== null);
       if (rows.length > 0) {

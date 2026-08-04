@@ -83,6 +83,7 @@ async function runPhase(
         && (result as { description: string }).description.length > 0;
 
       if (result.ok && !goodDesc) {
+        // Per Platform 2026-08-04: malformed = NON-retryable, no breaker advance.
         const nextRetry  = (row.enrichment_retry_count ?? 0) + 1;
         const outOfBudget = nextRetry >= MAX_RETRIES;
         const upd = await safeUpdate(row.id, {
@@ -90,7 +91,6 @@ async function runPhase(
           enrichment_retry_count: nextRetry,
         }, "malformed_result_mark_failed");
         if (!upd.ok) { stats.failed++; bk.onFailure(); }
-        bk.onFailure();
         stats.failed++;
         continue;
       }
@@ -104,9 +104,10 @@ async function runPhase(
         stats.ok++;
         bk.onSuccess();
       } else {
+        // Per Platform 2026-08-04: breaker counts ONLY retryable failures.
         const errResult = result as { ok: false; error: string; retryable: boolean };
         const nextRetry = (row.enrichment_retry_count ?? 0) + 1;
-        const tripped   = bk.onFailure();
+        if (errResult.retryable) bk.onFailure();
         const nonRetry  = !errResult.retryable;
         const outOfBudg = nextRetry >= MAX_RETRIES;
         const nextStatus = nonRetry || outOfBudg ? "description_failed" : "needs_description";
@@ -374,5 +375,99 @@ describe("v11 timeout-class (57014) — row update degrades gracefully", () => {
     expect(stats.failed).toBe(5);        // every row's update counted
     expect(stats.sawException).toBe(false);
     expect(supabase.updates.length).toBe(5);
+  });
+});
+
+
+
+// ─────────────────────────────────────────────────────────────────────
+// v12 — Platform 2026-08-04 breaker-tuning behaviour tests
+// ─────────────────────────────────────────────────────────────────────
+// Rule: circuit breaker counts ONLY retryable / 5xx-class failures.
+// Non-retryable outcomes (404 expired, 403 bot-detect, permanent parse
+// fails, malformed results) still mark the row description_failed but
+// do NOT advance the breaker. Rationale: a batch of dead postings must
+// never halt a healthy source's remaining invocation budget.
+// ─────────────────────────────────────────────────────────────────────
+
+describe("v12 breaker tuning — retryable vs non-retryable", () => {
+  it("5 consecutive retryable 5xx failures trip the source breaker → subsequent rows skipped", async () => {
+    const queue: Row[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (): Promise<DetailFetchResult> => {
+      attempted++;
+      return { ok: false, error: "HTTP 502", retryable: true };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(attempted).toBe(5);
+    expect(stats.failed).toBe(5);
+    expect(stats.skipped).toBe(3);
+    expect(stats.ok).toBe(0);
+    expect(stats.sawException).toBe(false);
+    expect(supabase.updates.length).toBe(5);
+  });
+
+  it("20 consecutive non-retryable 404 failures do NOT trip the source breaker", async () => {
+    // The centerpiece assertion. Pre-v12 would trip at row 5 and skip 6-20.
+    // Post-v12: all 20 rows get their description_failed status write.
+    const queue: Row[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (): Promise<DetailFetchResult> => {
+      attempted++;
+      return { ok: false, error: "posting not found", retryable: false };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(20);
+    expect(stats.ok).toBe(0);
+    expect(stats.sawException).toBe(false);
+    expect(attempted).toBe(20);
+    expect(supabase.updates.length).toBe(20);
+    for (const u of supabase.updates) {
+      expect(u.op).toMatch(/^fetch_failed:/);
+      expect(u.patch.enrichment_status).toBe("description_failed");
+      expect(u.patch.enrichment_retry_count).toBe(1);
+    }
+  });
+
+  it("mixed 15 non-retryable + 5 retryable — all attempted (mirror path)", async () => {
+    const queue: Row[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (row: Row): Promise<DetailFetchResult> => {
+      attempted++;
+      const idx = parseInt(row.id.split("-")[1]);
+      return idx < 15
+        ? { ok: false, error: "posting not found", retryable: false }
+        : { ok: false, error: "HTTP 502",           retryable: true  };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(attempted).toBe(20);
+    expect(stats.failed).toBe(20);
+  });
+
+  it("malformed-result path does NOT advance breaker", async () => {
+    const queue: Row[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    const fetcher = async (): Promise<DetailFetchResult> =>
+      ({ ok: true, description: undefined as unknown as string, source: "greenhouse" });
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(10);
+    for (const u of supabase.updates) {
+      expect(u.op).toBe("malformed_result_mark_failed");
+    }
   });
 });

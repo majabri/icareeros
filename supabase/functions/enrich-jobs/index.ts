@@ -598,10 +598,11 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
             ? (result as { description: string }).description.length
             : null,
         }));
-        // Coerce into a failed transition. Count against the source budget
-        // per item 2 — an adapter that returns garbage IS a failure.
-        const tripped = breakers[src].onFailure();
-        if (tripped) bucket.tripped = true;
+        // Coerce into a failed transition. Per Platform 2026-08-04:
+        // malformed adapter results are NON-retryable (broken code, not
+        // upstream flake) — do NOT advance the source breaker. The row
+        // still gets its status write; other rows in the same source
+        // budget continue unimpaired.
         const nextRetry  = (row.enrichment_retry_count ?? 0) + 1;
         const outOfBudget = nextRetry >= MAX_RETRIES;
         const upd = await safeUpdate(supabase, row.id, {
@@ -609,9 +610,10 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
           enrichment_retry_count: nextRetry,
         }, { source: src, op: "malformed_result_mark_failed" });
         if (!upd.ok) {
-          // Failed status write is a failure — item 2 counts it.
+          // Failed status write is a retryable-class DB error — item 2
+          // counts it; breaker DOES advance (per Platform 2026-08-04
+          // "retryable/5xx-class failures").
           bucket.failed++;
-          // Trip too, to avoid a stuck loop on a persistently broken column.
           breakers[src].onFailure();
         }
         bucket.failed++;
@@ -643,10 +645,18 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
         breakers[src].onSuccess();
       } else {
         // Fetch failed (result.ok === false)
+        // Per Platform 2026-08-04: the source breaker counts ONLY
+        // retryable / 5xx-class failures. Non-retryable outcomes (404
+        // on expired postings, 403 auth blocks, permanent parse fails)
+        // still mark the row description_failed but do NOT advance the
+        // breaker. Rationale: a batch of dead postings must never halt
+        // a healthy source's remaining budget.
         const errResult = result as { ok: false; error: string; retryable: boolean };
         const nextRetry   = (row.enrichment_retry_count ?? 0) + 1;
-        const tripped     = breakers[src].onFailure();
-        if (tripped) bucket.tripped = true;
+        if (errResult.retryable) {
+          const tripped = breakers[src].onFailure();
+          if (tripped) bucket.tripped = true;
+        }
         const nonRetryable = !errResult.retryable;
         const outOfBudget  = nextRetry >= MAX_RETRIES;
         const nextStatus   = nonRetryable || outOfBudget ? "description_failed" : "needs_description";
