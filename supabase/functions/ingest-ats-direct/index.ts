@@ -115,6 +115,63 @@ async function fetchJsonWithLogging<T>(url: string, source: string, slug: string
 
 // ── Greenhouse ──────────────────────────────────────────────────────────
 
+/**
+ * upsertPreservingFilledDescriptions — v12 refresh-path re-orphan fix.
+ *
+ * Root cause (Platform 2026-08-04): plain `.upsert(rows, {onConflict})` sends
+ * INSERT ... ON CONFLICT DO UPDATE SET <all_columns>=EXCLUDED.<...>. Every 4h
+ * ingest tick, GH/SR/WD list endpoints return empty descriptions — the upsert
+ * then overwrites any real description the description-fetch phase populated.
+ * Same for enrichment_status: rows that transitioned to 'complete' get wiped
+ * back to 'needs_description' with empty description. Platform's sweep found
+ * 46,342 orphans accumulated over 11 days from this loop.
+ *
+ * The fix: pre-read existing (source, apply_url, description, enrichment_status).
+ * For each incoming row:
+ *   - IF an existing row has non-empty description AND our incoming description
+ *     is empty → preserve existing description + enrichment_status in the
+ *     upsert payload (don't overwrite real data with empty).
+ *   - Otherwise → upsert with full payload (normal path: new rows, ashby/lever
+ *     with real descriptions, refresh of already-empty rows).
+ *
+ * Race window: SELECT-then-UPSERT is non-atomic. If a concurrent write flips
+ * the row between our SELECT and our UPSERT, we may still overwrite. This is
+ * bounded by the 4h ingest cadence + the description-fetch phase completing
+ * writes in seconds — the race window is small relative to the state
+ * machine's dwell times.
+ */
+async function upsertPreservingFilledDescriptions(
+  supabase: any,
+  rows: any[],
+): Promise<{ error: any }> {
+  if (rows.length === 0) return { error: null };
+  const source = rows[0].source;
+  const applyUrls = rows.map((r) => r.apply_url).filter(Boolean);
+  const { data: existing, error: selErr } = await supabase
+    .from("ats_jobs")
+    .select("apply_url, description, enrichment_status")
+    .eq("source", source)
+    .in("apply_url", applyUrls);
+  if (selErr) return { error: selErr };
+  const existingByUrl = new Map<string, { description: string | null; enrichment_status: string | null }>();
+  for (const e of (existing ?? [])) {
+    existingByUrl.set(e.apply_url, {
+      description:       e.description ?? null,
+      enrichment_status: e.enrichment_status ?? null,
+    });
+  }
+  const merged = rows.map((r) => {
+    const ex = existingByUrl.get(r.apply_url);
+    const incomingEmpty = !r.description || r.description.length === 0;
+    const existingFilled = ex && ex.description && ex.description.length > 0;
+    if (ex && incomingEmpty && existingFilled) {
+      return { ...r, description: ex.description, enrichment_status: ex.enrichment_status };
+    }
+    return r;
+  });
+  return await supabase.from("ats_jobs").upsert(merged, { onConflict: "source,apply_url" });
+}
+
 async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
   const errors: string[] = [];
@@ -142,7 +199,7 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
         enrichment_status: "needs_description"  // #400 backfill sources — list endpoint returns no description, description-fetch phase in enrich-jobs populates it,
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await upsertPreservingFilledDescriptions(supabase, rows);
       if (error) throw new Error(`gh:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -182,7 +239,7 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
         enrichment_status: "pending",
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await upsertPreservingFilledDescriptions(supabase, rows);
       if (error) throw new Error(`lever:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -223,7 +280,7 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
         enrichment_status: "pending",
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await upsertPreservingFilledDescriptions(supabase, rows);
       if (error) throw new Error(`ashby:${slug}:${error.message}`);
       return rows.length;
     }));
@@ -275,7 +332,7 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
       };
     }).filter((r: any) => r !== null);
     if (rows.length > 0) {
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      const { error } = await upsertPreservingFilledDescriptions(supabase, rows);
       if (error) { errors.push(`workday:${t.tenant}:${error.message}`.slice(0, 200)); break; }
       upserted += rows.length;
     }
@@ -351,7 +408,7 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
         };
       }).filter((r: any) => r !== null);
       if (rows.length > 0) {
-        const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+        const { error } = await upsertPreservingFilledDescriptions(supabase, rows);
         if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
         upserted += rows.length;
       }
