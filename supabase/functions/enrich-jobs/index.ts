@@ -610,10 +610,11 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
           enrichment_retry_count: nextRetry,
         }, { source: src, op: "malformed_result_mark_failed" });
         if (!upd.ok) {
-          // Failed status write is a retryable-class DB error — item 2
-          // counts it; breaker DOES advance (per Platform 2026-08-04
-          // "retryable/5xx-class failures").
-          bucket.failed++;
+          // Failed status write is a retryable-class DB error — advance
+          // breaker (per Platform 2026-08-04 "retryable/5xx-class failures").
+          // The single bucket.failed++ below counts this row's failure
+          // exactly once whether the fetch failed, the write failed, or
+          // both — Platform 2026-08-04 dedup fix.
           breakers[src].onFailure();
         }
         bucket.failed++;
@@ -664,10 +665,10 @@ async function runDescriptionFetchPhase(supabase: any): Promise<DescFetchStats> 
           enrichment_status:      nextStatus,
           enrichment_retry_count: nextRetry,
         }, { source: src, op: `fetch_failed:${errResult.error.slice(0, 40)}` });
-        if (!upd.ok) {
-          // Item 2 — status write failure is a failure.
-          bucket.failed++;
-        }
+        // Failed row is counted exactly once at the end of the branch —
+        // whether the fetch failed only, or the fetch + status write both
+        // failed. Platform 2026-08-04 dedup fix (was double-counting when
+        // both paths failed).
         bucket.failed++;
         stats.totalFailed++;
       }
