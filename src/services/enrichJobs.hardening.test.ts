@@ -83,14 +83,17 @@ async function runPhase(
         && (result as { description: string }).description.length > 0;
 
       if (result.ok && !goodDesc) {
+        // Per Platform 2026-08-04: malformed = NON-retryable, no breaker
+        // advance for the fetch itself. Row counted exactly ONCE at
+        // end-of-branch regardless of whether the write also failed
+        // (dedupe per Platform 2026-08-04).
         const nextRetry  = (row.enrichment_retry_count ?? 0) + 1;
         const outOfBudget = nextRetry >= MAX_RETRIES;
         const upd = await safeUpdate(row.id, {
           enrichment_status:      outOfBudget ? "description_failed" : "needs_description",
           enrichment_retry_count: nextRetry,
         }, "malformed_result_mark_failed");
-        if (!upd.ok) { stats.failed++; bk.onFailure(); }
-        bk.onFailure();
+        if (!upd.ok) bk.onFailure();
         stats.failed++;
         continue;
       }
@@ -104,16 +107,17 @@ async function runPhase(
         stats.ok++;
         bk.onSuccess();
       } else {
+        // Per Platform 2026-08-04: breaker counts ONLY retryable failures.
+        // Row counted exactly ONCE at end-of-branch (dedupe fix).
         const errResult = result as { ok: false; error: string; retryable: boolean };
         const nextRetry = (row.enrichment_retry_count ?? 0) + 1;
-        const tripped   = bk.onFailure();
+        if (errResult.retryable) bk.onFailure();
         const nonRetry  = !errResult.retryable;
         const outOfBudg = nextRetry >= MAX_RETRIES;
         const nextStatus = nonRetry || outOfBudg ? "description_failed" : "needs_description";
         const upd = await safeUpdate(row.id, {
           enrichment_status: nextStatus, enrichment_retry_count: nextRetry,
         }, `fetch_failed:${errResult.error.slice(0, 40)}`);
-        if (!upd.ok) stats.failed++;
         stats.failed++;
       }
     } catch (_e) {
@@ -191,7 +195,7 @@ describe("Hardening item 2 — supabase update .error counts against error budge
     expect(supabase.updates.length).toBe(1);
   });
 
-  it("update .error on a fetch-failed transition is also counted", async () => {
+  it("update .error on a fetch-failed transition — counted exactly ONCE per row (Platform 2026-08-04 dedupe)", async () => {
     const queue: Row[] = [
       { id: "a", source: "greenhouse", external_id: "1", company: "c", apply_url: null, enrichment_retry_count: 0 },
     ];
@@ -202,8 +206,8 @@ describe("Hardening item 2 — supabase update .error counts against error budge
       updateResult: () => ({ error: { code: "42P01", message: "relation does not exist" } }),
     };
     const stats = await runPhase(queue, fetcher, supabase);
-    // 2 failures: the fetch itself + the status-write .error
-    expect(stats.failed).toBe(2);
+    // Post-dedupe: one row, one failure count — even if both fetch AND write fail.
+    expect(stats.failed).toBe(1);
   });
 });
 
@@ -374,5 +378,145 @@ describe("v11 timeout-class (57014) — row update degrades gracefully", () => {
     expect(stats.failed).toBe(5);        // every row's update counted
     expect(stats.sawException).toBe(false);
     expect(supabase.updates.length).toBe(5);
+  });
+});
+
+
+
+// ─────────────────────────────────────────────────────────────────────
+// v12 — Platform 2026-08-04 breaker-tuning behaviour tests
+// ─────────────────────────────────────────────────────────────────────
+// Rule: circuit breaker counts ONLY retryable / 5xx-class failures.
+// Non-retryable outcomes (404 expired, 403 bot-detect, permanent parse
+// fails, malformed results) still mark the row description_failed but
+// do NOT advance the breaker. Rationale: a batch of dead postings must
+// never halt a healthy source's remaining invocation budget.
+// ─────────────────────────────────────────────────────────────────────
+
+describe("v12 breaker tuning — retryable vs non-retryable", () => {
+  it("5 consecutive retryable 5xx failures trip the source breaker → subsequent rows skipped", async () => {
+    const queue: Row[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (): Promise<DetailFetchResult> => {
+      attempted++;
+      return { ok: false, error: "HTTP 502", retryable: true };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(attempted).toBe(5);
+    expect(stats.failed).toBe(5);
+    expect(stats.skipped).toBe(3);
+    expect(stats.ok).toBe(0);
+    expect(stats.sawException).toBe(false);
+    expect(supabase.updates.length).toBe(5);
+  });
+
+  it("20 consecutive non-retryable 404 failures do NOT trip the source breaker", async () => {
+    // The centerpiece assertion. Pre-v12 would trip at row 5 and skip 6-20.
+    // Post-v12: all 20 rows get their description_failed status write.
+    const queue: Row[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (): Promise<DetailFetchResult> => {
+      attempted++;
+      return { ok: false, error: "posting not found", retryable: false };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(20);
+    expect(stats.ok).toBe(0);
+    expect(stats.sawException).toBe(false);
+    expect(attempted).toBe(20);
+    expect(supabase.updates.length).toBe(20);
+    for (const u of supabase.updates) {
+      expect(u.op).toMatch(/^fetch_failed:/);
+      expect(u.patch.enrichment_status).toBe("description_failed");
+      expect(u.patch.enrichment_retry_count).toBe(1);
+    }
+  });
+
+  it("mixed 15 non-retryable + 5 retryable — all attempted (mirror path)", async () => {
+    const queue: Row[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    let attempted = 0;
+    const fetcher = async (row: Row): Promise<DetailFetchResult> => {
+      attempted++;
+      const idx = parseInt(row.id.split("-")[1]);
+      return idx < 15
+        ? { ok: false, error: "posting not found", retryable: false }
+        : { ok: false, error: "HTTP 502",           retryable: true  };
+    };
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(attempted).toBe(20);
+    expect(stats.failed).toBe(20);
+  });
+
+  it("malformed-result path does NOT advance breaker", async () => {
+    const queue: Row[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `row-${i}`, source: "greenhouse", external_id: String(i),
+      company: "c", apply_url: null, enrichment_retry_count: 0,
+    }));
+    const fetcher = async (): Promise<DetailFetchResult> =>
+      ({ ok: true, description: undefined as unknown as string, source: "greenhouse" });
+    const supabase: FakeSupabase = { updates: [], updateResult: () => ({ error: null }) };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(10);
+    for (const u of supabase.updates) {
+      expect(u.op).toBe("malformed_result_mark_failed");
+    }
+  });
+});
+
+
+
+// ─────────────────────────────────────────────────────────────────────
+// v12 rework — Platform 2026-08-04 dedupe test
+// ─────────────────────────────────────────────────────────────────────
+describe("v12 dedupe — malformed + write-failure counts as ONE failure", () => {
+  it("malformed result AND status-write failure → stats.failed = 1, not 2", async () => {
+    // Pre-dedupe (pre-rework): bucket.failed++ ran once inside the
+    // if(!upd.ok) block AND once at end of branch → 2 failures counted
+    // for the same row. Post-dedupe: exactly one.
+    const queue: Row[] = [
+      { id: "a", source: "greenhouse", external_id: "1", company: "c", apply_url: null, enrichment_retry_count: 0 },
+    ];
+    // Fetcher returns malformed (ok=true, but no description) → triggers
+    // malformed_result_mark_failed branch
+    const fetcher = async (): Promise<DetailFetchResult> =>
+      ({ ok: true, description: undefined as unknown as string, source: "greenhouse" });
+    // Status write ALSO fails
+    const supabase: FakeSupabase = {
+      updates: [],
+      updateResult: () => ({ error: { code: "23514", message: "CHECK violation" } }),
+    };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(1);   // NOT 2
+    expect(stats.sawException).toBe(false);
+    expect(supabase.updates.length).toBe(1);
+  });
+
+  it("fetch-failed AND status-write failure → stats.failed = 1, not 2", async () => {
+    // Same dedupe applied to the fetch-failed branch (previously also
+    // double-counted).
+    const queue: Row[] = [
+      { id: "a", source: "greenhouse", external_id: "1", company: "c", apply_url: null, enrichment_retry_count: 0 },
+    ];
+    const fetcher = async (): Promise<DetailFetchResult> =>
+      ({ ok: false, error: "posting not found", retryable: false });
+    const supabase: FakeSupabase = {
+      updates: [],
+      updateResult: () => ({ error: { code: "23514", message: "CHECK violation" } }),
+    };
+    const stats = await runPhase(queue, fetcher, supabase);
+    expect(stats.failed).toBe(1);
+    expect(supabase.updates.length).toBe(1);
   });
 });
