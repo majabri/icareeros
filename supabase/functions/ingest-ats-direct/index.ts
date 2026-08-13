@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
 
 const BATCH_SIZE = 20;                // Greenhouse/Lever/Ashby fetch batch
 const FETCH_TIMEOUT_MS = 10_000;
@@ -369,6 +370,12 @@ serve(async (_req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+  // ── HEARTBEAT (invocation.start / .complete) ──
+  const __hbStart = Date.now();
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = "pg_cron";
+  const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker });
+  try {
+    const __hbResponse: Response = await (async (): Promise<Response> => {
     const runStartedAt = new Date().toISOString();
 
     const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
@@ -459,4 +466,14 @@ serve(async (_req) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+    })();
+    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+    await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+    return __hbResponse;
+  } catch (__hbE) {
+    await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
+    throw __hbE;
+  }
 });
+
+

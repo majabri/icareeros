@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logInfrastructureEvent } from "@/lib/observability/logInfrastructureEvent";
 
 export const dynamic = "force-dynamic";
 // Max runtime — the edge function takes ~6s for 10 companies × 25 jobs.
@@ -59,6 +60,25 @@ export async function POST(req: NextRequest) {
   if (cronSecret && auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // ── HEARTBEAT (invocation.start) — mirrors the edge-fn pattern for the Vercel-cron path ──
+  const __hbStart = Date.now();
+  const __hbInvocationId = crypto.randomUUID();
+  await logInfrastructureEvent({
+    source: "edge-fn.ingest-ats-direct",       // same source-name-space as the edge fn heartbeat
+    event_type: "invocation.start",
+    severity: "info",
+    payload: {
+      invocation_id: __hbInvocationId,
+      invoked_by: "vercel_cron",                // this path IS the Vercel cron
+      via: "api-route",                          // distinguishes route-fired vs direct edge-fn heartbeats
+      version: null,
+      chain_depth: 0,
+    },
+  });
+
+  try {
+    const __hbResponse: NextResponse = await (async (): Promise<NextResponse> => {
 
   // ── Layer 2: env vars required to forward to Supabase ───────────────
   const supabaseUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -120,7 +140,39 @@ export async function POST(req: NextRequest) {
     console.error("[cron/ingest-ats] fetch failed:", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
+    })();
+    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+    await logInfrastructureEvent({
+      source: "edge-fn.ingest-ats-direct",
+      event_type: "invocation.complete",
+      severity: __hbOutcome === "ok" ? "info" : "error",
+      payload: {
+        invocation_id: __hbInvocationId,
+        outcome: __hbOutcome,
+        duration_ms: Date.now() - __hbStart,
+        error: __hbOutcome === "error" ? `HTTP ${__hbResponse.status}` : null,
+        http_status: __hbResponse.status,
+        via: "api-route",
+      },
+    });
+    return __hbResponse;
+  } catch (__hbE) {
+    await logInfrastructureEvent({
+      source: "edge-fn.ingest-ats-direct",
+      event_type: "invocation.complete",
+      severity: "error",
+      payload: {
+        invocation_id: __hbInvocationId,
+        outcome: "error",
+        duration_ms: Date.now() - __hbStart,
+        error: (__hbE as Error)?.message ?? String(__hbE),
+        via: "api-route",
+      },
+    });
+    throw __hbE;
+  }
 }
 
 // Vercel cron sends GET by default; mirror health-check route pattern.
 export async function GET(req: NextRequest) { return POST(req); }
+
