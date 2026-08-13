@@ -365,17 +365,17 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
 
 serve(async (_req) => {
   const startTime = Date.now();
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-  // ── HEARTBEAT (invocation.start / .complete) ──
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  // ── HEARTBEAT (invocation.start) ──
   const __hbStart = Date.now();
-  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = "pg_cron";
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(undefined, {});
   const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker });
+  let __hbResponse: Response;
   try {
-    const __hbResponse: Response = await (async (): Promise<Response> => {
+  try {
     const runStartedAt = new Date().toISOString();
 
     const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
@@ -457,23 +457,20 @@ serve(async (_req) => {
       errorDetails: combinedErrors,
       ingested: totalUpserted,
     };
-    return new Response(JSON.stringify(body, null, 2), {
+    __hbResponse = new Response(JSON.stringify(body, null, 2), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+    __hbResponse = new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
-    })();
-    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
-    await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
-    return __hbResponse;
+  const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+  await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+  return __hbResponse;
   } catch (__hbE) {
     await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
     throw __hbE;
   }
 });
-
-
