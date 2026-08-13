@@ -18,6 +18,7 @@
 //  dep that deno check cannot resolve without a node_modules folder. Deno.serve is provided
 //  ambient in the edge runtime.)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
 
 // #400 description backfill — per-source detail fetchers, rate pacer, and
 // circuit breaker. See detailFetchers.ts for the vendor endpoints and the
@@ -795,6 +796,13 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
+  // ── HEARTBEAT (invocation.start / .complete) ──
+  const __hbStart = Date.now();
+  let __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = "unknown";
+  try { const __b = await req.clone().json().catch(() => ({})); __hbInvoker = inferInvoker(req, __b); } catch { __hbInvoker = inferInvoker(req, {}); }
+  const __hbId = await invocationStart({ supabase, functionSlug: "enrich-jobs", invokedBy: __hbInvoker });
+  try {
+    const __hbResponse: Response = await (async (): Promise<Response> => {
   // Fix 1 + Fix 2 — read chainDepth + priorityTitleFilter from body
   let chainDepth = 0;
   let priorityTitleFilter: string | undefined;
@@ -847,4 +855,14 @@ Deno.serve(async (req: Request) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+    })();
+    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+    await invocationComplete({ supabase, functionSlug: "enrich-jobs", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+    return __hbResponse;
+  } catch (__hbE) {
+    await invocationComplete({ supabase, functionSlug: "enrich-jobs", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
+    throw __hbE;
+  }
 });
+
+

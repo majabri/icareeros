@@ -12,6 +12,7 @@
 //  dep that deno check cannot resolve without a node_modules folder. Deno.serve is provided
 //  ambient in the edge runtime.)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
 
 Deno.serve(async (_req: Request) => {
   const supabase = createClient(
@@ -19,6 +20,12 @@ Deno.serve(async (_req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
+  // ── HEARTBEAT (invocation.start / .complete) ──
+  const __hbStart = Date.now();
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = "pg_cron";
+  const __hbId = await invocationStart({ supabase, functionSlug: "cleanup-dead-jobs", invokedBy: __hbInvoker });
+  try {
+    const __hbResponse: Response = await (async (): Promise<Response> => {
   try {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { count: deadCount, error: e1 } = await supabase
@@ -41,4 +48,14 @@ Deno.serve(async (_req: Request) => {
       status: 500, headers: { "Content-Type": "application/json" },
     });
   }
+    })();
+    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+    await invocationComplete({ supabase, functionSlug: "cleanup-dead-jobs", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+    return __hbResponse;
+  } catch (__hbE) {
+    await invocationComplete({ supabase, functionSlug: "cleanup-dead-jobs", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
+    throw __hbE;
+  }
 });
+
+
