@@ -67,7 +67,9 @@ CI must still pass. Branch protection allows admin bypass of review for hotfixes
 | Tests | This repo (`__tests__/`, `e2e/`) |
 | Database migrations | This repo (`supabase/migrations/`) |
 | Engineering docs | This repo (`docs/`) |
-| Business docs / handoffs / ADRs | Google Drive (`iCareerOS/docs/`) |
+| Business docs / ADRs | Google Drive (`iCareerOS/docs/`) |
+| Backlog / tracked work | GitHub Issues (per #410 — not docs, not chat) |
+| Retired agent handoffs | `archive/agent-handoffs-2026-08-25/` (historical, frozen) |
 | Secrets (API keys, tokens) | Vercel env vars + Supabase secrets — NEVER in any file |
 | Design assets | Google Drive (`iCareerOS/shared/`) |
 

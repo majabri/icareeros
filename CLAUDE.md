@@ -12,6 +12,24 @@
 2. `docs/ARCHITECTURE.md` (TBD) — high-level system map
 3. The 3 ADRs in the Drive workspace under `iCareerOS/docs/adr/` — define repo topology, branching, where things live
 
+## Session topology
+
+Two session types, one repo. Decided 2026-08-25 (#410).
+
+| Session | Runs | Owns |
+|---|---|---|
+| **Chat (Cowork)** | claude.ai | Strategy, planning, triage, research. Writes the brief. Does **not** push code. |
+| **Claude Code (cloud, via GitHub)** | GitHub-attached cloud session | Every code change, migration, and doc edit. Branch → PR → CI → merge. |
+
+- **The backlog lives in GitHub Issues.** Not in a doc, not in chat scrollback.
+  A tracking issue is the unit of work; Claude Code executes it and opens the PR.
+- **No handoff docs.** Claude Code re-derives state each session from git history,
+  open issues and PRs, and its own memory. Nothing needs to be written down for
+  the next session. Historical handoffs are frozen under
+  `archive/agent-handoffs-2026-08-25/`.
+- There are no per-domain execution arms. `jobs.*` / `hire.*` / root are product
+  surfaces in this repo, not separate sessions or owners.
+
 ## Quick rules
 
 - **All code goes here, not in Drive.** Per ADR 0001.
@@ -58,33 +76,27 @@ supabase functions serve      # local edge fn runtime
 
 ---
 
-## Current state (as of 2026-05-20)
+## Phase 5/6 baseline (snapshot, 2026-05-20)
 
-**HEAD on `main`:** `7ce8bba` — feat(landing): three-domain copy overhaul (#264).
-
-> The detailed live state (per-arm landing inventory, recent merges,
-> active features, env vars, open backlog) lives in the workspace
-> CLAUDE.md in Google Drive:
+> **This section is a snapshot, not live state.** For what is true right now,
+> read git history, open issues, and open PRs — that is the source of truth
+> under the session topology above. What follows is the Phase 5/6 baseline,
+> kept because the Stripe activation, feature flags, and webhook setup it
+> describes still have not shipped.
+>
+> Business / product context lives in the workspace CLAUDE.md in Google Drive:
 > `https://drive.google.com/open?id=1BbNbup5P0xNGljUIUkPh_qE5hAYrc3Ob`
-> The rest of this in-repo file documents Phase 5/6 baseline state
-> from 2026-05-07 — useful as historical context for the Stripe
-> activation, feature flags, and webhook setup that hasn't yet shipped.
 
-**Recent landing-page work (2026-05-20):**
+**Landing-page baseline (2026-05-20):**
 - #264 Three-domain landing copy overhaul — Career OS framing, brand
-  voice, 21 components (per-arm component ownership: Root 6 / Jobs 7 /
+  voice, 21 components (per-surface component ownership: Root 6 / Jobs 7 /
   Hire 8; zero shared landing components remain).
 - #263 Three-domain landing alignment — social proof out, Tabler icons
   in, per-host metadata, public hire.* landing (middleware Phase-4
   split for hire.* `/`).
 
-**Last full handoff:** `docs/AGENT_HANDOFF_20260520b.md` (landing copy
-overhaul); see `AGENT_HANDOFF_20260507d.md` for the Phase 5/Stripe
-baseline still referenced below.
-
-**Test suite:** Type-check + Unit tests green on `7ce8bba` (CI required
-check). Local `pnpm test` sweep was not run by the Cowork session due
-to sandbox disk pressure; CI is the source of truth.
+**Test suite:** CI (type-check + unit tests, required check) is the source
+of truth.
 
 ### Active features (Phase 1-5 shipped)
 
@@ -119,7 +131,7 @@ NEXT_PUBLIC_MONETIZATION_ENABLED    # currently `false` — flip to `true` to ac
 ### Env vars — pending (set before billing/observability launch)
 
 ```
-# Stripe — see docs/AGENT_HANDOFF_20260507d.md for full list (17 vars)
+# Stripe — 17 vars total
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -154,7 +166,7 @@ Events:
   invoice.payment_failed
 ```
 
-### Open launch blockers (see AGENT_HANDOFF_20260507d.md for full list)
+### Open launch blockers
 
 P0 (manual, blocks production):
 - Set the 17 Stripe env vars above + register webhook
