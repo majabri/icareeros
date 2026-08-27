@@ -107,7 +107,7 @@ detail lives in the Drive workspace CLAUDE.md. Archived handoff docs that
 *were* committed are under `archive/agent-handoffs-2026-08-25/`.
 
 **Test suite:** Type-check + Unit tests green on `7ce8bba` (CI required
-check). A local `pnpm test` sweep was not run when this state was
+check). A local `npm test` sweep was not run when this state was
 captured, due to sandbox disk pressure; CI is the source of truth.
 
 ### Active features (Phase 1-5 shipped)
