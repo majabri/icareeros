@@ -120,7 +120,14 @@ Follow `docs/DNS_CUTOVER_PLAYBOOK.md` — ~15 min total, zero downtime
 | BetterStack monitor | https://uptime.betterstack.com/team/t529212/monitors/4340966 |
 | GitHub repo | https://github.com/majabri/icareeros |
 | E2E test user | e2e-test@icareeros.com (kuneabeiwcxavvyyfjkx) |
-| Job seeker test account | majabri714@gmail.com / FitCheck2026! |
+| Job seeker test account | majabri714@gmail.com / **[REDACTED — see note below]** |
+
+
+> **Credential redacted 2026-08-27.** This row previously carried the test
+> account's password in plaintext. It was committed to this repo, so it is in
+> git history and must be treated as compromised — **rotate the account
+> password**; redacting the file does not undo the exposure. Test credentials
+> belong in Vercel / Supabase / GitHub Actions secrets, never in a file.
 
 ---
 

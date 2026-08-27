@@ -67,7 +67,8 @@ CI must still pass. Branch protection allows admin bypass of review for hotfixes
 | Tests | This repo (`__tests__/`, `e2e/`) |
 | Database migrations | This repo (`supabase/migrations/`) |
 | Engineering docs | This repo (`docs/`) |
-| Business docs / handoffs / ADRs | Google Drive (`iCareerOS/docs/`) |
+| Business docs / ADRs | Google Drive (`iCareerOS/docs/`) |
+| Backlog / follow-up work | GitHub Issues on this repo |
 | Secrets (API keys, tokens) | Vercel env vars + Supabase secrets — NEVER in any file |
 | Design assets | Google Drive (`iCareerOS/shared/`) |
 
@@ -97,6 +98,19 @@ Two required checks gate merge to `main`:
 - **Playwright E2E** — runs the E2E suite against `https://icareeros.vercel.app`.
 
 Both must pass before merge.
+
+## Who does the work (per the 2026-08-25 topology decision)
+
+Two surfaces, no others:
+
+- **Chat (Cowork)** — strategy, planning, exploration, DB probes, memory. No repo writes.
+- **Claude Code (cloud, GitHub-triggered)** — all code changes, deploys, PRs, tests.
+
+Trigger Claude Code by opening an Issue here and mentioning `@claude`, or by
+starting a fresh Claude Code session pointed at this repo. There are no
+Jobs / Hire / Platform execution arms, no NEXUS orchestrator, and no
+`AGENT_HANDOFF_*.md` docs — Claude Code re-derives state from git each
+session. See `CLAUDE.md` → *Session topology*.
 
 ## Reporting bugs
 
