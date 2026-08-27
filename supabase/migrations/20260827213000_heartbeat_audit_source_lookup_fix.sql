@@ -91,7 +91,7 @@ BEGIN
     jsonb_build_object(
       'checked_count',      checked_count,
       'stale_count',        stale_count,
-      'duration_ms',        EXTRACT(EPOCH FROM (clock_timestamp() - audit_started_at))::integer * 1000
+     'duration_ms',        (EXTRACT(EPOCH FROM (clock_timestamp() - audit_started_at)) * 1000)::integer
     )
   );
 END;
