@@ -20,6 +20,28 @@
 - **Edge function calls use `supabase.functions.invoke()`** — never raw `fetch`. Exception: SSE streaming responses.
 - **AI calls go through Next.js API routes** (`src/app/api/...`). `ANTHROPIC_API_KEY` stays server-side.
 
+## Session topology
+
+**As of 2026-08-25 there are exactly two work surfaces.** No Jobs / Hire /
+Platform execution arms, no NEXUS orchestrator, no `AGENT_HANDOFF_*.md`
+handoff docs.
+
+* **Chat (Cowork)** — strategy, planning, exploration, DB probes, memory.
+  No repo writes.
+* **Claude Code (cloud, GitHub-triggered)** — all code changes, deploys, PRs,
+  tests.
+
+Trigger Code by opening a GitHub issue on `majabri/icareeros` and mentioning
+`@claude`, or by starting a fresh Claude Code session on claude.com / mobile
+app pointed at the repo.
+
+Backlog lives in GitHub Issues.
+
+Claude Code re-derives project state from git history plus its own memory at
+the start of each session, so there is nothing to hand off in a file. Prior
+handoff docs are archived, unmaintained, under
+`archive/agent-handoffs-2026-08-25/`.
+
 ## Environments
 
 | Component | Value |
@@ -78,13 +100,15 @@ supabase functions serve      # local edge fn runtime
   in, per-host metadata, public hire.* landing (middleware Phase-4
   split for hire.* `/`).
 
-**Last full handoff:** `docs/AGENT_HANDOFF_20260520b.md` (landing copy
-overhaul); see `AGENT_HANDOFF_20260507d.md` for the Phase 5/Stripe
-baseline still referenced below.
+**Handoff docs: retired** (2026-08-25, see *Session topology* above).
+The Phase 5 / Stripe baseline described below was last captured in
+`AGENT_HANDOFF_20260507d.md`, which was never committed to this repo — the
+detail lives in the Drive workspace CLAUDE.md. Archived handoff docs that
+*were* committed are under `archive/agent-handoffs-2026-08-25/`.
 
 **Test suite:** Type-check + Unit tests green on `7ce8bba` (CI required
-check). Local `pnpm test` sweep was not run by the Cowork session due
-to sandbox disk pressure; CI is the source of truth.
+check). A local `pnpm test` sweep was not run when this state was
+captured, due to sandbox disk pressure; CI is the source of truth.
 
 ### Active features (Phase 1-5 shipped)
 
@@ -119,7 +143,7 @@ NEXT_PUBLIC_MONETIZATION_ENABLED    # currently `false` — flip to `true` to ac
 ### Env vars — pending (set before billing/observability launch)
 
 ```
-# Stripe — see docs/AGENT_HANDOFF_20260507d.md for full list (17 vars)
+# Stripe — 17 vars total; full list in the Drive workspace CLAUDE.md
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -154,7 +178,7 @@ Events:
   invoice.payment_failed
 ```
 
-### Open launch blockers (see AGENT_HANDOFF_20260507d.md for full list)
+### Open launch blockers (full list in the Drive workspace CLAUDE.md)
 
 P0 (manual, blocks production):
 - Set the 17 Stripe env vars above + register webhook

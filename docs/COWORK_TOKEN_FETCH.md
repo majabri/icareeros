@@ -1,5 +1,10 @@
 # Cowork token fetch — Vercel env-var pattern
 
+> **Still current.** "Cowork" here means the Chat surface of the two-surface
+> topology (see `CLAUDE.md` → *Session topology*), not one of the retired
+> Jobs / Hire / Platform execution arms. Chat does credential probes; it does
+> not write to the repo.
+
 Cowork sessions running against this project need three credentials. All three are stored as `encrypted`-type env vars in the Vercel project so they can be fetched programmatically each session instead of pasted into chat. This doc pins down the working fetch pattern after we hit two failure modes in this discovery.
 
 ## The three tokens

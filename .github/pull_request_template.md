@@ -37,7 +37,7 @@ Doc-only PRs can short-circuit by deleting all but the title and a one-line summ
 - [ ] If new env var: added to `.env.example` with placeholder value + comment
 - [ ] If new edge function: deployed to Supabase via `supabase functions deploy`
 - [ ] If middleware change: tested both authenticated and unauthenticated paths
-- [ ] Updated relevant doc (`docs/`, ADR, or handoff if scope warrants)
+- [ ] Updated relevant doc (`docs/`, `CLAUDE.md`, or ADR if scope warrants)
 
 ## Closes
 
