@@ -41,6 +41,29 @@ interface SearchRequestBody {
   resultsPerPage?: number;
 }
 
+type SearchRouteOpportunity = OpportunityResult & {
+  source_tag?: "adzuna" | "employer";
+};
+
+interface EmployerOpportunityRow {
+  id: string;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  description: string | null;
+  url: string | null;
+  job_type: string | null;
+  is_remote: boolean | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string | null;
+  posted_at: string | null;
+  first_seen_at: string | null;
+  created_at: string | null;
+  is_flagged: boolean | null;
+  source: string | null;
+}
+
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -57,6 +80,52 @@ async function makeSupabaseServer() {
       },
     }
   );
+}
+
+function getOpportunityDedupeSignals(opp: Pick<OpportunityResult, "id" | "url" | "company" | "title">): string[] {
+  const companyTitle = `${opp.company}::${opp.title}`.toLowerCase();
+  return [
+    opp.url ? `url:${opp.url.toLowerCase()}` : "",
+    opp.id ? `id:${opp.id.toLowerCase()}` : "",
+    `company-title:${companyTitle}`,
+  ].filter(Boolean);
+}
+
+function rememberOpportunity(seen: Set<string>, opp: Pick<OpportunityResult, "id" | "url" | "company" | "title">): boolean {
+  const signals = getOpportunityDedupeSignals(opp);
+  if (signals.some((signal) => seen.has(signal))) return false;
+  signals.forEach((signal) => seen.add(signal));
+  return true;
+}
+
+function addSourceTag(opp: OpportunityResult): SearchRouteOpportunity {
+  if (opp.source === "employer") return { ...opp, source_tag: "employer" };
+  if (opp.source === "adzuna")   return { ...opp, source_tag: "adzuna" };
+  return opp;
+}
+
+function sanitizeEmployerKeyword(raw: string): string {
+  return raw.replace(/[,%_()"]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function rowToEmployerOpportunity(row: EmployerOpportunityRow): SearchRouteOpportunity {
+  return {
+    id:              row.id,
+    title:           row.title ?? "",
+    company:         row.company ?? "",
+    location:        row.location ?? "",
+    type:            row.job_type ?? "",
+    description:     row.description ?? "",
+    url:             row.url ?? "",
+    matchReason:     "",
+    salary_min:      row.salary_min,
+    salary_max:      row.salary_max,
+    salary_currency: row.salary_currency,
+    is_remote:       !!row.is_remote,
+    first_seen_at:   row.first_seen_at ?? row.posted_at ?? row.created_at ?? undefined,
+    source:          row.source ?? "employer",
+    source_tag:      "employer",
+  };
 }
 
 export async function POST(req: Request) {
@@ -173,6 +242,39 @@ export async function POST(req: Request) {
     // a non-null value (TypeScript loses the narrowing inside async
     // functions even after the `if (!user) return 401` guard above).
     const authedUserId = user.id;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const privilegedClient = serviceKey
+      ? createServiceRoleClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          serviceKey,
+          { auth: { persistSession: false } },
+        )
+      : supabase;
+
+    const employerQuery = sanitizeEmployerKeyword(params.what ?? "");
+    const employerOpportunitiesPromise = employerQuery
+      ? privilegedClient
+          .from("opportunities")
+          .select("id, title, company, location, description, url, job_type, is_remote, salary_min, salary_max, salary_currency, posted_at, first_seen_at, created_at, is_flagged, source")
+          .eq("source", "employer")
+          .not("is_flagged", "is", true)
+          .or([
+            `title.ilike.%${employerQuery}%`,
+            `company.ilike.%${employerQuery}%`,
+            `description.ilike.%${employerQuery}%`,
+          ].join(","))
+          .order("created_at", { ascending: false })
+          .limit(50)
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn("[/api/jobs/search] employer query failed:", error.message);
+              return [] as SearchRouteOpportunity[];
+            }
+            return (data ?? [])
+              .filter((row) => !row.is_flagged)
+              .map((row) => rowToEmployerOpportunity(row as EmployerOpportunityRow));
+          })
+      : Promise.resolve([] as SearchRouteOpportunity[]);
 
     // ── W4-B-2 (UAT 2026-05-10): multi-query fan-out for manual search ──
     // Single Adzuna query returned 1-2 results too often. Fan-out into:
@@ -249,20 +351,23 @@ export async function POST(req: Request) {
       };
     }
 
-    const variantResults = await Promise.all(
-      variants.map((what) =>
-        searchOpportunities({
-          filters: paramsToFilters(what),
-          limit:   40,                  // ~ 4 sources × 10
-          offset:  0,
-          // feat/jobs-opportunity-scoring — profile-aware rerank
-          userId:  authedUserId,
-        }).catch((e) => {
-          console.warn(`[/api/jobs/search] variant "${what}" failed:`, e instanceof Error ? e.message : e);
-          return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };
-        }),
+    const [variantResults, employerOpportunities] = await Promise.all([
+      Promise.all(
+        variants.map((what) =>
+          searchOpportunities({
+            filters: paramsToFilters(what),
+            limit:   40,                  // ~ 4 sources × 10
+            offset:  0,
+            // feat/jobs-opportunity-scoring — profile-aware rerank
+            userId:  authedUserId,
+          }).catch((e) => {
+            console.warn(`[/api/jobs/search] variant "${what}" failed:`, e instanceof Error ? e.message : e);
+            return { opportunities: [] as OpportunityResult[], total: 0, sources: {} };
+          }),
+        ),
       ),
-    );
+      employerOpportunitiesPromise,
+    ]);
 
     // Merge + dedupe across variants AND aggregate per-source counts so the
     // UI can show "25 jobs from Adzuna · LinkedIn · Database" without
@@ -274,9 +379,7 @@ export async function POST(req: Request) {
     for (const vr of variantResults) {
       rawTotal += vr.total;
       for (const opp of vr.opportunities) {
-        const key = (opp.url || `${opp.company}::${opp.title}`).toLowerCase();
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
+        if (rememberOpportunity(seenKeys, opp)) {
           mergedOpps.push(opp);
         }
       }
@@ -348,15 +451,7 @@ export async function POST(req: Request) {
         is_active:        true,
       }));
 
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const upsertClient = serviceKey
-        ? createServiceRoleClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            serviceKey,
-            { auth: { persistSession: false } },
-          )
-        : supabase; // fallback — will fail RLS but matches prior behaviour
-      const { data: upserted, error: upsertErr } = await upsertClient
+      const { data: upserted, error: upsertErr } = await privilegedClient
         .from("opportunities")
         .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: false })
         .select("id, source, source_id, title, company");
@@ -378,15 +473,34 @@ export async function POST(req: Request) {
       }
     }
 
+    const liveOpportunities = opportunitiesWithDbIds.map((opp) => addSourceTag(opp));
+    const finalSeenKeys = new Set<string>();
+    liveOpportunities.forEach((opp) => {
+      rememberOpportunity(finalSeenKeys, opp);
+    });
+    const dedupedEmployerOpportunities = employerOpportunities.filter((opp) => {
+      return rememberOpportunity(finalSeenKeys, opp);
+    });
+    const combinedOpportunities = [
+      ...liveOpportunities,
+      ...dedupedEmployerOpportunities,
+    ];
+    const combinedSources = dedupedEmployerOpportunities.length > 0
+      ? {
+          ...result.sources,
+          employer: { count: dedupedEmployerOpportunities.length, fallback: false },
+        }
+      : result.sources;
+
     return NextResponse.json({
-      opportunities: opportunitiesWithDbIds,
-      total: result.total,
+      opportunities: combinedOpportunities,
+      total: result.total + dedupedEmployerOpportunities.length,
       derivedFrom,
       page: params.page,
-      sourceFallback: result.fallback,
+      sourceFallback: result.fallback && dedupedEmployerOpportunities.length === 0,
       // 2026-06-18 — per-source counts so the page can show
       // "N opportunities from Adzuna · LinkedIn · Database".
-      sources: result.sources,
+      sources: combinedSources,
       // 2026-06-20 — quality-gate filtered postings (Brief Task 3).
       filtered: result.filtered,
     });
