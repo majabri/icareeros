@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
 
 const BATCH_SIZE = 20;                // Greenhouse/Lever/Ashby fetch batch
 const FETCH_TIMEOUT_MS = 10_000;
@@ -139,7 +140,6 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
         raw: j,
         last_seen_at: new Date().toISOString(),
         is_active: true,
-        enrichment_status: "pending",
       }));
       if (rows.length === 0) return 0;
       const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
@@ -271,7 +271,6 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
         raw: p,
         last_seen_at: new Date().toISOString(),
         is_active: true,
-        enrichment_status: "pending",
       };
     }).filter((r: any) => r !== null);
     if (rows.length > 0) {
@@ -347,7 +346,6 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
           raw: p,
           last_seen_at: new Date().toISOString(),
           is_active: true,
-          enrichment_status: "pending",
         };
       }).filter((r: any) => r !== null);
       if (rows.length > 0) {
@@ -367,11 +365,17 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
 
 serve(async (_req) => {
   const startTime = Date.now();
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  // ── HEARTBEAT (invocation.start) ──
+  const __hbStart = Date.now();
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(undefined, {});
+  const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker });
+  let __hbResponse: Response;
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+  try {
     const runStartedAt = new Date().toISOString();
 
     const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
@@ -453,13 +457,20 @@ serve(async (_req) => {
       errorDetails: combinedErrors,
       ingested: totalUpserted,
     };
-    return new Response(JSON.stringify(body, null, 2), {
+    __hbResponse = new Response(JSON.stringify(body, null, 2), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+    __hbResponse = new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
+  }
+  const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
+  await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+  return __hbResponse;
+  } catch (__hbE) {
+    await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
+    throw __hbE;
   }
 });
