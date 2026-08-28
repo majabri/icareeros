@@ -62,6 +62,7 @@ import {
   synonymsForExactDeno,
   expandQueriesDeno,
   buildTsqueryArgDeno,
+  filterExcludedRolePatterns,
 } from "./lib.ts";
 // re-export so the (very small) public surface of this file stays
 // stable for any other Deno test that imports it directly.
@@ -166,10 +167,11 @@ function reasonFor(sig: { roleSignal: string; matchedSkills: string[]; missingSk
 // ─────────────────────────────────────────────────────────────────────────
 async function curateForUser(supabase: any, userId: string): Promise<{ recs: number }> {
   const [{ data: up }, { data: cp }] = await Promise.all([
-    supabase.from("user_profiles").select("target_roles").eq("user_id", userId).maybeSingle(),
+    supabase.from("user_profiles").select("target_roles, excluded_role_patterns").eq("user_id", userId).maybeSingle(),
     supabase.from("career_profiles").select("skills, headline, summary").eq("user_id", userId).maybeSingle(),
   ]);
   const targetRoles = (up?.target_roles ?? []) as string[];
+  const excludedRolePatterns = (up?.excluded_role_patterns ?? null) as string[] | null;
   if (targetRoles.length === 0) return { recs: 0 };
 
   const skills = (cp?.skills ?? []) as string[];
@@ -205,7 +207,7 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   //   path preserves the existing row's computed_at, freezing
   //   X-Recommendations-Computed-At forever.
   const nowIso = new Date().toISOString();
-  const scored = [...tagged.values()].map(({ row, retrievedFor }) => {
+  const scored = filterExcludedRolePatterns([...tagged.values()], excludedRolePatterns).map(({ row, retrievedFor }) => {
     const s = scoreJob(row, profile);
     const tier = classify(s.total, "exact");
     if (!tier) return null;
@@ -328,5 +330,4 @@ Deno.serve(async (req: Request) => {
     throw __hbE;
   }
 });
-
 
