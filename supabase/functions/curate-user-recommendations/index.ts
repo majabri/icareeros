@@ -231,7 +231,15 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   const eligibleCandidates = scoredCandidates.filter(
     (candidate): candidate is NonNullable<typeof candidate> => candidate !== null,
   );
-  const scored = filterExcludedRolePatterns(eligibleCandidates, excludedRolePatterns)
+  // The excluded-pattern filter matches on job title, but candidates are
+  // { row, recommendation } wrappers — surface `title` at the top level so
+  // the generic constraint is satisfied AND the match actually sees a title.
+  // (Filtering the wrapper directly compiles-fails and would silently match
+  // nothing, making every configured pattern a no-op.)
+  const scored = filterExcludedRolePatterns(
+    eligibleCandidates.map((candidate) => ({ ...candidate, title: candidate.row.title })),
+    excludedRolePatterns,
+  )
     .map(({ recommendation }) => recommendation)
     .slice(0, 100);
 
