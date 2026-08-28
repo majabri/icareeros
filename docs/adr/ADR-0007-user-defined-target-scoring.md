@@ -112,7 +112,7 @@ matching additionally needs:
 | `management_signal` | enum: `IC`, `small_team_manager`, `mid_manager`, `director`, `executive` |
 | `department_context` | controlled enum where known (`Security`, `Marketing`, `Sales`, `Engineering`, etc.), otherwise a normalized free string |
 | `discipline_signal` | controlled-vocabulary match against the canonical discipline list |
-| `level_signal` | enum: `entry`, `mid`, `senior`, `staff`, `principal`, `director`, `vp`, `c_suite` |
+| `level_signal` | enum: `entry`, `mid`, `senior`, `staff`, `principal`, `director`, `vp`, `c_suite`; job-side `director` maps to target-side `director_plus` |
 
 Extraction should be regex-first for explicit title markers (`VP`, `CISO`,
 `Director`, `IC`, and similar), then use an LLM only for ambiguous context.
@@ -170,6 +170,12 @@ Unknown attributes should be omitted from the denominator and the remaining
 weights renormalized, rather than treated as a zero or a false match. Apply
 the user's excluded patterns after attribute scoring. The user's score is the
 maximum score across all declared targets:
+
+For example, if industry is unknown, use the other four weights
+(`0.25 + 0.20 + 0.20 + 0.20 = 0.85`) as the denominator, yielding effective
+weights of approximately `0.294 / 0.235 / 0.235 / 0.235`. If both industry and
+discipline are unknown, divide by `0.45` and renormalize level, track, and
+title-token weights. Calibration tests must assert these denominator rules.
 
 ```text
 score(job, user) = max(scoreTarget(job, target) for target in user.targets)
