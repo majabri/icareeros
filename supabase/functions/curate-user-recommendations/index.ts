@@ -210,7 +210,7 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   const scoredCandidates = [...tagged.values()].map(({ row, retrievedFor }) => {
     const s = scoreJob(row, profile);
     const tier = classify(s.total, "exact");
-    if (!tier) return { row, recommendation: null };
+    if (!tier) return null;
     const matchedRole = retrievedFor[0] ?? "";
     const baseReason = reasonFor(s);
     const reasonWithProvenance = matchedRole
@@ -228,7 +228,10 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
       },
     };
   });
-  const scored = filterExcludedRolePatterns(scoredCandidates, excludedRolePatterns)
+  const eligibleCandidates = scoredCandidates.filter(
+    (candidate): candidate is NonNullable<typeof candidate> => candidate !== null,
+  );
+  const scored = filterExcludedRolePatterns(eligibleCandidates, excludedRolePatterns)
     .map(({ recommendation }) => recommendation)
     .filter((recommendation): recommendation is NonNullable<typeof recommendation> => recommendation !== null)
     .slice(0, 100);
