@@ -107,12 +107,12 @@ preferences UI.
 The existing extractor produces a title, seniority, and some skills. Structured
 matching additionally needs:
 
-| Attribute | Proposed representation |
-|---|---|
-| `management_signal` | enum: `IC`, `small_team_manager`, `mid_manager`, `director`, `executive` |
-| `department_context` | controlled enum where known (`Security`, `Marketing`, `Sales`, `Engineering`, etc.), otherwise a normalized free string |
-| `discipline_signal` | controlled-vocabulary match against the canonical discipline list |
-| `level_signal` | enum: `entry`, `mid`, `senior`, `staff`, `principal`, `director`, `vp`, `c_suite`; job-side `director` maps to target-side `director_plus` |
+| Attribute | Proposed representation | Notes |
+|---|---|---|
+| `management_signal` | enum: `IC`, `small_team_manager`, `mid_manager`, `director`, `executive` | Compared with the target's `track` |
+| `department_context` | controlled enum where known (`Security`, `Marketing`, `Sales`, `Engineering`, etc.), otherwise a normalized free string | Context for discipline and exclusion matching |
+| `discipline_signal` | controlled-vocabulary match against the canonical discipline list | Compared with target `discipline` |
+| `level_signal` | enum: `entry`, `mid`, `senior`, `staff`, `principal`, `director`, `vp`, `c_suite` | Job-side `director` maps to target-side `director_plus` |
 
 Extraction should be regex-first for explicit title markers (`VP`, `CISO`,
 `Director`, `IC`, and similar), then use an LLM only for ambiguous context.
@@ -176,7 +176,8 @@ For example, if industry is unknown, use the other four weights
 weights of approximately `level=0.294`, `track=0.235`,
 `discipline=0.235`, and `title-token=0.235`. If both industry and discipline
 are unknown, divide by `0.65` (`0.25 + 0.20 + 0.20`) and renormalize
-`level=0.385`, `track=0.308`, and `title-token=0.308`. Calibration tests must
+`level≈0.385`, `track≈0.308`, and `title-token≈0.308` (rounded values).
+Calibration tests must
 assert these denominator rules.
 
 ```text
