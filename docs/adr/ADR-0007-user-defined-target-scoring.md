@@ -3,11 +3,11 @@
 - **Status:** Draft — design approval required
 - **Date:** 2026-08-28
 - **Decision owners:** Amir Jabri
-- **Supersedes:** ADR-006 Options A and B once this ADR is fully rolled out
+- **Supersedes:** ADR-0006 (ADR-006) Options A and B once this ADR is fully rolled out
 
 ## 1. Problem statement
 
-ADR-006 F4 scoring was evaluated against a 21-row scoring pool. The pool
+ADR-0006 (ADR-006) F4 scoring was evaluated against a 21-row scoring pool. The pool
 contains several false-positive families: Pfizer rows entangled with
 Marketing, HPE IC/Principal rows that introduce individual-contributor noise,
 and Mastercard Sales rows. In particular, a Pfizer “Manager, CISO Marketing”
@@ -37,8 +37,8 @@ preferences, and anti-patterns that matter to them. The scorer should then
 compare jobs with those declarations rather than imposing maintainer-wide
 preferences.
 
-ADR-006 §5's anchor-set doctrine remains governance for calibration. This ADR
-does not retire ADR-006 F4; the current path remains active until the rollout
+ADR-0006 §5's anchor-set doctrine remains governance for calibration. This ADR
+does not retire ADR-0006 F4; the current path remains active until the rollout
 below is complete.
 
 ## 2. Data model
@@ -174,7 +174,7 @@ score(job, user) = max(scoreTarget(job, target) for target in user.targets)
 
 Return the winning target as provenance so the UI can explain the
 recommendation. The weights and thresholds are proposals, not product truth;
-calibration must honor ADR-006 §5's anchor-set doctrine.
+calibration must honor ADR-0006 §5's anchor-set doctrine.
 
 For users with an empty or invalid `target_roles_v2`, fall through to today's
 F4/current `scoreTargetRoleMatch` behavior. This preserves identical behavior
@@ -222,23 +222,23 @@ GitHub issue and Copilot session. This ADR itself is design-only.
 
 ### Regression pool
 
-Score the ADR-006 21-row pool against Amir's declared target:
+Score the ADR-0006 (ADR-006) 21-row pool against Amir's declared target:
 `Director+ Security People-Manager`, with security discipline and the relevant
 industry preferences. The expected result is clean separation: security
 director/manager anchors pass; Pfizer Marketing entanglements, HPE
 IC/Principal noise, and Mastercard Sales rows fail unless their structured
 attributes actually satisfy the target. The exact expected fixture is:
 
-| ADR-006 row | Expected | Reason |
+| ADR-0006 row | Expected | Reason |
 |---|---|---|
-| 01–05 | Pass/fail per the ADR-006 anchor labels | Preserve the existing anchor-set ground truth |
+| 01–05 | Pass/fail per the ADR-0006 anchor labels | Preserve the existing anchor-set ground truth |
 | 06–08 (Pfizer Marketing entanglement) | Fail | Marketing context conflicts with Amir's security target |
 | 09–11 (HPE IC/Principal) | Fail | IC/individual-contributor track or level conflicts |
 | 12–14 (Mastercard Sales) | Fail | Sales department/discipline conflicts |
-| 15–21 | Pass/fail per the ADR-006 anchor labels | Preserve the existing anchor-set ground truth |
+| 15–21 | Pass/fail per the ADR-0006 anchor labels | Preserve the existing anchor-set ground truth |
 
 Before implementation, the 21 concrete titles and labels must be copied
-verbatim from ADR-006 into a versioned test fixture; no implementation issue
+verbatim from ADR-0006 into a versioned test fixture; no implementation issue
 may substitute subjective labels for that fixture.
 
 ### Positive counterexample
@@ -284,4 +284,3 @@ These answers are required before implementation issues can be split:
 
 No implementation issue should assume answers to these questions. Once Amir
 answers, update this ADR if necessary and split the phase-specific issues.
-
