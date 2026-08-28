@@ -207,24 +207,31 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   //   path preserves the existing row's computed_at, freezing
   //   X-Recommendations-Computed-At forever.
   const nowIso = new Date().toISOString();
-  const scored = filterExcludedRolePatterns([...tagged.values()], excludedRolePatterns).map(({ row, retrievedFor }) => {
+  const scoredCandidates = [...tagged.values()].map(({ row, retrievedFor }) => {
     const s = scoreJob(row, profile);
     const tier = classify(s.total, "exact");
-    if (!tier) return null;
+    if (!tier) return { row, recommendation: null };
     const matchedRole = retrievedFor[0] ?? "";
     const baseReason = reasonFor(s);
     const reasonWithProvenance = matchedRole
       ? `Retrieved for ${matchedRole}${baseReason ? " · " + baseReason : ""}`
       : baseReason;
     return {
-      user_id:      userId,
-      job_id:       row.id,
-      fit_score:    s.total,
-      tier,
-      match_reason: reasonWithProvenance,
-      computed_at:  nowIso,
+      row,
+      recommendation: {
+        user_id:      userId,
+        job_id:       row.id,
+        fit_score:    s.total,
+        tier,
+        match_reason: reasonWithProvenance,
+        computed_at:  nowIso,
+      },
     };
-  }).filter(Boolean).slice(0, 100);
+  });
+  const scored = filterExcludedRolePatterns(scoredCandidates, excludedRolePatterns)
+    .map(({ recommendation }) => recommendation)
+    .filter((recommendation): recommendation is NonNullable<typeof recommendation> => recommendation !== null)
+    .slice(0, 100);
 
   if (scored.length > 0) {
     await supabase.from("user_job_recommendations").upsert(scored, {
@@ -330,4 +337,3 @@ Deno.serve(async (req: Request) => {
     throw __hbE;
   }
 });
-
