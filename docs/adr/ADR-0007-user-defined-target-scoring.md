@@ -90,7 +90,10 @@ rather than inventing precision. The operation must be idempotent, keyed by
 user/profile and source value, and record a schema/version marker in a separate
 `user_profile_target_role_backfills` audit table (user/profile ID, source-value
 hash, target schema version, and completion timestamp) so retries cannot append
-duplicates. A user may review and correct the result in the preferences UI.
+duplicates. The source value is the canonical, trimmed, case-folded title
+string after the same normalization used by the scorer; hash that value
+together with the source schema version. A user may review and correct the
+result in the preferences UI.
 
 ### Migration strategy
 
@@ -172,9 +175,10 @@ weights renormalized, rather than treated as a zero or a false match. Apply
 the user's excluded patterns after attribute scoring. The user's score is the
 maximum score across all declared targets:
 
-For example, if industry is unknown, use the other four weights
+For example, from the full weight sum of `1.00`, if industry is unknown, use
+the other four weights
 (`level=0.25 + track=0.20 + discipline=0.20 + title-token=0.20 = 0.85`) as
-the denominator, yielding effective
+the denominator (`1.00 - industry=0.15`), yielding effective
 weights of approximately `level=0.294`, `track=0.235`,
 `discipline=0.235`, and `title-token=0.235`. If both industry and discipline
 are unknown, divide by `0.65`
