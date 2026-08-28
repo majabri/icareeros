@@ -140,8 +140,11 @@ migrations and permits extractor versioning:
 
 For each job and target, calculate independent normalized similarities:
 
-- **Level:** exact level is 1.0; adjacent level is 0.7; compatible
-  `director_plus` range is 0.85; otherwise 0.
+- **Level:** normalize the job-side `director`/`vp`/`c_suite` values into the
+  target-side `director_plus` bucket before comparison. Exact level is 1.0;
+  adjacent level is 0.7; a compatible `director_plus` range is 0.85;
+  otherwise 0. This explicit mapping is the intentional difference between
+  the granular extraction enum and the user-facing range enum.
 - **Track:** exact management/IC track is 1.0; adjacent management band is
   0.6; conflicting IC versus people-manager signals are 0.
 - **Discipline:** exact canonical discipline is 1.0; an explicitly different
