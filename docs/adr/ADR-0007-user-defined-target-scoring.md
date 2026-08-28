@@ -87,9 +87,10 @@ Existing `text[]` entries will be converted to one structured target per
 entry. Use an LLM assist (recommend **claude-haiku-4-5**) once per user to
 infer level, track, and discipline from the title; default uncertain fields
 rather than inventing precision. The operation must be idempotent, keyed by
-user/profile and source value, and record a schema/version marker so retries
-cannot append duplicates. A user may review and correct the result in the
-preferences UI.
+user/profile and source value, and record a schema/version marker in a separate
+`user_profile_target_role_backfills` audit table (user/profile ID, source-value
+hash, target schema version, and completion timestamp) so retries cannot append
+duplicates. A user may review and correct the result in the preferences UI.
 
 ### Migration strategy
 
@@ -175,7 +176,8 @@ For example, if industry is unknown, use the other four weights
 (`0.25 + 0.20 + 0.20 + 0.20 = 0.85`) as the denominator, yielding effective
 weights of approximately `level=0.294`, `track=0.235`,
 `discipline=0.235`, and `title-token=0.235`. If both industry and discipline
-are unknown, divide by `0.65` (`0.25 + 0.20 + 0.20`) and renormalize
+are unknown, divide by `0.65`
+(`level=0.25 + track=0.20 + title-token=0.20`) and renormalize
 `level≈0.385`, `track≈0.308`, and `title-token≈0.308` (rounded values).
 Calibration tests must
 assert these denominator rules.
