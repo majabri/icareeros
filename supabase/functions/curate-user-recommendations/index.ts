@@ -233,7 +233,6 @@ async function curateForUser(supabase: any, userId: string): Promise<{ recs: num
   );
   const scored = filterExcludedRolePatterns(eligibleCandidates, excludedRolePatterns)
     .map(({ recommendation }) => recommendation)
-    .filter((recommendation): recommendation is NonNullable<typeof recommendation> => recommendation !== null)
     .slice(0, 100);
 
   if (scored.length > 0) {
