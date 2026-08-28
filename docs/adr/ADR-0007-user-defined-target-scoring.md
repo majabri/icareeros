@@ -173,14 +173,15 @@ the user's excluded patterns after attribute scoring. The user's score is the
 maximum score across all declared targets:
 
 For example, if industry is unknown, use the other four weights
-(`0.25 + 0.20 + 0.20 + 0.20 = 0.85`) as the denominator, yielding effective
+(`level=0.25 + track=0.20 + discipline=0.20 + title-token=0.20 = 0.85`) as
+the denominator, yielding effective
 weights of approximately `level=0.294`, `track=0.235`,
 `discipline=0.235`, and `title-token=0.235`. If both industry and discipline
 are unknown, divide by `0.65`
 (`level=0.25 + track=0.20 + title-token=0.20`) and renormalize
 `level≈0.385`, `track≈0.308`, and `title-token≈0.308` (rounded values).
-Calibration tests must
-assert these denominator rules.
+Rounded display values may sum to 1.001; implementation and calibration tests
+must use unrounded fractions and assert these denominator rules.
 
 ```text
 score(job, user) = max(scoreTarget(job, target) for target in user.targets)
