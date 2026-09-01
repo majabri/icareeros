@@ -7,7 +7,24 @@
  *   Bug 3  Workday tenants parallelized batch=4 + MAX_PAGES_PER_TENANT=15
  *   Bug 4  Rolled-up `inserted` + `errors` at top level of response
  *
+ * #425 (P0) — this function fanned all 5 sources out via a single
+ * top-level `Promise.allSettled` and NEVER completed a single invocation
+ * in prod: every run hit the 150s edge-function wall-clock limit and was
+ * killed (504), so the 48h stale-job sweep, the enrich-jobs chain-kick,
+ * and the rolled-up counts after the fan-out never ran. Fix adopts the
+ * bounded-slice + self-chain pattern `enrich-jobs` already uses: each
+ * invocation processes sources in order, in bounded slices, until an
+ * internal time budget is exhausted, persists progress in
+ * `public.ingest_ats_cursor`, and self-chains (capped by MAX_CHAIN_DEPTH).
+ * The stale-job sweep + enrich-jobs kick only run once a full cycle
+ * (all 5 sources) completes — see `serve()` below.
+ *
  * Deploy: supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
+ * IMPORTANT — deploy with --no-verify-jwt (or verify_jwt=false in the
+ * dashboard) and re-check the function's metadata after deploy; the
+ * mgmt-API deploy tool has silently reset this to true before, which
+ * caused an 8-day outage on 2026-08-05 (cron callers can't send a
+ * Supabase JWT).
  * Trigger: POST https://{project}.supabase.co/functions/v1/ingest-ats-direct
  */
 // deno-lint-ignore-file no-explicit-any
@@ -26,7 +43,20 @@ const WD_PAGE_SIZE = 20;
 const SR_PAGE_SIZE = 100;
 const SR_MAX_PAGES = 30;
 
+// #425 — chained continuation. Each invocation gets a wall-clock budget
+// well under the 150s edge-function limit (leaves headroom for cold
+// start, DB writes, and response serialization); once exhausted it
+// persists a cursor and self-chains rather than pressing on and risking
+// a 504. MAX_CHAIN_DEPTH is a hard stop mirroring enrich-jobs' pattern —
+// if a full cycle (5 sources) can't complete in 60 chained invocations
+// something is fundamentally wrong (e.g. every request timing out), and
+// we let the cursor go stale + reset rather than chain forever.
+const INGEST_BUDGET_MS = 100_000;
+const MAX_CHAIN_DEPTH  = 60;
+const CURSOR_STALE_MS  = 10 * 60 * 1000; // 10 min — presumed-dead chain, safe to restart
+
 // ── Company lists — synced to companyList.ts (dead slugs pruned) ────────
+
 
 const GREENHOUSE: string[] = [
   "airbnb","instacart","lyft","robinhood","coinbase",
@@ -114,15 +144,23 @@ async function fetchJsonWithLogging<T>(url: string, source: string, slug: string
   }
 }
 
+// #425 — chunked-source contract. Every per-source ingest function now
+// takes a startIndex (resume point) + deadline (Date.now() ms) and
+// returns nextIndex/done so the caller can persist a cursor and self-chain
+// instead of processing the whole company/tenant list in one invocation.
+interface ChunkResult { upserted: number; errors: string[]; nextIndex: number; done: boolean }
+
 // ── Greenhouse ──────────────────────────────────────────────────────────
 // List endpoint fields used here: id, title, location.name, absolute_url,
 // updated_at, raw payload. Description stays detail-endpoint-owned so
 // conflict updates never send `description` for this source.
 
-async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestGreenhouse(supabase: any, startIndex: number, deadline: number): Promise<ChunkResult> {
   let upserted = 0;
   const errors: string[] = [];
-  for (let i = 0; i < GREENHOUSE.length; i += BATCH_SIZE) {
+  let i = startIndex;
+  for (; i < GREENHOUSE.length; i += BATCH_SIZE) {
+    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
     const batch = GREENHOUSE.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -153,7 +191,7 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, nextIndex: GREENHOUSE.length, done: true };
 }
 
 // ── Lever ───────────────────────────────────────────────────────────────
@@ -161,10 +199,12 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
 // description, hostedUrl, categories.commitment, createdAt. Lever's list
 // payload already carries the job description, so ingest writes it inline.
 
-async function ingestLever(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestLever(supabase: any, startIndex: number, deadline: number): Promise<ChunkResult> {
   let upserted = 0;
   const errors: string[] = [];
-  for (let i = 0; i < LEVER.length; i += BATCH_SIZE) {
+  let i = startIndex;
+  for (; i < LEVER.length; i += BATCH_SIZE) {
+    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
     const batch = LEVER.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const postings = (await fetchJsonWithLogging<any[]>(
@@ -196,7 +236,7 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, nextIndex: LEVER.length, done: true };
 }
 
 // ── Ashby ───────────────────────────────────────────────────────────────
@@ -204,10 +244,12 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
 // descriptionPlain, jobUrl, publishedDate, isRemote. Ashby's list payload
 // already carries the job description, so ingest writes it inline.
 
-async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestAshby(supabase: any, startIndex: number, deadline: number): Promise<ChunkResult> {
   let upserted = 0;
   const errors: string[] = [];
-  for (let i = 0; i < ASHBY.length; i += BATCH_SIZE) {
+  let i = startIndex;
+  for (; i < ASHBY.length; i += BATCH_SIZE) {
+    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
     const batch = ASHBY.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -240,7 +282,7 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, nextIndex: ASHBY.length, done: true };
 }
 
 // ── Workday CXS — Bug 3: parallel tenant batches ────────────────────────
@@ -255,10 +297,11 @@ export function workdayApplyUrl(tenant: string, shard: string, site: string, ext
   return `https://${tenant}.${shard}.myworkdayjobs.com/${site}${externalPath}`;
 }
 
-async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; site: string }, supabase: any, errors: string[]): Promise<number> {
+async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; site: string }, supabase: any, errors: string[], deadline: number): Promise<number> {
   const url = buildWorkdayUrl(t.tenant, t.shard, t.site);
   let offset = 0, upserted = 0;
   for (let page = 0; page < WD_MAX_PAGES_PER_TENANT; page++) {
+    if (Date.now() >= deadline) break; // #425 — bail out of a single slow tenant rather than blow the invocation budget
     const data = await fetchJsonWithLogging<any>(url, "workday", t.tenant, errors, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -301,17 +344,20 @@ export function chunkWorkdayTenants<T>(tenants: T[], size: number): T[][] {
   return out;
 }
 
-async function ingestWorkday(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestWorkday(supabase: any, startIndex: number, deadline: number): Promise<ChunkResult> {
   let upserted = 0;
   const errors: string[] = [];
-  for (const batch of chunkWorkdayTenants(WORKDAY, WD_TENANT_BATCH)) {
-    const results = await Promise.allSettled(batch.map(t => ingestSingleWorkdayTenant(t, supabase, errors)));
+  let i = startIndex;
+  for (; i < WORKDAY.length; i += WD_TENANT_BATCH) {
+    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    const batch = WORKDAY.slice(i, i + WD_TENANT_BATCH);
+    const results = await Promise.allSettled(batch.map(t => ingestSingleWorkdayTenant(t, supabase, errors, deadline)));
     for (const r of results) {
       if (r.status === "fulfilled") upserted += r.value;
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, nextIndex: WORKDAY.length, done: true };
 }
 
 // ── SmartRecruiters — Bug 1: ?embed=jobAd ───────────────────────────────
@@ -328,109 +374,239 @@ export function srLocationString(loc: any): string | null {
   return `${loc.city}${loc.country ? ", " + loc.country : ""}`;
 }
 
-async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number; errors: string[] }> {
-  let upserted = 0;
-  const errors: string[] = [];
-  for (const slug of SMARTRECRUITERS) {
-    let offset = 0;
-    for (let page = 0; page < SR_MAX_PAGES; page++) {
-      const data = await fetchJsonWithLogging<any>(
-        buildSmartRecruitersUrl(slug, offset),
-        "smartrecruiters", slug, errors,
-      );
-      const postings: any[] = data?.content ?? [];
-      if (postings.length === 0) break;
-      const rows = postings.map((p: any) => {
-        // Bug 1 — with ?embed=jobAd, applyUrl is populated. Fallback
-        // constructs the standard jobs.smartrecruiters.com URL.
-        const applyUrl = p.applyUrl ?? p.postingUrl
-                       ?? `https://jobs.smartrecruiters.com/${slug}/${p.id}`;
-        if (!p.id) return null;
-        return {
-          source: "smartrecruiters",
-          external_id: `${slug}:${p.id}`,
-          company: slug,
-          title: (p.name || "").trim(),
-          location: srLocationString(p.location),
-          description: stripHtml(p.jobAd?.sections?.jobDescription?.text ?? ""),
-          apply_url: applyUrl,
-          posted_at: p.releasedDate ?? p.createdOn ?? null,
-          remote: !!p.location?.remote,
-          raw: p,
-          last_seen_at: new Date().toISOString(),
-          is_active: true,
+async function ingestSmartRecruitersSlug(slug: string, supabase: any, errors: string[], deadline: number): Promise<number> {
+  let offset = 0, upserted = 0;
+  for (let page = 0; page < SR_MAX_PAGES; page++) {
+    if (Date.now() >= deadline) break; // #425 — bail out of a single slow company rather than blow the invocation budget
+    const data = await fetchJsonWithLogging<any>(
+      buildSmartRecruitersUrl(slug, offset),
+      "smartrecruiters", slug, errors,
+    );
+    const postings: any[] = data?.content ?? [];
+    if (postings.length === 0) break;
+    const rows = postings.map((p: any) => {
+      // Bug 1 — with ?embed=jobAd, applyUrl is populated. Fallback
+      // constructs the standard jobs.smartrecruiters.com URL.
+      const applyUrl = p.applyUrl ?? p.postingUrl
+                     ?? `https://jobs.smartrecruiters.com/${slug}/${p.id}`;
+      if (!p.id) return null;
+      return {
+        source: "smartrecruiters",
+        external_id: `${slug}:${p.id}`,
+        company: slug,
+        title: (p.name || "").trim(),
+        location: srLocationString(p.location),
+        description: stripHtml(p.jobAd?.sections?.jobDescription?.text ?? ""),
+        apply_url: applyUrl,
+        posted_at: p.releasedDate ?? p.createdOn ?? null,
+        remote: !!p.location?.remote,
+        raw: p,
+        last_seen_at: new Date().toISOString(),
+        is_active: true,
         };
       }).filter((r: any) => r !== null);
-      if (rows.length > 0) {
-        const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-        if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
-        upserted += rows.length;
-      }
-      if (postings.length < SR_PAGE_SIZE) break;
-      offset += SR_PAGE_SIZE;
-      await sleep(WD_PAGE_DELAY_MS);
+    if (rows.length > 0) {
+      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
+      if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
+      upserted += rows.length;
     }
+    if (postings.length < SR_PAGE_SIZE) break;
+    offset += SR_PAGE_SIZE;
+    await sleep(WD_PAGE_DELAY_MS);
   }
-  return { upserted, errors };
+  return upserted;
 }
+
+async function ingestSmartRecruiters(supabase: any, startIndex: number, deadline: number): Promise<ChunkResult> {
+  let upserted = 0;
+  const errors: string[] = [];
+  let i = startIndex;
+  for (; i < SMARTRECRUITERS.length; i++) {
+    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    const slug = SMARTRECRUITERS[i];
+    upserted += await ingestSmartRecruitersSlug(slug, supabase, errors, deadline);
+  }
+  return { upserted, errors, nextIndex: SMARTRECRUITERS.length, done: true };
+}
+
+// ── Cursor persistence — #425 chained continuation state ────────────────
+
+interface SourceDetail { upserted: number; errors: string[] }
+interface CursorState {
+  sourceIndex:   number;
+  itemIndex:     number;
+  chainDepth:    number;
+  detail:        Record<string, SourceDetail>;
+  runStartedAt:  string | null;
+}
+
+const SOURCE_NAMES = ["greenhouse", "lever", "ashby", "workday", "smartrecruiters"] as const;
+
+function emptyDetail(): Record<string, SourceDetail> {
+  const out: Record<string, SourceDetail> = {};
+  for (const name of SOURCE_NAMES) out[name] = { upserted: 0, errors: [] };
+  return out;
+}
+
+function freshCursor(): CursorState {
+  return { sourceIndex: 0, itemIndex: 0, chainDepth: 0, detail: emptyDetail(), runStartedAt: null };
+}
+
+// A cursor is resumable only if a cycle is genuinely in progress AND was
+// updated recently. A stale (presumed-dead, e.g. a self-invoke fetch that
+// never landed) or already-complete cursor is treated as idle — the next
+// invocation starts a brand new cycle rather than getting stuck forever.
+async function loadCursor(supabase: any, requestChainDepth: number): Promise<CursorState> {
+  try {
+    const { data } = await supabase.from("ingest_ats_cursor").select("*").eq("id", 1).maybeSingle();
+    if (!data) return freshCursor();
+    const isComplete = data.source_index >= SOURCE_NAMES.length;
+    const updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : 0;
+    const isStale = Date.now() - updatedAt > CURSOR_STALE_MS;
+    if (isComplete || isStale) return freshCursor();
+    return {
+      sourceIndex:  data.source_index ?? 0,
+      itemIndex:    data.item_index ?? 0,
+      chainDepth:   Math.max(data.chain_depth ?? 0, requestChainDepth),
+      detail:       { ...emptyDetail(), ...(data.detail ?? {}) },
+      runStartedAt: data.run_started_at ?? null,
+    };
+  } catch (_e) {
+    return freshCursor();
+  }
+}
+
+async function saveCursor(supabase: any, state: CursorState): Promise<void> {
+  try {
+    await supabase.from("ingest_ats_cursor").upsert({
+      id:             1,
+      source_index:   state.sourceIndex,
+      item_index:     state.itemIndex,
+      chain_depth:    state.chainDepth,
+      detail:         state.detail,
+      run_started_at: state.runStartedAt,
+      updated_at:     new Date().toISOString(),
+    });
+  } catch (_e) { /* best-effort — worst case this slice re-runs next chain */ }
+}
+
+async function resetCursor(supabase: any): Promise<void> {
+  try {
+    await supabase.from("ingest_ats_cursor").upsert({
+      id: 1, source_index: 0, item_index: 0, chain_depth: 0, detail: {}, run_started_at: null,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (_e) { /* best-effort */ }
+}
+
+const SOURCE_RUNNERS: Array<(supabase: any, startIndex: number, deadline: number) => Promise<ChunkResult>> = [
+  ingestGreenhouse, ingestLever, ingestAshby, ingestWorkday, ingestSmartRecruiters,
+];
 
 // ── HTTP entrypoint — Bug 4: rolled-up inserted + errors ────────────────
 
-serve(async (_req) => {
+serve(async (req) => {
   const startTime = Date.now();
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+  let __reqBody: any = {};
+  try { __reqBody = await req.clone().json(); } catch { __reqBody = {}; }
+  const requestChainDepth = typeof __reqBody?.chainDepth === "number" ? Math.max(0, __reqBody.chainDepth) : 0;
+
   // ── HEARTBEAT (invocation.start) ──
   const __hbStart = Date.now();
-  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(undefined, {});
-  const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker });
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(req, __reqBody);
+  const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker, chainDepth: requestChainDepth });
   let __hbResponse: Response;
   try {
   try {
-    const runStartedAt = new Date().toISOString();
+    const deadline = Date.now() + INGEST_BUDGET_MS;
+    const cursor = await loadCursor(supabase, requestChainDepth);
+    if (cursor.runStartedAt === null) cursor.runStartedAt = new Date().toISOString();
+    const runStartedAt = cursor.runStartedAt;
 
-    const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
-      ingestGreenhouse(supabase),
-      ingestLever(supabase),
-      ingestAshby(supabase),
-      ingestWorkday(supabase),
-      ingestSmartRecruiters(supabase),
-    ]);
+    // #425 — process sources in order, in bounded slices, until either a
+    // full cycle completes or the invocation's time budget runs out.
+    // Progress is persisted after every source slice so a truncated
+    // chain resumes at the next un-processed company/tenant rather than
+    // restarting the whole source from #1.
+    while (cursor.sourceIndex < SOURCE_NAMES.length) {
+      const name = SOURCE_NAMES[cursor.sourceIndex];
+      const run = SOURCE_RUNNERS[cursor.sourceIndex];
+      const result = await run(supabase, cursor.itemIndex, deadline);
+      cursor.detail[name].upserted += result.upserted;
+      cursor.detail[name].errors.push(...result.errors);
+      if (result.done) {
+        cursor.sourceIndex += 1;
+        cursor.itemIndex = 0;
+      } else {
+        cursor.itemIndex = result.nextIndex;
+      }
+      await saveCursor(supabase, cursor);
+      if (!result.done) break; // budget exhausted this invocation — must chain
+    }
 
-    const unwrap = (r: PromiseSettledResult<{ upserted: number; errors: string[] }>) =>
-      r.status === "fulfilled" ? r.value : { upserted: 0, errors: [String(r.reason).slice(0, 200)] };
-    const gh = unwrap(ghRes), lever = unwrap(leverRes), ashby = unwrap(ashbyRes);
-    const workday = unwrap(wdRes), smartrecruiters = unwrap(srRes);
+    const cycleComplete = cursor.sourceIndex >= SOURCE_NAMES.length;
+    const gh = cursor.detail.greenhouse, lever = cursor.detail.lever, ashby = cursor.detail.ashby;
+    const workday = cursor.detail.workday, smartrecruiters = cursor.detail.smartrecruiters;
 
     let deactivated = 0;
-    try {
-      const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from("ats_jobs")
-        .update({ is_active: false })
-        .lt("last_seen_at", cutoff)
-        .eq("is_active", true)
-        .select("id", { count: "exact", head: true });
-      deactivated = count ?? 0;
-    } catch (_e) { /* best-effort */ }
+    if (cycleComplete) {
+      // #425 — the 48h stale-job deactivation sweep only runs once a FULL
+      // cycle (all 5 sources) has completed. Running it after a
+      // truncated/still-chaining pass would falsely deactivate jobs from
+      // sources this cycle hasn't reached yet — see issue #425's
+      // "do NOT mass-deactivate" warning.
+      try {
+        const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const { count } = await supabase
+          .from("ats_jobs")
+          .update({ is_active: false })
+          .lt("last_seen_at", cutoff)
+          .eq("is_active", true)
+          .select("id", { count: "exact", head: true });
+        deactivated = count ?? 0;
+      } catch (_e) { /* best-effort */ }
 
-    // fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich
-    // pass targeting exec / director / VP / security titles so the newly
-    // ingested rows get classified fast. Generalizable: the filter is a
-    // parameter, not hardcoded here — swap the string for any future
-    // high-value pattern.
-    try {
-      void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chainDepth: 0,
-          priorityTitleFilter: "security|ciso|biso|director|chief|vp|head of",
-        }),
-      }).catch(() => {});
-    } catch { /* silent — never fail ingest on enrich chain */ }
+      // fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich
+      // pass targeting exec / director / VP / security titles so the newly
+      // ingested rows get classified fast. Generalizable: the filter is a
+      // parameter, not hardcoded here — swap the string for any future
+      // high-value pattern.
+      try {
+        void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chainDepth: 0,
+            priorityTitleFilter: "security|ciso|biso|director|chief|vp|head of",
+          }),
+        }).catch(() => {});
+      } catch { /* silent — never fail ingest on enrich chain */ }
+
+      await resetCursor(supabase);
+    } else if (cursor.chainDepth < MAX_CHAIN_DEPTH) {
+      // #425 — self-chain so the cycle keeps advancing without a single
+      // invocation ever approaching the wall-clock limit. Mirrors the
+      // enrich-jobs self-invoke pattern (fire-and-forget, no auth header
+      // needed since this function is deployed with verify_jwt=false).
+      const nextChainDepth = cursor.chainDepth + 1;
+      try {
+        void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ingest-ats-direct`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainDepth: nextChainDepth }),
+        }).catch(() => {});
+      } catch { /* silent — never fail this invocation on chain kick */ }
+    }
+    // else: MAX_CHAIN_DEPTH reached — stop chaining. The cursor stays
+    // in-progress; if nothing resumes it within CURSOR_STALE_MS it's
+    // treated as stale and the next tick starts a fresh cycle (see
+    // loadCursor). Hitting this cap indicates something is fundamentally
+    // wrong (e.g. every upstream request timing out) — chaining forever
+    // would just mask that.
 
     // Bug 4 — rolled-up counts at top level so the cron caller reads
     // result.inserted + result.errors instead of digging into per-source.
@@ -451,6 +627,12 @@ serve(async (_req) => {
       runStartedAt,
       finishedAt: new Date().toISOString(),
       duration_ms: Date.now() - startTime,
+      // #425 — cycle/chain visibility. `cycleComplete` is true only once
+      // all 5 sources have been processed for this run; `chained` tells
+      // the caller a self-invoke was fired to continue the cycle.
+      cycleComplete,
+      chained: !cycleComplete,
+      chainDepth: cursor.chainDepth,
       // Bug 4 — rolled-up counts for cron logging
       inserted: totalUpserted,
       updated:  0,
