@@ -181,6 +181,28 @@ load-bearing — dropping them silently breaks protected-slash-token restoration
 (`ISO/IEC 27001`, `CI/CD`, `TCP/IP`, `BC/DR`), and therefore skill normalisation
 and fit scores, with no error. Verify with `grep -c $'\x01'` after any copy.
 
+### Superseded: `curate-user-recommendations` v14
+
+Shortly after the v13 deploy above, `curate` was redeployed to **v14** from
+outside this workstream, carrying an `excluded_role_patterns` feature
+(`filterExcludedRolePatterns` in `lib.ts`, plus a `user_profiles.excluded_role_patterns`
+select). Verified after the fact:
+
+- the shared `_shared/heartbeat.ts` import and `verify_jwt: false` both survived
+- no inlined helper reintroduced; the five `\x01` sentinels intact
+- all four `_shared/scoring/*` files and `heartbeat.ts` are now byte-identical to
+  `main` — v14 closed the decorative drift noted above
+- running healthy: four consecutive paired heartbeats, `outcome: ok`, HTTP 200
+
+**Do not redeploy `curate` from `main` to "fix" the remaining comment drift.**
+`main` does not contain the v14 feature, so a redeploy from the repo would
+silently revert it and orphan the `excluded_role_patterns` column.
+
+Outstanding drift to reconcile: the v14 feature code exists in neither the repo
+nor any migration, while `user_profiles.excluded_role_patterns` already exists in the
+production database. Land the source and a migration before the next deploy of
+this function from `main`.
+
 ## Known gaps found in production
 
 ### `ingest-ats-direct` never completes — 504 at the wall-clock limit
