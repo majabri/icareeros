@@ -236,6 +236,40 @@ Fix direction: the chained-continuation pattern `enrich-jobs` already uses
 duplicate per-tick invocation first — halving the work is the cheapest partial
 mitigation. Needs its own PR.
 
+### Four functions are double-scheduled (pg_cron + Vercel cron)
+
+The paired `invocation.start` events visible throughout `infrastructure_events`
+are not an artifact — most of these functions really are invoked twice per tick.
+`cron.job` and `vercel.json` both schedule the same edge functions, and the
+Vercel routes under `src/app/api/cron/*` `fetch()` the identical
+`${SUPABASE_URL}/functions/v1/<slug>` target:
+
+| function | pg_cron | vercel.json | effect |
+|---|---|---|---|
+| `cleanup-dead-jobs` | `0 5 * * *` | `0 5 * * *` | 2x daily |
+| `curate-user-recommendations` | `0 4 * * *` | `0 4 * * *` | 2x daily |
+| `enrich-jobs` | `30 */4 * * *` | `30 */4 * * *` | 2x per 4h tick |
+| `validate-job-urls` | `0 3 * * *` | `15 3 * * *` | 2x daily, 15 min apart |
+| `ingest-ats-direct` | none | `0 */4 * * *` | single schedule |
+
+Observed confirmation: `cleanup-dead-jobs` ran at 05:00:13 and again at
+05:01:36; `curate` at 04:00:05 and 04:03:34; `validate-job-urls` twice daily.
+Each pair is one pg_cron call and one Vercel-cron call landing on the same
+function.
+
+Consequences: every one of these does double work on every tick, and the second
+caller can collide with the first (`cleanup-dead-jobs`'s second run returned a
+500 while the first returned 200 — the two runs delete against the same rows).
+Whichever scheduler is meant to own these, one side should be retired; the
+cadence table above assumes a single origin per function.
+
+**`ingest-ats-direct` is the exception and its doubling has a different cause.**
+It has no pg_cron entry — only the single Vercel cron. Its 12 starts / 24 h
+(2 per 4h tick) is consistent with Vercel cron **retrying after the 504**
+documented above. The retry is a symptom, not an independent bug: fix the
+wall-clock timeout and the second invocation disappears on its own. Do not
+chase the duplicate first for this function.
+
 ### Rules 1 and 2 do not detect the above
 
 Rule 1 keys on the age of the most recent **`invocation.start`**.
