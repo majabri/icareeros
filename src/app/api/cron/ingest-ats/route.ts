@@ -14,15 +14,24 @@
  *      itself rejects unauthenticated traffic (it's deployed with
  *      verify_jwt=false to support cron callers, so this header is the
  *      only thing keeping the public URL from being open).
+ *
+ * fix/ingest-ats-wall-clock-timeout — the edge function now runs ONE
+ * bounded slice per invocation and self-chains until the cycle finishes
+ * (see supabase/functions/ingest-ats-direct/chainState.ts). So the body we
+ * get back here describes the FIRST link only: `inserted` is cycle-to-date
+ * at that point, and `chained: true` means later links are still running.
+ * The cycle-wide roll-up lands durably in `public.infrastructure_events`
+ * as `ingest.cycle.complete`, written by the terminal link.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { logInfrastructureEvent } from "@/lib/observability/logInfrastructureEvent";
 
 export const dynamic = "force-dynamic";
-// Max runtime — the edge function takes ~6s for 10 companies × 25 jobs.
-// We leave generous headroom for slow ATSes.
-export const maxDuration = 60;
+// Max runtime — one edge-function slice is bounded by SLICE_BUDGET_MS (60s)
+// plus at most one work unit of overshoot (~30s), so ~90s worst case. 120
+// leaves headroom without letting a wedged call sit for the full 300.
+export const maxDuration = 120;
 
 /**
  * feat/jobs-search-db Task 1 — response shape aligned with the edge
@@ -51,6 +60,12 @@ interface IngestResponse {
   ashby?:           { upserted: number; errors: number };
   workday?:         { upserted: number; errors: number };
   smartrecruiters?: { upserted: number; errors: number };
+  // fix/ingest-ats-wall-clock-timeout — chained-continuation state.
+  cycleId?:       string;
+  chainDepth?:    number;
+  chained?:       boolean;
+  cycleComplete?: boolean;
+  remaining?:     Record<string, number>;
 }
 
 export async function POST(req: NextRequest) {
@@ -129,10 +144,15 @@ export async function POST(req: NextRequest) {
       json?.workday         ? `wd=${json.workday.upserted}(err=${json.workday.errors})`               : null,
       json?.smartrecruiters ? `sr=${json.smartrecruiters.upserted}(err=${json.smartrecruiters.errors})` : null,
     ].filter(Boolean);
+    // The first link rarely completes the cycle on its own; say so
+    // explicitly rather than letting a partial count read as a final one.
+    const chainPart = json?.chained
+      ? `chained(depth=${json?.chainDepth ?? 0}, remaining=${JSON.stringify(json?.remaining ?? {})})`
+      : `cycleComplete=${json?.cycleComplete ?? false}`;
     console.info(
       `[cron/ingest-ats] ok in ${elapsedMs}ms — ingested=${totalIngested} ` +
       `deactivated=${json?.deactivated ?? 0} errors=${totalErrors} ` +
-      `[${perSourceParts.join(" ")}]`
+      `${chainPart} [${perSourceParts.join(" ")}]`
     );
     return NextResponse.json({ ok: true, elapsedMs, result: json ?? null });
   } catch (e) {

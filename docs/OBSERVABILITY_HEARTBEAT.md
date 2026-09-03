@@ -99,9 +99,100 @@ Two side effects per run:
 | `curate-user-recommendations` | 1440 min | pg_cron @ `0 4` |
 | `cleanup-dead-jobs` | 1440 min | pg_cron @ `0 5` |
 | `validate-job-urls` | 1440 min | pg_cron @ `0 3` |
-| `ingest-ats-direct` | 240 min | Vercel-cron `/api/cron/ingest-ats` @ `0 */4` |
+| `ingest-ats-direct` | 240 min | Vercel-cron `/api/cron/ingest-ats` @ `0 */4` — self-chains, so one tick emits a burst of pairs sharing a `cycle_id` (see *Known gaps* below) |
 
 Add rows to the `VALUES` clause in `public.heartbeat_audit()` to track new functions. If additions become frequent, migrate to a real `edge_function_cadence` table — schema commented at the bottom of the migration.
+
+## Known gaps found in production
+
+### `ingest-ats-direct` never completed (fixed — chained continuation)
+
+**Symptom (three days to 2026-09-03, project `kuneabeiwcxavvyyfjkx`):**
+
+```sql
+SELECT event_type, count(*) FROM public.infrastructure_events
+WHERE source = 'edge-fn.ingest-ats-direct'
+  AND created_at > NOW() - INTERVAL '3 days'
+GROUP BY event_type;
+-- invocation.start  39
+-- invocation.complete 0
+```
+
+39 starts, zero completes. Every gateway-logged invocation returned **504**
+with `execution_time_ms` ~= 150,000 — the edge wall clock. It reproduced on
+both v21 and v22 of the deployed function, so it was not a deploy artifact.
+This is exactly the failure class the start/complete pairing was built to
+surface: "invoked but never finishing", as opposed to "not invoked".
+
+**Cause.** The handler fanned out to all five ATS sources in one
+`Promise.allSettled` (Greenhouse ~55 slugs, Lever ~19, Ashby ~25, Workday
+17 tenants x up to 15 pages, SmartRecruiters 5 x up to 30 pages) and awaited
+the whole thing. That await never returned inside the wall clock, so every
+line after it was dead code in production:
+
+- the 48h stale-job deactivation sweep (dead postings kept `is_active = true`),
+- the priority-lane `enrich-jobs` chain-kick,
+- the rolled-up `inserted` / `errors` response counts (PR #363 "Bug 4"),
+  which the 504 swallowed anyway.
+
+Partial ingest still persisted, because the upserts are incremental — but
+the slowest sources (Workday, SmartRecruiters) were truncated mid-pagination
+every run.
+
+**Fix.** The same chained-continuation pattern `enrich-jobs` already used —
+and which the heartbeats show working (166 starts / 166 completes over the
+same window, 130 of them `invoked_by: "chain"`). Each invocation now runs a
+deadline-bounded slice and hands off:
+
+- `SLICE_BUDGET_MS` (60s) is a **soft** deadline, checked only *before*
+  starting a work unit. Worst-case overshoot is one unit — at most
+  `WD_PAGES_PER_SLICE`/`SR_PAGES_PER_SLICE` (3) pages x `FETCH_TIMEOUT_MS`
+  (10s) = ~30s — so ~90s worst case against a ~150s ceiling.
+- A per-source cursor (`supabase/functions/ingest-ats-direct/chainState.ts`)
+  records exactly where the slice stopped; running totals ride along in the
+  same request body. The cursor is rebuilt defensively on every link: the
+  function is `verify_jwt=false`, so its request body is attacker-reachable,
+  and a company-list length change between deploys restarts the cycle rather
+  than silently skipping a source.
+- Work remaining -> fire-and-forget self-invoke at `chainDepth + 1`, capped
+  at `MAX_CHAIN_DEPTH` (60).
+- The **terminal link** does the post-fan-out work: the deactivation sweep
+  (only on a fully-completed cycle — a depth-truncated cycle never visited
+  some sources, and flipping their rows inactive would punish the truncation),
+  the enrich kick, and the cycle-wide roll-up.
+
+**New event — `ingest.cycle.complete`.** The Bug-4 roll-up used to exist only
+in an HTTP response body that nobody ever received. The terminal link now
+writes it durably:
+
+```sql
+SELECT payload->>'inserted'    AS inserted,
+       payload->>'errors'      AS errors,
+       payload->>'deactivated' AS deactivated,
+       payload->>'chain_links' AS links,
+       payload->>'truncated'   AS truncated,
+       created_at
+FROM public.infrastructure_events
+WHERE source = 'edge-fn.ingest-ats-direct'
+  AND event_type = 'ingest.cycle.complete'
+ORDER BY created_at DESC LIMIT 10;
+```
+
+`severity` is `warning` when `truncated` is true (the chain hit
+`MAX_CHAIN_DEPTH` before the cycle finished) — worth a look, but not a page.
+
+**Reading the heartbeats after this change.** One 4h tick now produces a
+*burst* of start/complete pairs sharing a `payload.cycle_id`, one per chain
+link, with `payload.chain_depth` counting up — not a single pair. The
+cadence table entry (240 min) is unchanged and the staleness audit still
+works: it only cares that *some* invocation landed inside the window. To
+count cycles rather than links, group by `payload->>'cycle_id'` or count
+`ingest.cycle.complete` rows.
+
+The "invoked twice per 4h tick" pattern that was visible alongside this was
+Vercel-cron retrying the 504, not a duplicate schedule. It disappears with
+the timeout. `/api/cron/ingest-ats` now runs with `maxDuration = 120` to
+cover the ~90s worst-case first slice.
 
 ## BetterStack rule wire-up
 

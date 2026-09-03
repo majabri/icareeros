@@ -7,7 +7,30 @@
  *   Bug 3  Workday tenants parallelized batch=4 + MAX_PAGES_PER_TENANT=15
  *   Bug 4  Rolled-up `inserted` + `errors` at top level of response
  *
- * Deploy: supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx
+ * fix/ingest-ats-wall-clock-timeout (v5) — the whole-cycle fan-out never
+ * finished. `Promise.allSettled` over all five sources exceeded the ~150s
+ * edge wall clock on EVERY invocation (39 `invocation.start` / 0
+ * `invocation.complete` over three days in production), so the gateway
+ * returned 504 and everything after the fan-out — the 48h deactivation
+ * sweep, the priority-lane enrich kick, and the Bug-4 rolled-up counts —
+ * never ran.
+ *
+ * The fix is the chained-continuation pattern `enrich-jobs` already uses
+ * (see `selfInvokeIfPending()` + `MAX_CHAIN_DEPTH` in ../enrich-jobs):
+ *   - Each invocation runs a DEADLINE-BOUNDED slice (SLICE_BUDGET_MS) of
+ *     the work, never approaching the wall clock.
+ *   - A per-source cursor (`IngestCursor`) records exactly where the slice
+ *     stopped; running totals ride along in the same request body.
+ *   - When work remains, the function fire-and-forget self-invokes with
+ *     `chainDepth + 1`, capped by MAX_CHAIN_DEPTH.
+ *   - The terminal link does the post-fan-out work: deactivation sweep
+ *     (only on a fully-completed cycle), enrich chain-kick, and an
+ *     `ingest.cycle.complete` row in `infrastructure_events` carrying the
+ *     cycle-wide rolled-up counts.
+ *
+ * Deploy: supabase functions deploy ingest-ats-direct --project-ref kuneabeiwcxavvyyfjkx --no-verify-jwt
+ *   This function is custom-header/internal-auth only and MUST stay
+ *   verify_jwt=false — see runbook gotcha #8 in docs/OBSERVABILITY_HEARTBEAT.md.
  * Trigger: POST https://{project}.supabase.co/functions/v1/ingest-ats-direct
  */
 // deno-lint-ignore-file no-explicit-any
@@ -16,6 +39,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
+import {
+  DONE, SLICE_BUDGET_MS, MAX_CHAIN_DEPTH,
+  normalizeCursor, normalizeTotals, normalizeChainDepth,
+  isCursorComplete, remainingUnits, shouldChain, accumulate,
+  totalUpserted, totalErrors,
+  type IngestCursor, type IngestTotals, type SourceSizes,
+} from "./chainState.ts";
 
 const BATCH_SIZE = 20;                // Greenhouse/Lever/Ashby fetch batch
 const FETCH_TIMEOUT_MS = 10_000;
@@ -25,6 +55,18 @@ const WD_MAX_PAGES_PER_TENANT = 15;   // Bug 3 — cap per tenant
 const WD_PAGE_SIZE = 20;
 const SR_PAGE_SIZE = 100;
 const SR_MAX_PAGES = 30;
+
+// ── v5 chained-continuation budget ──────────────────────────────────────
+//
+// SLICE_BUDGET_MS (see ./chainState.ts) is a SOFT deadline: it is only
+// checked BEFORE starting a work unit, never mid-unit, so worst-case
+// overshoot is a single unit. The slowest unit is a paginating one —
+// WD_PAGES_PER_SLICE / SR_PAGES_PER_SLICE pages, each capped at
+// FETCH_TIMEOUT_MS, i.e. 3 x 10s ~= 30s. 60s + 30s sits well inside the
+// ~150s edge wall clock that the unsliced v4 hit on every run.
+const WD_PAGES_PER_SLICE = 3;    // Workday pages per tenant per slice
+const SR_PAGES_PER_SLICE = 3;    // SmartRecruiters pages per slug per slice
+const STALE_CUTOFF_MS    = 48 * 60 * 60 * 1000;
 
 // ── Company lists — synced to companyList.ts (dead slugs pruned) ────────
 
@@ -114,15 +156,32 @@ async function fetchJsonWithLogging<T>(url: string, source: string, slug: string
   }
 }
 
+// ── v5 cursor + totals ──────────────────────────────────────────────────
+// The chain-state helpers live in ./chainState.ts (no Deno-only imports,
+// so they are unit-testable from vitest). SIZES pins them to the company
+// lists configured above.
+
+const SIZES: SourceSizes = {
+  greenhouse:      GREENHOUSE.length,
+  lever:           LEVER.length,
+  ashby:           ASHBY.length,
+  workday:         WORKDAY.length,
+  smartrecruiters: SMARTRECRUITERS.length,
+};
+
 // ── Greenhouse ──────────────────────────────────────────────────────────
 // List endpoint fields used here: id, title, location.name, absolute_url,
 // updated_at, raw payload. Description stays detail-endpoint-owned so
 // conflict updates never send `description` for this source.
+//
+// v5: slice-bounded. Starts at `from`, returns the next unprocessed index
+// so the following chain link resumes exactly where this one stopped.
 
-async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestGreenhouse(supabase: any, from: number, deadline: number): Promise<{ upserted: number; errors: string[]; next: number }> {
   let upserted = 0;
+  let i = from;
   const errors: string[] = [];
-  for (let i = 0; i < GREENHOUSE.length; i += BATCH_SIZE) {
+  for (; i < GREENHOUSE.length && Date.now() < deadline; i += BATCH_SIZE) {
     const batch = GREENHOUSE.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -153,7 +212,7 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, next: Math.min(i, GREENHOUSE.length) };
 }
 
 // ── Lever ───────────────────────────────────────────────────────────────
@@ -161,10 +220,11 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
 // description, hostedUrl, categories.commitment, createdAt. Lever's list
 // payload already carries the job description, so ingest writes it inline.
 
-async function ingestLever(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestLever(supabase: any, from: number, deadline: number): Promise<{ upserted: number; errors: string[]; next: number }> {
   let upserted = 0;
+  let i = from;
   const errors: string[] = [];
-  for (let i = 0; i < LEVER.length; i += BATCH_SIZE) {
+  for (; i < LEVER.length && Date.now() < deadline; i += BATCH_SIZE) {
     const batch = LEVER.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const postings = (await fetchJsonWithLogging<any[]>(
@@ -196,7 +256,7 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, next: Math.min(i, LEVER.length) };
 }
 
 // ── Ashby ───────────────────────────────────────────────────────────────
@@ -204,10 +264,11 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
 // descriptionPlain, jobUrl, publishedDate, isRemote. Ashby's list payload
 // already carries the job description, so ingest writes it inline.
 
-async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+async function ingestAshby(supabase: any, from: number, deadline: number): Promise<{ upserted: number; errors: string[]; next: number }> {
   let upserted = 0;
+  let i = from;
   const errors: string[] = [];
-  for (let i = 0; i < ASHBY.length; i += BATCH_SIZE) {
+  for (; i < ASHBY.length && Date.now() < deadline; i += BATCH_SIZE) {
     const batch = ASHBY.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -240,7 +301,7 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
       else errors.push(String(r.reason).slice(0, 200));
     }
   }
-  return { upserted, errors };
+  return { upserted, errors, next: Math.min(i, ASHBY.length) };
 }
 
 // ── Workday CXS — Bug 3: parallel tenant batches ────────────────────────
@@ -255,17 +316,23 @@ export function workdayApplyUrl(tenant: string, shard: string, site: string, ext
   return `https://${tenant}.${shard}.myworkdayjobs.com/${site}${externalPath}`;
 }
 
-async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; site: string }, supabase: any, errors: string[]): Promise<number> {
+/**
+ * v5 — one tenant, at most WD_PAGES_PER_SLICE pages, resuming from
+ * `startOffset`. Returns the next offset to fetch, or DONE when the tenant
+ * is exhausted (empty page, short page, page cap, or upsert error).
+ */
+async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; site: string }, supabase: any, errors: string[], startOffset: number): Promise<{ upserted: number; nextOffset: number }> {
   const url = buildWorkdayUrl(t.tenant, t.shard, t.site);
-  let offset = 0, upserted = 0;
-  for (let page = 0; page < WD_MAX_PAGES_PER_TENANT; page++) {
+  let offset = startOffset, upserted = 0;
+  for (let page = 0; page < WD_PAGES_PER_SLICE; page++) {
+    if (offset >= WD_MAX_PAGES_PER_TENANT * WD_PAGE_SIZE) return { upserted, nextOffset: DONE };
     const data = await fetchJsonWithLogging<any>(url, "workday", t.tenant, errors, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ appliedFacets: {}, limit: WD_PAGE_SIZE, offset, searchText: "" }),
     });
     const postings: any[] = data?.jobPostings ?? [];
-    if (postings.length === 0) break;
+    if (postings.length === 0) return { upserted, nextOffset: DONE };
     const rows = postings.map((p: any) => {
       const externalPath = p.externalPath ?? "";
       if (!externalPath) return null;
@@ -285,31 +352,37 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
     }).filter((r: any) => r !== null);
     if (rows.length > 0) {
       const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) { errors.push(`workday:${t.tenant}:${error.message}`.slice(0, 200)); break; }
+      if (error) { errors.push(`workday:${t.tenant}:${error.message}`.slice(0, 200)); return { upserted, nextOffset: DONE }; }
       upserted += rows.length;
     }
-    if (postings.length < WD_PAGE_SIZE) break;
+    if (postings.length < WD_PAGE_SIZE) return { upserted, nextOffset: DONE };
     offset += WD_PAGE_SIZE;
     await sleep(WD_PAGE_DELAY_MS);
   }
-  return upserted;
+  return { upserted, nextOffset: offset >= WD_MAX_PAGES_PER_TENANT * WD_PAGE_SIZE ? DONE : offset };
 }
 
-export function chunkWorkdayTenants<T>(tenants: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < tenants.length; i += size) out.push(tenants.slice(i, i + size));
-  return out;
-}
-
-async function ingestWorkday(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+/**
+ * v5 — mutates `cursor` (one entry per WORKDAY tenant) in place. Keeps
+ * Bug 3's WD_TENANT_BATCH parallelism, but the batch is drawn from the
+ * tenants that are still pending rather than from a fixed chunking, so a
+ * resumed chain link doesn't re-walk finished tenants.
+ */
+async function ingestWorkday(supabase: any, cursor: number[], deadline: number): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
   const errors: string[] = [];
-  for (const batch of chunkWorkdayTenants(WORKDAY, WD_TENANT_BATCH)) {
-    const results = await Promise.allSettled(batch.map(t => ingestSingleWorkdayTenant(t, supabase, errors)));
-    for (const r of results) {
-      if (r.status === "fulfilled") upserted += r.value;
-      else errors.push(String(r.reason).slice(0, 200));
+  while (Date.now() < deadline) {
+    const pending: number[] = [];
+    for (let i = 0; i < WORKDAY.length && pending.length < WD_TENANT_BATCH; i++) {
+      if (cursor[i] !== DONE) pending.push(i);
     }
+    if (pending.length === 0) break;
+    const results = await Promise.allSettled(pending.map(i => ingestSingleWorkdayTenant(WORKDAY[i], supabase, errors, cursor[i])));
+    results.forEach((r, k) => {
+      const i = pending[k];
+      if (r.status === "fulfilled") { upserted += r.value.upserted; cursor[i] = r.value.nextOffset; }
+      else { errors.push(String(r.reason).slice(0, 200)); cursor[i] = DONE; }
+    });
   }
   return { upserted, errors };
 }
@@ -328,18 +401,26 @@ export function srLocationString(loc: any): string | null {
   return `${loc.city}${loc.country ? ", " + loc.country : ""}`;
 }
 
-async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number; errors: string[] }> {
+/**
+ * v5 — mutates `cursor` (one entry per SMARTRECRUITERS slug) in place.
+ * Each slug advances at most SR_PAGES_PER_SLICE pages per slice, so a
+ * deep-paginating company can no longer monopolise the wall clock.
+ */
+async function ingestSmartRecruiters(supabase: any, cursor: number[], deadline: number): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
   const errors: string[] = [];
-  for (const slug of SMARTRECRUITERS) {
-    let offset = 0;
-    for (let page = 0; page < SR_MAX_PAGES; page++) {
+  for (let s = 0; s < SMARTRECRUITERS.length; s++) {
+    if (cursor[s] === DONE || Date.now() >= deadline) continue;
+    const slug = SMARTRECRUITERS[s];
+    let offset = cursor[s];
+    for (let page = 0; page < SR_PAGES_PER_SLICE; page++) {
+      if (offset >= SR_MAX_PAGES * SR_PAGE_SIZE) { offset = DONE; break; }
       const data = await fetchJsonWithLogging<any>(
         buildSmartRecruitersUrl(slug, offset),
         "smartrecruiters", slug, errors,
       );
       const postings: any[] = data?.content ?? [];
-      if (postings.length === 0) break;
+      if (postings.length === 0) { offset = DONE; break; }
       const rows = postings.map((p: any) => {
         // Bug 1 — with ?embed=jobAd, applyUrl is populated. Fallback
         // constructs the standard jobs.smartrecruiters.com URL.
@@ -363,124 +444,252 @@ async function ingestSmartRecruiters(supabase: any): Promise<{ upserted: number;
       }).filter((r: any) => r !== null);
       if (rows.length > 0) {
         const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-        if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
+        if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); offset = DONE; break; }
         upserted += rows.length;
       }
-      if (postings.length < SR_PAGE_SIZE) break;
+      if (postings.length < SR_PAGE_SIZE) { offset = DONE; break; }
       offset += SR_PAGE_SIZE;
       await sleep(WD_PAGE_DELAY_MS);
     }
+    cursor[s] = offset;
   }
   return { upserted, errors };
 }
 
+// ── v5 slice runner ─────────────────────────────────────────────────────
+
+/**
+ * Runs as much of the remaining cycle as fits inside `deadline`, in a
+ * fixed source order. Every loop guards on the deadline BEFORE starting a
+ * unit, so this returns promptly with a partial cursor instead of running
+ * into the wall clock. `cursor` and `totals` are mutated in place.
+ */
+async function runSlice(supabase: any, cursor: IngestCursor, totals: IngestTotals, deadline: number): Promise<void> {
+  const gh = await ingestGreenhouse(supabase, cursor.greenhouse, deadline);
+  cursor.greenhouse = gh.next;
+  accumulate(totals, "greenhouse", gh.upserted, gh.errors);
+
+  const lever = await ingestLever(supabase, cursor.lever, deadline);
+  cursor.lever = lever.next;
+  accumulate(totals, "lever", lever.upserted, lever.errors);
+
+  const ashby = await ingestAshby(supabase, cursor.ashby, deadline);
+  cursor.ashby = ashby.next;
+  accumulate(totals, "ashby", ashby.upserted, ashby.errors);
+
+  const workday = await ingestWorkday(supabase, cursor.workday, deadline);
+  accumulate(totals, "workday", workday.upserted, workday.errors);
+
+  const sr = await ingestSmartRecruiters(supabase, cursor.smartrecruiters, deadline);
+  accumulate(totals, "smartrecruiters", sr.upserted, sr.errors);
+}
+
+// ── v5 terminal-link work — everything v4 never reached ─────────────────
+
+/**
+ * 48h stale-job deactivation sweep. Only ever called on a COMPLETE cycle:
+ * on a depth-capped (truncated) cycle some sources were never visited, and
+ * flipping their rows inactive would punish the truncation rather than a
+ * genuinely dead posting.
+ */
+async function deactivateStaleJobs(supabase: any): Promise<number> {
+  try {
+    const cutoff = new Date(Date.now() - STALE_CUTOFF_MS).toISOString();
+    const { count } = await supabase
+      .from("ats_jobs")
+      .update({ is_active: false })
+      .lt("last_seen_at", cutoff)
+      .eq("is_active", true)
+      .select("id", { count: "exact", head: true });
+    return count ?? 0;
+  } catch (_e) { return 0; /* best-effort */ }
+}
+
+/**
+ * fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich pass
+ * targeting exec / director / VP / security titles so the newly ingested
+ * rows get classified fast. Generalizable: the filter is a parameter, not
+ * hardcoded here — swap the string for any future high-value pattern.
+ *
+ * v5 — moved to the terminal chain link; under v4 this line sat after the
+ * fan-out await and therefore never executed.
+ */
+function kickEnrichJobs(): void {
+  try {
+    void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chainDepth: 0,
+        priorityTitleFilter: "security|ciso|biso|director|chief|vp|head of",
+      }),
+    }).catch(() => {});
+  } catch { /* silent — never fail ingest on enrich chain */ }
+}
+
+/**
+ * Fire-and-forget self-invoke carrying the cursor + running totals — the
+ * same pattern as enrich-jobs' `selfInvokeIfPending()`, which production
+ * heartbeats confirm works (130 of 166 enrich-jobs starts over three days
+ * were `invoked_by: "chain"`). Capped by MAX_CHAIN_DEPTH so a cursor bug
+ * can't spin an unbounded chain.
+ *
+ * The caller's `x-ingest-cron-secret` is forwarded so every link is
+ * indistinguishable from the original cron call to any future auth gate.
+ */
+function selfInvokeIfPending(state: {
+  chainDepth: number; cursor: IngestCursor; totals: IngestTotals;
+  runStartedAt: string; cycleId: string; cronSecret: string | null;
+}): void {
+  if (state.chainDepth >= MAX_CHAIN_DEPTH) return;
+  try {
+    void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ingest-ats-direct`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(state.cronSecret ? { "x-ingest-cron-secret": state.cronSecret } : {}),
+      },
+      body: JSON.stringify({
+        chainDepth:   state.chainDepth + 1,
+        cursor:       state.cursor,
+        totals:       state.totals,
+        runStartedAt: state.runStartedAt,
+        cycleId:      state.cycleId,
+      }),
+    }).catch(() => {});
+  } catch { /* silent — never let self-invoke failure surface */ }
+}
+
+/**
+ * v5 — the Bug-4 rolled-up counts, relocated. They used to be computed
+ * after the fan-out await (i.e. never) and returned only in the HTTP body,
+ * which the 504 swallowed. Now the terminal link writes them to
+ * `infrastructure_events` so the cycle result is durable and queryable
+ * alongside the invocation heartbeats.
+ */
+async function logCycleComplete(supabase: any, payload: Record<string, unknown>): Promise<void> {
+  try {
+    await supabase.from("infrastructure_events").insert({
+      source:     "edge-fn.ingest-ats-direct",
+      event_type: "ingest.cycle.complete",
+      severity:   payload.truncated ? "warning" : "info",
+      payload,
+    });
+  } catch (e) {
+    console.error("[ingest-ats-direct] cycle event insert failed:", (e as Error)?.message);
+  }
+}
+
 // ── HTTP entrypoint — Bug 4: rolled-up inserted + errors ────────────────
 
-serve(async (_req) => {
+serve(async (req) => {
   const startTime = Date.now();
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // v5 — chain state arrives in the request body. A first tick (cron) has
+  // no body, or a body with no cursor, and starts a fresh cycle.
+  const reqBody: any = await req.json().catch(() => ({}));
+  const chainDepth = normalizeChainDepth(reqBody?.chainDepth);
+  const cursor = normalizeCursor(reqBody?.cursor, SIZES);
+  const totals = normalizeTotals(reqBody?.totals);
+  const runStartedAt = typeof reqBody?.runStartedAt === "string" ? reqBody.runStartedAt : new Date().toISOString();
+  const cycleId = typeof reqBody?.cycleId === "string" ? reqBody.cycleId.slice(0, 64) : crypto.randomUUID();
+  const cronSecret = req.headers.get("x-ingest-cron-secret");
+
   // ── HEARTBEAT (invocation.start) ──
   const __hbStart = Date.now();
-  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(undefined, {});
-  const __hbId = await invocationStart({ supabase, functionSlug: "ingest-ats-direct", invokedBy: __hbInvoker });
+  const __hbInvoker: "pg_cron"|"vercel_cron"|"manual"|"chain"|"unknown" = inferInvoker(req, reqBody);
+  const __hbId = await invocationStart({
+    supabase,
+    functionSlug: "ingest-ats-direct",
+    invokedBy: __hbInvoker,
+    chainDepth,
+    extra: { cycle_id: cycleId },
+  });
   let __hbResponse: Response;
   try {
   try {
-    const runStartedAt = new Date().toISOString();
+    // v5 — bounded slice. Everything below this await is now reachable,
+    // which is the whole point of the fix.
+    await runSlice(supabase, cursor, totals, startTime + SLICE_BUDGET_MS);
 
-    const [ghRes, leverRes, ashbyRes, wdRes, srRes] = await Promise.allSettled([
-      ingestGreenhouse(supabase),
-      ingestLever(supabase),
-      ingestAshby(supabase),
-      ingestWorkday(supabase),
-      ingestSmartRecruiters(supabase),
-    ]);
+    const cycleComplete = isCursorComplete(cursor, SIZES);
+    const terminal      = !shouldChain(chainDepth, cursor, SIZES);
 
-    const unwrap = (r: PromiseSettledResult<{ upserted: number; errors: string[] }>) =>
-      r.status === "fulfilled" ? r.value : { upserted: 0, errors: [String(r.reason).slice(0, 200)] };
-    const gh = unwrap(ghRes), lever = unwrap(leverRes), ashby = unwrap(ashbyRes);
-    const workday = unwrap(wdRes), smartrecruiters = unwrap(srRes);
+    // Bug 4 — rolled-up counts, now cycle-wide rather than per-invocation.
+    const inserted = totalUpserted(totals);
+    const errorCount = totalErrors(totals);
 
     let deactivated = 0;
-    try {
-      const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from("ats_jobs")
-        .update({ is_active: false })
-        .lt("last_seen_at", cutoff)
-        .eq("is_active", true)
-        .select("id", { count: "exact", head: true });
-      deactivated = count ?? 0;
-    } catch (_e) { /* best-effort */ }
-
-    // fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich
-    // pass targeting exec / director / VP / security titles so the newly
-    // ingested rows get classified fast. Generalizable: the filter is a
-    // parameter, not hardcoded here — swap the string for any future
-    // high-value pattern.
-    try {
-      void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-jobs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chainDepth: 0,
-          priorityTitleFilter: "security|ciso|biso|director|chief|vp|head of",
-        }),
-      }).catch(() => {});
-    } catch { /* silent — never fail ingest on enrich chain */ }
-
-    // Bug 4 — rolled-up counts at top level so the cron caller reads
-    // result.inserted + result.errors instead of digging into per-source.
-    const totalUpserted = gh.upserted + lever.upserted + ashby.upserted + workday.upserted + smartrecruiters.upserted;
-    const totalErrors   = gh.errors.length + lever.errors.length + ashby.errors.length + workday.errors.length + smartrecruiters.errors.length;
-
-    const combinedErrors = [
-      ...gh.errors.map(e             => ({ source: "greenhouse",      error: e })),
-      ...lever.errors.map(e          => ({ source: "lever",           error: e })),
-      ...ashby.errors.map(e          => ({ source: "ashby",           error: e })),
-      ...workday.errors.map(e        => ({ source: "workday",         error: e })),
-      ...smartrecruiters.errors.map(e=> ({ source: "smartrecruiters", error: e })),
-    ];
+    if (terminal) {
+      if (cycleComplete) deactivated = await deactivateStaleJobs(supabase);
+      kickEnrichJobs();
+      await logCycleComplete(supabase, {
+        cycle_id:      cycleId,
+        run_started_at: runStartedAt,
+        finished_at:   new Date().toISOString(),
+        chain_links:   chainDepth + 1,
+        truncated:     !cycleComplete,
+        inserted,
+        errors:        errorCount,
+        deactivated,
+        sources: {
+          greenhouse: totals.greenhouse.upserted, lever: totals.lever.upserted,
+          ashby: totals.ashby.upserted, workday: totals.workday.upserted,
+          smartrecruiters: totals.smartrecruiters.upserted,
+        },
+        error_samples: totals.errorSamples,
+      });
+    } else {
+      selfInvokeIfPending({ chainDepth, cursor, totals, runStartedAt, cycleId, cronSecret });
+    }
 
     const body = {
       ok:       true,
       success:  true,
+      cycleId,
       runStartedAt,
       finishedAt: new Date().toISOString(),
       duration_ms: Date.now() - startTime,
-      // Bug 4 — rolled-up counts for cron logging
-      inserted: totalUpserted,
+      // v5 chain state — the caller sees where the cycle got to.
+      chainDepth,
+      chained:  !terminal,
+      cycleComplete,
+      truncated: terminal && !cycleComplete,
+      remaining: remainingUnits(cursor, SIZES),
+      // Bug 4 — rolled-up counts for cron logging (cycle-to-date).
+      inserted,
       updated:  0,
-      errors:   totalErrors,
+      errors:   errorCount,
       deactivated,
-      // Per-source detail
-      greenhouse:      { upserted: gh.upserted,              errors: gh.errors.length },
-      lever:           { upserted: lever.upserted,           errors: lever.errors.length },
-      ashby:           { upserted: ashby.upserted,           errors: ashby.errors.length },
-      workday:         { upserted: workday.upserted,         errors: workday.errors.length },
-      smartrecruiters: { upserted: smartrecruiters.upserted, errors: smartrecruiters.errors.length },
+      // Per-source detail (cycle-to-date)
+      greenhouse:      { upserted: totals.greenhouse.upserted,      errors: totals.greenhouse.errors },
+      lever:           { upserted: totals.lever.upserted,           errors: totals.lever.errors },
+      ashby:           { upserted: totals.ashby.upserted,           errors: totals.ashby.errors },
+      workday:         { upserted: totals.workday.upserted,         errors: totals.workday.errors },
+      smartrecruiters: { upserted: totals.smartrecruiters.upserted, errors: totals.smartrecruiters.errors },
       // Aggregate for the older cron path
       sources: {
-        greenhouse: gh.upserted, lever: lever.upserted, ashby: ashby.upserted,
-        workday: workday.upserted, smartrecruiters: smartrecruiters.upserted,
+        greenhouse: totals.greenhouse.upserted, lever: totals.lever.upserted, ashby: totals.ashby.upserted,
+        workday: totals.workday.upserted, smartrecruiters: totals.smartrecruiters.upserted,
       },
-      errorDetails: combinedErrors,
-      ingested: totalUpserted,
+      errorDetails: totals.errorSamples,
+      ingested: inserted,
     };
     __hbResponse = new Response(JSON.stringify(body, null, 2), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    __hbResponse = new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+    __hbResponse = new Response(JSON.stringify({ ok: false, error: (err as Error).message, chainDepth, cycleId }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
   const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
-  await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status } });
+  await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: __hbOutcome, error: __hbOutcome === "error" ? ("HTTP " + __hbResponse.status) : undefined, metrics: { http_status: __hbResponse.status, chain_depth: chainDepth, cycle_id: cycleId } });
   return __hbResponse;
   } catch (__hbE) {
     await invocationComplete({ supabase, functionSlug: "ingest-ats-direct", invocationId: __hbId, startedAt: __hbStart, outcome: "error", error: (__hbE as Error)?.message ?? String(__hbE) });
