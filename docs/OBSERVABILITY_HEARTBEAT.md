@@ -181,7 +181,7 @@ load-bearing — dropping them silently breaks protected-slash-token restoration
 (`ISO/IEC 27001`, `CI/CD`, `TCP/IP`, `BC/DR`), and therefore skill normalisation
 and fit scores, with no error. Verify with `grep -c $'\x01'` after any copy.
 
-### Superseded: `curate-user-recommendations` v14
+### Superseded, then reconciled: `curate-user-recommendations` v14
 
 Shortly after the v13 deploy above, `curate` was redeployed to **v14** from
 outside this workstream, carrying an `excluded_role_patterns` feature
@@ -194,14 +194,30 @@ select). Verified after the fact:
   `main` — v14 closed the decorative drift noted above
 - running healthy: four consecutive paired heartbeats, `outcome: ok`, HTTP 200
 
-**Do not redeploy `curate` from `main` to "fix" the remaining comment drift.**
-`main` does not contain the v14 feature, so a redeploy from the repo would
-silently revert it and orphan the `excluded_role_patterns` column.
+**Correction — the drift is reconciled; redeploying `curate` from `main` is
+now safe.** When this section was first written the branch was cut at `784cf6f`,
+where neither the v14 feature code nor a migration for the column existed, and it
+warned against redeploying from `main`. That warning is obsolete. #421
+(`feat(recommendations): per-user excluded_role_patterns filter`) landed on `main`
+afterwards and carries both halves: the `curate` source (`index.ts` + `lib.ts`)
+and `supabase/migrations/20260828132400_add_excluded_role_patterns.sql`.
 
-Outstanding drift to reconcile: the v14 feature code exists in neither the repo
-nor any migration, while `user_profiles.excluded_role_patterns` already exists in the
-production database. Land the source and a migration before the next deploy of
-this function from `main`.
+Re-verified against deployed v14 after merging `main` into this branch — every
+file `curate` ships is byte-identical to `main`:
+
+| file | vs `main` |
+|---|---|
+| `source/index.ts` | identical |
+| `source/lib.ts` | identical |
+| `_shared/heartbeat.ts` | identical |
+| `_shared/scoring/{jdExtractor,skillsNormalizer,geoTokens,f4Denominator}.ts` | identical |
+
+The five `\x01` sentinels are present in the deployed `skillsNormalizer.ts`. No
+outstanding repo/prod drift remains for this function.
+
+The general lesson survives the correction: production had a feature the checkout
+did not, and nothing in the deploy path said so. Diff deployed source against the
+revision you are about to deploy *from* — not against the revision you branched at.
 
 ## Known gaps found in production
 
