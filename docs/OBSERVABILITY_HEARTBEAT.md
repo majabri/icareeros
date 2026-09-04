@@ -263,12 +263,26 @@ caller can collide with the first (`cleanup-dead-jobs`'s second run returned a
 Whichever scheduler is meant to own these, one side should be retired; the
 cadence table above assumes a single origin per function.
 
-**`ingest-ats-direct` is the exception and its doubling has a different cause.**
-It has no pg_cron entry — only the single Vercel cron. Its 12 starts / 24 h
-(2 per 4h tick) is consistent with Vercel cron **retrying after the 504**
-documented above. The retry is a symptom, not an independent bug: fix the
-wall-clock timeout and the second invocation disappears on its own. Do not
-chase the duplicate first for this function.
+**`ingest-ats-direct` is the exception and its doubling has a different cause
+entirely — it is not a scheduling duplicate at all.** It has no pg_cron entry,
+only the single Vercel cron. The two starts per tick come from **two different
+emitters writing to the same source name**: `src/app/api/cron/ingest-ats/route.ts`
+emits its own `invocation.start` / `invocation.complete` against
+`source: "edge-fn.ingest-ats-direct"` (it is the only cron route that does this),
+and then the edge function emits its own on top.
+
+That also explains the 0 completes exactly. The route holds `maxDuration = 60`,
+so it dies before the 150s edge fetch returns and never reaches its `complete`
+write; the edge function is killed at 150s and never reaches its own. Two
+starts, no completes, every tick — which is precisely the 12 / 0 measured over
+24h.
+
+The fix is to make the edge function the sole heartbeat emitter (drop the
+route-level wrapper) and raise the route's `maxDuration`. PR #426 does both.
+
+An earlier revision of this section attributed the doubling to Vercel cron
+retrying the 504. That was wrong — corrected here against
+`src/app/api/cron/ingest-ats/route.ts`.
 
 ### Rules 1 and 2 do not detect the above
 
