@@ -240,6 +240,20 @@ export function buildTsqueryArgDeno(
   return { arg: cleaned.join(" OR "), mode: "websearch" };
 }
 
+export function filterExcludedRolePatterns<T extends { title?: string | null }>(
+  rows: T[],
+  patterns: string[] | null | undefined,
+): T[] {
+  const excluded = (patterns ?? [])
+    .map((pattern) => pattern.trim().toLowerCase())
+    .filter(Boolean);
+  if (excluded.length === 0) return rows;
+  return rows.filter((row) => {
+    const title = (row.title ?? "").toLowerCase();
+    return !excluded.some((pattern) => title.includes(pattern));
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // fix/jobs-skills-normalization — Deno port of the skills normalizer.
 //

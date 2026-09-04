@@ -115,6 +115,9 @@ async function fetchJsonWithLogging<T>(url: string, source: string, slug: string
 }
 
 // ── Greenhouse ──────────────────────────────────────────────────────────
+// List endpoint fields used here: id, title, location.name, absolute_url,
+// updated_at, raw payload. Description stays detail-endpoint-owned so
+// conflict updates never send `description` for this source.
 
 async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
@@ -133,7 +136,6 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
         company: slug,
         title: (j.title || "").trim(),
         location: j.location?.name ?? null,
-        description: stripHtml(j.content ?? ""),
         apply_url: j.absolute_url,
         posted_at: j.updated_at ?? null,
         remote: /remote/i.test(j.title ?? "") || /remote/i.test(j.location?.name ?? ""),
@@ -155,6 +157,9 @@ async function ingestGreenhouse(supabase: any): Promise<{ upserted: number; erro
 }
 
 // ── Lever ───────────────────────────────────────────────────────────────
+// List endpoint fields used here: id, text, categories.location,
+// description, hostedUrl, categories.commitment, createdAt. Lever's list
+// payload already carries the job description, so ingest writes it inline.
 
 async function ingestLever(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
@@ -195,6 +200,9 @@ async function ingestLever(supabase: any): Promise<{ upserted: number; errors: s
 }
 
 // ── Ashby ───────────────────────────────────────────────────────────────
+// List endpoint fields used here: id, title, locationName,
+// descriptionPlain, jobUrl, publishedDate, isRemote. Ashby's list payload
+// already carries the job description, so ingest writes it inline.
 
 async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: string[] }> {
   let upserted = 0;
@@ -236,6 +244,9 @@ async function ingestAshby(supabase: any): Promise<{ upserted: number; errors: s
 }
 
 // ── Workday CXS — Bug 3: parallel tenant batches ────────────────────────
+// List endpoint fields used here: externalPath, title, locationsText, raw
+// payload. Description is fetched later from the detail page, so conflict
+// updates must omit `description` for this source.
 
 export function buildWorkdayUrl(tenant: string, shard: string, site: string): string {
   return `https://${tenant}.${shard}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
@@ -264,7 +275,6 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
         company: t.tenant,
         title: (p.title || "").trim(),
         location: p.locationsText ?? null,
-        description: "",
         apply_url: workdayApplyUrl(t.tenant, t.shard, t.site, externalPath),
         posted_at: null,
         remote: /remote/i.test(p.locationsText ?? "") || /remote/i.test(p.title ?? ""),
@@ -305,6 +315,9 @@ async function ingestWorkday(supabase: any): Promise<{ upserted: number; errors:
 }
 
 // ── SmartRecruiters — Bug 1: ?embed=jobAd ───────────────────────────────
+// List endpoint fields used here: id, name, location, applyUrl/postingUrl,
+// releasedDate/createdOn, raw payload, plus embedded
+// jobAd.sections.jobDescription.text via `?embed=jobAd`.
 
 export function buildSmartRecruitersUrl(slug: string, offset: number, limit = SR_PAGE_SIZE): string {
   return `https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=${limit}&offset=${offset}&embed=jobAd`;

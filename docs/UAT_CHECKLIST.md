@@ -1,6 +1,8 @@
 # iCareerOS — UAT Checklist (Day 63)
 
-**Test account:** `majabri714@gmail.com` / `FitCheck2026!`  
+**Test account:** `majabri714@gmail.com` / **password redacted** — fetch it from
+the team password store or Supabase; never commit it. (The prior plaintext value
+was committed and is in git history: treat it as compromised and rotate.)  
 **Staging URL:** https://icareeros.vercel.app  
 **Tested by:** Amir Jabri  
 **Date:** ___________

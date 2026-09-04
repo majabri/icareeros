@@ -1,7 +1,7 @@
 # Edge-function heartbeat observability
 
 **Status:** Live 2026-08-13
-**Owner:** Platform Cowork
+**Owner:** `@majabri` (platform)
 **Related:** ADR-005, `docs/EMAIL_DELIVERABILITY.md`, runbook gotcha #8
 
 ## What this doc covers
