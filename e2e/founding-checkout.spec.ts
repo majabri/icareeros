@@ -22,7 +22,7 @@ test.beforeAll(async ({ request }) => {
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('input[type="email"]', E2E_EMAIL);
+  await page.fill('#identifier', E2E_EMAIL);
   await page.fill('input[type="password"]', E2E_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 15_000 });

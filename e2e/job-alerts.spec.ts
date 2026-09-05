@@ -89,7 +89,7 @@ test("🔔 Alert button is visible on the jobs page", async ({ page }) => {
 
   // Sign in
   await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('input[type="email"]', E2E_EMAIL);
+  await page.fill('#identifier', E2E_EMAIL);
   await page.fill('input[type="password"]', E2E_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -114,7 +114,7 @@ test("JobAlertModal opens and closes correctly", async ({ page }) => {
 
   // Sign in
   await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('input[type="email"]', E2E_EMAIL);
+  await page.fill('#identifier', E2E_EMAIL);
   await page.fill('input[type="password"]', E2E_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/dashboard/, { timeout: 15_000 });

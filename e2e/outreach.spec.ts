@@ -54,7 +54,7 @@ test.beforeAll(async ({ browser, request: unauthRequest }) => {
   const page = await browser.newPage();
   try {
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -102,7 +102,7 @@ test("POST /api/outreach → 400 when opportunity_id is missing", async ({ brows
   const page = await browser.newPage();
   try {
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -129,7 +129,7 @@ test("/jobs page shows Outreach button on opportunity cards", async ({ browser }
   const page = await browser.newPage();
   try {
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });

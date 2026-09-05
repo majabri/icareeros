@@ -10,7 +10,7 @@ const HAS_CREDS = !!process.env.E2E_TEST_EMAIL && !!process.env.E2E_TEST_PASSWOR
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('input[type="email"]', process.env.E2E_TEST_EMAIL!);
+  await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
   await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/dashboard/);
