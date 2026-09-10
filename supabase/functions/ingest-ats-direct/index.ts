@@ -553,6 +553,7 @@ serve(async (req) => {
     const workday = cursor.detail.workday, smartrecruiters = cursor.detail.smartrecruiters;
 
     let deactivated = 0;
+    let didChain = false;
     if (cycleComplete) {
       // #425 — the 48h stale-job deactivation sweep only runs once a FULL
       // cycle (all 5 sources) has completed. Running it after a
@@ -588,6 +589,7 @@ serve(async (req) => {
 
       await resetCursor(supabase);
     } else if (cursor.chainDepth < MAX_CHAIN_DEPTH) {
+      didChain = true;
       // #425 — self-chain so the cycle keeps advancing without a single
       // invocation ever approaching the wall-clock limit. Mirrors the
       // enrich-jobs self-invoke pattern (fire-and-forget, no auth header
@@ -631,7 +633,14 @@ serve(async (req) => {
       // all 5 sources have been processed for this run; `chained` tells
       // the caller a self-invoke was fired to continue the cycle.
       cycleComplete,
-      chained: !cycleComplete,
+      // Derived from the actual self-invoke attempt, NOT from cycle state.
+      // `!cycleComplete` would report chained=true in two cases where no
+      // chain was fired: (a) MAX_CHAIN_DEPTH reached and we deliberately
+      // stopped, (b) the fire-and-forget fetch threw. This P0 exists
+      // because a status flag lied (cron.job_run_details reporting success
+      // on a queued net.http_post) — this one must not.
+      chained: didChain,
+      chainStopped: !cycleComplete && !didChain,
       chainDepth: cursor.chainDepth,
       // Bug 4 — rolled-up counts for cron logging
       inserted: totalUpserted,
