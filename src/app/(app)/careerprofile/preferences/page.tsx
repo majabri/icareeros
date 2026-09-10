@@ -128,6 +128,7 @@ export default function SearchPreferencesPage() {
   const [currentPosition, setCurrentPosition]   = useState("");
   const [careerLevels, setCareerLevels]         = useState<string[]>([]);
   const [targetRoles, setTargetRoles]           = useState<string[]>([]);
+  const [excludedRolePatterns, setExcludedRolePatterns] = useState<string[]>([]);
   const [locationCountry, setLocationCountry]   = useState("");
   const [locationState, setLocationState]       = useState("");
   const [locationCity, setLocationCity]         = useState("");
@@ -148,12 +149,13 @@ export default function SearchPreferencesPage() {
         setUserId(u.id);
         const { data: p } = await supabase
           .from("user_profiles")
-          .select("current_position,target_roles,career_levels,location_country,location_state,location_city,work_mode,job_type,salary_min,salary_max,min_fit_score,search_mode")
+          .select("current_position,target_roles,excluded_role_patterns,career_levels,location_country,location_state,location_city,work_mode,job_type,salary_min,salary_max,min_fit_score,search_mode")
           .eq("user_id", u.id)
           .maybeSingle();
         if (p) {
           setCurrentPosition(p.current_position ?? "");
           setTargetRoles(p.target_roles ?? []);
+          setExcludedRolePatterns(p.excluded_role_patterns ?? []);
           setCareerLevels(p.career_levels ?? []);
           setLocationCountry(p.location_country ?? "");
           setLocationState(p.location_state ?? "");
@@ -183,6 +185,7 @@ export default function SearchPreferencesPage() {
           user_id:          userId,
           current_position: currentPosition.trim() || null,
           target_roles:     targetRoles,
+          excluded_role_patterns: excludedRolePatterns,
           career_levels:    careerLevels,
           location_country: locationCountry || null,
           location_state:   locationState.trim() || null,
@@ -259,6 +262,16 @@ export default function SearchPreferencesPage() {
             <CheckboxGroup options={CAREER_LEVELS} selected={careerLevels} onChange={setCareerLevels} />
           </div>
 
+        </Section>
+
+        <Section title="Exclude role patterns">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Role patterns to exclude</label>
+            <TagInput tags={excludedRolePatterns} onChange={setExcludedRolePatterns} placeholder="e.g. marketing, assistant…" />
+            <p className="mt-1 text-xs text-gray-400">
+              Any job title containing one of these words won&apos;t appear in your recommendations. Case-insensitive substring match. Example: adding &apos;marketing&apos; hides both &apos;CISO Marketing&apos; and &apos;Marketing Director&apos;.
+            </p>
+          </div>
         </Section>
 
         <Section title="Location" subtitle="Where are you open to working?">

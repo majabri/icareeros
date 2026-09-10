@@ -145,3 +145,204 @@ The core insight from the 2026-08-05 incident: **`cron.job_run_details.status='s
 - The audit writes its own `audit.ran` info event and BetterStack alerts on absence (proves the audit itself ran).
 
 If a future job introduces a third link in the chain, apply the same pattern: write an event from inside that link, alert on absence.
+
+## Deploy record — shared-import rollout
+
+All five tracked functions redeployed from `main@784cf6f` so they import the
+shared `_shared/heartbeat.ts` instead of an inlined copy (the stopgap from the
+first pass). Deploy-only — no source changes.
+
+| slug | version | verify_jwt | runtime-verified |
+|---|---|---|---|
+| `cleanup-dead-jobs` | v6 | false | paired heartbeat |
+| `validate-job-urls` | v6 | false | paired heartbeat |
+| `ingest-ats-direct` | v22 | false | `invocation.start` emitted |
+| `enrich-jobs` | v15 | false | paired heartbeat |
+| `curate-user-recommendations` | v13 | false | paired heartbeat |
+
+Deployed via the Supabase MCP `deploy_edge_function` tool rather than the CLI
+(the remote session had no CLI credential, and Vault holds no mgmt token). That
+tool nests uploaded paths one level under `source/`, so entrypoints read
+`source/source/index.ts`. Cosmetic — `../_shared/heartbeat.ts` resolves
+correctly from there, as the live heartbeats confirm.
+
+`verify_jwt: false` re-confirmed on all five per gotcha #8 above.
+
+Deployed bytes were diffed against `main` file-by-file. All executable code is
+byte-identical, and `_shared/heartbeat.ts` is byte-identical on all five — the
+point of the exercise. `curate`'s `index.ts`, `jdExtractor.ts` and
+`skillsNormalizer.ts` differ only in the width of decorative box-drawing comment
+rules (11 lines). Redeploy from the CLI to close that if exact parity matters.
+
+**Hand-transmission hazard:** `_shared/scoring/skillsNormalizer.ts` contains five
+literal `\x01` sentinel characters (the `` `\x01${idx}\x01` `` placeholder and the
+matching `/\x01(\d+)\x01/g`). They are invisible in `cat` output and
+load-bearing — dropping them silently breaks protected-slash-token restoration
+(`ISO/IEC 27001`, `CI/CD`, `TCP/IP`, `BC/DR`), and therefore skill normalisation
+and fit scores, with no error. Verify with `grep -c $'\x01'` after any copy.
+
+### Superseded, then reconciled: `curate-user-recommendations` v14
+
+Shortly after the v13 deploy above, `curate` was redeployed to **v14** from
+outside this workstream, carrying an `excluded_role_patterns` feature
+(`filterExcludedRolePatterns` in `lib.ts`, plus a `user_profiles.excluded_role_patterns`
+select). Verified after the fact:
+
+- the shared `_shared/heartbeat.ts` import and `verify_jwt: false` both survived
+- no inlined helper reintroduced; the five `\x01` sentinels intact
+- all four `_shared/scoring/*` files and `heartbeat.ts` are now byte-identical to
+  `main` — v14 closed the decorative drift noted above
+- running healthy: four consecutive paired heartbeats, `outcome: ok`, HTTP 200
+
+**Correction — the drift is reconciled; redeploying `curate` from `main` is
+now safe.** When this section was first written the branch was cut at `784cf6f`,
+where neither the v14 feature code nor a migration for the column existed, and it
+warned against redeploying from `main`. That warning is obsolete. #421
+(`feat(recommendations): per-user excluded_role_patterns filter`) landed on `main`
+afterwards and carries both halves: the `curate` source (`index.ts` + `lib.ts`)
+and `supabase/migrations/20260828132400_add_excluded_role_patterns.sql`.
+
+Re-verified against deployed v14 after merging `main` into this branch — every
+file `curate` ships is byte-identical to `main`:
+
+| file | vs `main` |
+|---|---|
+| `source/index.ts` | identical |
+| `source/lib.ts` | identical |
+| `_shared/heartbeat.ts` | identical |
+| `_shared/scoring/{jdExtractor,skillsNormalizer,geoTokens,f4Denominator}.ts` | identical |
+
+The five `\x01` sentinels are present in the deployed `skillsNormalizer.ts`. No
+outstanding repo/prod drift remains for this function.
+
+The general lesson survives the correction: production had a feature the checkout
+did not, and nothing in the deploy path said so. Diff deployed source against the
+revision you are about to deploy *from* — not against the revision you branched at.
+
+## Known gaps found in production
+
+### `ingest-ats-direct` never completes — 504 at the wall-clock limit
+
+39 `invocation.start`, **0 `invocation.complete`** over three days, spanning both
+v21 (inlined helper) and v22. Pre-existing; not introduced by the redeploy.
+
+Every gateway-logged invocation ends identically:
+
+    booted (time: 32ms)
+    POST | 504 | ingest-ats-direct   execution_time_ms = 150101
+
+100% of logged invocations return 504 at ~150,000 ms — the edge-function
+wall-clock ceiling. The function is killed mid-run and never reaches
+`invocationComplete`.
+
+What therefore never runs, because it sits after `Promise.allSettled`:
+
+- the 48h stale-job deactivation sweep — dead postings keep `is_active = true`
+- the priority-lane `enrich-jobs` chain-kick
+- the rolled-up `inserted` / `errors` counts (PR #363 Bug 4), so the cron caller
+  logs nothing useful
+
+Partial ingest still persists (upserts are incremental), but the slowest sources
+— Workday (17 tenants x up to 15 pages) and SmartRecruiters (5 x up to 30 pages)
+— are truncated mid-pagination. It is also invoked **twice per 4h tick** (paired
+starts ~0.5 s apart), doubling the load.
+
+Fix direction: the chained-continuation pattern `enrich-jobs` already uses
+(`chainDepth` + `MAX_CHAIN_DEPTH`) instead of one 150 s+ run. Investigate the
+duplicate per-tick invocation first — halving the work is the cheapest partial
+mitigation. Needs its own PR.
+
+### Four functions are double-scheduled (pg_cron + Vercel cron)
+
+The paired `invocation.start` events visible throughout `infrastructure_events`
+are not an artifact — most of these functions really are invoked twice per tick.
+`cron.job` and `vercel.json` both schedule the same edge functions, and the
+Vercel routes under `src/app/api/cron/*` `fetch()` the identical
+`${SUPABASE_URL}/functions/v1/<slug>` target:
+
+| function | pg_cron | vercel.json | effect |
+|---|---|---|---|
+| `cleanup-dead-jobs` | `0 5 * * *` | `0 5 * * *` | 2x daily |
+| `curate-user-recommendations` | `0 4 * * *` | `0 4 * * *` | 2x daily |
+| `enrich-jobs` | `30 */4 * * *` | `30 */4 * * *` | 2x per 4h tick |
+| `validate-job-urls` | `0 3 * * *` | `15 3 * * *` | 2x daily, 15 min apart |
+| `ingest-ats-direct` | none | `0 */4 * * *` | single schedule |
+
+Observed confirmation: `cleanup-dead-jobs` ran at 05:00:13 and again at
+05:01:36; `curate` at 04:00:05 and 04:03:34; `validate-job-urls` twice daily.
+Each pair is one pg_cron call and one Vercel-cron call landing on the same
+function.
+
+Consequences: every one of these does double work on every tick, and the second
+caller can collide with the first (`cleanup-dead-jobs`'s second run returned a
+500 while the first returned 200 — the two runs delete against the same rows).
+Whichever scheduler is meant to own these, one side should be retired; the
+cadence table above assumes a single origin per function.
+
+**`ingest-ats-direct` is the exception and its doubling has a different cause
+entirely — it is not a scheduling duplicate at all.** It has no pg_cron entry,
+only the single Vercel cron. The two starts per tick come from **two different
+emitters writing to the same source name**: `src/app/api/cron/ingest-ats/route.ts`
+emits its own `invocation.start` / `invocation.complete` against
+`source: "edge-fn.ingest-ats-direct"` (it is the only cron route that does this),
+and then the edge function emits its own on top.
+
+That also explains the 0 completes exactly. The route holds `maxDuration = 60`,
+so it dies before the 150s edge fetch returns and never reaches its `complete`
+write; the edge function is killed at 150s and never reaches its own. Two
+starts, no completes, every tick — which is precisely the 12 / 0 measured over
+24h.
+
+The fix is to make the edge function the sole heartbeat emitter (drop the
+route-level wrapper) and raise the route's `maxDuration`. PR #426 does both.
+
+An earlier revision of this section attributed the doubling to Vercel cron
+retrying the 504. That was wrong — corrected here against
+`src/app/api/cron/ingest-ats/route.ts`.
+
+### Rules 1 and 2 do not detect the above
+
+Rule 1 keys on the age of the most recent **`invocation.start`**.
+`ingest-ats-direct` emits a fresh start every tick, so the audit reads it as
+healthy and Rule 1 stays quiet. Rule 2 watches for absence of `audit.ran` and is
+unrelated. **A function that starts on schedule and dies every single time is
+invisible to both rules as currently wired.**
+
+Recommended Rule 3 — unpaired invocation:
+
+- **Name:** `edge-fn heartbeat: start without complete`
+- **Detection:** for each `invocation.start`, no `invocation.complete` sharing
+  its `invocation_id` within that function's expected runtime
+- **Condition:** `count > 0`
+- **Notification:** page
+
+Cleanest implementation is inside `public.heartbeat_audit()`, which already scans
+`infrastructure_events` every 5 minutes and can emit an
+`unpaired_edge_invocation` critical event that BetterStack matches the same way
+as `stale_edge_invocation`.
+
+### `invocation.start` can be lost silently under concurrent cold boots
+
+Two `curate-user-recommendations` runs recorded an `invocation.complete` with no
+matching start. Both were `POST /rest/v1/infrastructure_events` -> **401**, issued
+~16 ms after boot. It is a readiness race: a PostgREST call made within roughly
+the first ~40 ms of a cold boot can have its service-role JWT rejected. Measured
+boot -> first-call deltas: 16 ms -> 401; 41 ms and 63 ms -> 201.
+
+Both occurrences came from firing two functions in a single SQL statement, i.e.
+two isolates cold-booting at the same instant. **Scheduled runs are not
+affected** — `curate`'s daily invocations paired 6/6 over three days, and the
+rate across all functions was 2 x 401 against 1190 x 201 in 24 h. Do not detune
+Rule 1 for this.
+
+The reason it is *silent* is a helper bug worth fixing on its own merits:
+`supabase-js` `.insert()` **resolves** with `{ data, error }` on rejection rather
+than throwing, and `invocationStart` wraps the call in `try/catch` without
+inspecting `.error`. A 401 therefore produces no exception, no log line, and no
+row. This is the same silent-`.error` class the #401 post-mortem already fixed
+inside `enrich-jobs` (`safeUpdate` checks `.error` on every write); the shared
+helper did not inherit it.
+
+Fix direction: check `.error` in `invocationStart` and log it, then retry once
+after ~50 ms. Not applied here — the helper is the source of truth and was
+explicitly out of scope for the deploy ticket.
