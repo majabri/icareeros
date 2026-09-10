@@ -35,25 +35,19 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
+  // Chromium-engine projects only. The CI workflow installs the chromium
+  // browser alone, so the firefox / webkit / mobile-safari projects added in
+  // Sprint 4 W2-C had no binary to launch and failed every test in CI — see
+  // issue #429. They are removed rather than papered over: with workers: 1 and
+  // fullyParallel: false, five real engines do not fit the job's time budget.
+  // To restore cross-browser coverage, add the projects back AND install their
+  // browsers in .github/workflows/e2e.yml, ideally on a separate nightly job.
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
-    // Sprint 4 W2-C: cross-browser foundation
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-    },
-    {
-      name: "webkit",
-      use: { ...devices["Desktop Safari"] },
-    },
-    // Mobile viewports (Safari engine on iOS; Chrome engine on Android)
-    {
-      name: "mobile-safari",
-      use: { ...devices["iPhone 14"] },
-    },
+    // Mobile viewport, Chrome engine on Android — same binary as chromium.
     {
       name: "mobile-chrome",
       use: { ...devices["Pixel 7"] },
