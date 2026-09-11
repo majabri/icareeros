@@ -76,4 +76,21 @@ for (const f of failures.slice(0, MAX)) {
 if (failures.length > MAX) {
   console.log(`... and ${failures.length - MAX} more. Raise DIGEST_MAX to see them.`);
 }
+
+// Repeat the totals at the very end, and break them down by file. The header
+// counts sit hundreds of lines up once there are dozens of failures, which is
+// out of reach for anything reading only the tail of the log — the exact
+// problem this script exists to solve.
+const byFile = new Map();
+for (const f of failures) {
+  const file = f.location.split(":")[0];
+  byFile.set(file, (byFile.get(file) ?? 0) + 1);
+}
+const ranked = [...byFile.entries()].sort((a, b) => b[1] - a[1]);
+
+console.log("");
+console.log(`DIGEST SUMMARY: ${failures.length} failing test(s) across ${byFile.size} file(s)`);
+for (const [file, count] of ranked) {
+  console.log(`  ${String(count).padStart(3)}  ${file}`);
+}
 console.log("=============== END E2E FAILURE DIGEST ===============");
