@@ -155,8 +155,51 @@ For each job and target, calculate independent normalized similarities:
   discipline is 0; missing is neutral/unknown, not a penalty.
 - **Industry:** overlap with `industry_preferences` is 1.0; no preference is
   neutral; an explicit non-overlap is 0.2 (subject to calibration).
-- **Title tokens:** retain current normalization, synonym expansion, phrase
-  matching, and token-overlap behavior as the lexical component.
+- **Title tokens:** normalization, phrase matching, and token-overlap behavior
+  carry over as the lexical component — but **synonym expansion must be
+  rebuilt, not retained**. See §4.1; the current implementation is the
+  measured cause of cross-profession failure.
+
+### 4.1 Synonym expansion is the defect, not a component to preserve
+
+Evidence: `docs/FINDINGS-cross-profession-generalization.md` (#424). Same user,
+same skills, same corpus, same day — only the *phrasing* of the target role
+changed:
+
+| Target role typed | Recs | Top score | Best tier |
+|---|---:|---:|---|
+| `Registered Nurse` | 38 | 72 | strongMatch |
+| `RN` | 19 | 40 | stretch |
+
+Root cause: `synonymsForExactDeno` requires **exact string membership** in
+`ROLE_FAMILIES`, a hand-curated list of 32 families (5 security + 27
+senior/exec tech). No fuzzy, stem, or partial fallback. In-taxonomy users get
+up to 15 query phrases; everyone else gets exactly one — the literal string
+typed. Whether a user succeeds is decided by whether their phrasing happens to
+appear verbatim in job titles.
+
+Two facts bound the problem usefully. The corpus is **not** the constraint —
+114,607 active jobs, broadly distributed (engineering 13k, sales 4k, design
+3.1k, data 2.5k, healthcare 2k); security, the vertical the system was tuned
+on, is 1.4%. And `scoreJob` is already profession-agnostic Jaccard overlap —
+it scored a nurse persona *higher* than the CISO persona. The engine
+generalizes; the taxonomy does not.
+
+**Required changes:**
+
+1. **Graded matching replaces exact membership** — exact → contains →
+   token-overlap → stem. Highest value, smallest change: it alone lets `RN`,
+   `Senior Registered Nurse`, and `Nurse, ICU` resolve to one family.
+2. **Derive families from the corpus.** 114k real titles beat 32 hand-written
+   ones. Hand-curation should *correct* a derived set, not *be* the set —
+   otherwise every new profession requires a PR.
+3. **Make degradation visible.** If a declared target resolves to no family,
+   say so in the UI and offer alternatives. Today thin retrieval is silent and
+   the user concludes the product is weak rather than that their phrasing was
+   unlucky.
+4. **Track retrieval breadth.** Log `queries_generated` and `pool_size` per
+   curator run per user. Any user retrieving on a single phrase is a latent bad
+   experience; this makes it measurable rather than anecdotal.
 - **Excluded patterns:** a match is a per-target penalty or rejection, never a
   global token ban.
 
@@ -221,6 +264,13 @@ copied to each target unless the user explicitly edits them.
 
 ## 6. Rollout plan
 
+**Known adjacent risk — ingestion breadth.** All 38 recommendations for the
+nurse persona came from a single employer: `cvshealth` holds 122 of the 123
+`registered nurse` postings in the corpus. Taxonomy breadth and *ingestion*
+breadth are different axes. Fixing §4.1 will expose the second, and rollout
+should expect per-vertical employer concentration to surface as the next
+complaint rather than treating it as a regression of this work.
+
 1. **Phase 1 — schema and extraction:** ship the extractor and
    `target_roles_v2`; dark-launch population, but do not score with it.
 2. **Phase 2 — scoring flag:** ship the rewritten scorer behind
@@ -240,6 +290,13 @@ GitHub issue and Copilot session. This ADR itself is design-only.
 ## 7. Testing strategy
 
 ### Regression pool
+
+**Must include out-of-taxonomy personas.** A pool drawn only from the security
+vertical will pass while the generalization defect in §4.1 survives intact.
+Include at minimum: nursing (e.g. `Registered Nurse` *and* `RN` as separate
+personas — they must converge), plus one non-tech, non-clinical profession
+(skilled trades, education, or logistics). The `RN` vs `Registered Nurse`
+convergence is the acceptance test for §4.1.
 
 Score the ADR-0006 (ADR-006) 21-row pool against Amir's declared target:
 `Director+ Security People-Manager`, with security discipline and the relevant
