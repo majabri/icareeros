@@ -52,3 +52,23 @@ jobs:
 
       - name: Run E2E tests
         run: npx playwright test --retries=2
+
+      # A failed run used to report only which tests failed, never why: the
+      # assertion detail is interleaved thousands of lines up, and no report was
+      # ever written or uploaded. These two steps close that gap.
+      - name: Failure digest
+        if: failure()
+        run: node scripts/e2e-failure-digest.mjs test-results/results.json
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          # test-results/ carries the JSON plus the screenshots and traces
+          # produced by screenshot:only-on-failure and trace:on-first-retry.
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: warn

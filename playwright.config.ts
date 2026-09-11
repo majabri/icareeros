@@ -21,7 +21,18 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  // CI emits three things: "github" for inline PR annotations, "html" for a
+  // browsable report uploaded as an artifact, and "json" for the failure digest
+  // the workflow prints at the end of the log (scripts/e2e-failure-digest.mjs).
+  // Before this, CI kept only "github", so a failed run told you WHICH tests
+  // failed and never WHY — the report was never written or uploaded anywhere.
+  reporter: process.env.CI
+    ? [
+        ["github"],
+        ["html", { open: "never" }],
+        ["json", { outputFile: "test-results/results.json" }],
+      ]
+    : [["list"]],
 
   use: {
     // In CI: test against the live Vercel deployment (no local server needed)
