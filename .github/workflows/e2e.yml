@@ -10,7 +10,21 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 was too tight and was silently killing runs: #426's run on the old
+    # 5-project config was cancelled at 45m19s with zero failed jobs, which is
+    # this ceiling, not a test failure. That is the real cause of the "cancelled"
+    # E2E runs going back months — there is no concurrency group in this file.
+    #
+    # The suite is slow for a structural reason: 24 of 33 spec files log in
+    # through the UI as the shared E2E_TEST_EMAIL account, and there is no
+    # globalSetup/storageState to reuse a session, so the login flow is paid
+    # once per file. Fixing that is the real speed-up (see #433) and would let
+    # this come back down. Until then, give the job room to finish rather than
+    # reporting a timeout as though it were a test result.
+    #
+    # workers stays at 1 deliberately: those 24 files share ONE account, so
+    # parallel workers would mutate the same user's data concurrently.
+    timeout-minutes: 75
 
     env:
       # Tests run against the live Vercel deployment — no local server needed
