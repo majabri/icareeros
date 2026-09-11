@@ -15,7 +15,8 @@
 import { readFileSync } from "node:fs";
 
 const path = process.argv[2] ?? "test-results/results.json";
-const MAX = Number(process.env.DIGEST_MAX ?? 40);
+// 100 covers the current failure count; 40 truncated it at "and 41 more".
+const MAX = Number(process.env.DIGEST_MAX ?? 100);
 
 let report;
 try {
