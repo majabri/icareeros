@@ -54,12 +54,24 @@ export async function GET(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       serviceKey,
     );
-    const { error } = await serviceClient
+    // .select() is load-bearing, not decoration. A PostgREST update that matches
+    // zero rows is NOT an error — it resolves to { data: null, error: null }. So
+    // without asking for the affected rows back, an unknown token fell through
+    // the `if (error)` guard below and returned 200 "Unsubscribed successfully"
+    // while changing nothing. That is worse than a 4xx: a real user whose link
+    // was truncated or mangled by their mail client was told the unsubscribe had
+    // worked, and kept receiving mail. e2e/email-preferences.spec.ts asserts the
+    // 400 and had been failing against production.
+    const { data: updated, error } = await serviceClient
       .from("email_preferences")
       .update({ weekly_insights: false, job_alerts: false })
-      .eq("unsubscribe_token", token);
+      .eq("unsubscribe_token", token)
+      .select("id");
 
     if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!updated || updated.length === 0) {
       return NextResponse.json({ error: "Invalid unsubscribe token" }, { status: 400 });
     }
     return NextResponse.json({ ok: true, message: "Unsubscribed successfully" });
