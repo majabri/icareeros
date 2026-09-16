@@ -17,12 +17,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { logInfrastructureEvent } from "@/lib/observability/logInfrastructureEvent";
 
 export const dynamic = "force-dynamic";
-// Max runtime — the edge function takes ~6s for 10 companies × 25 jobs.
-// We leave generous headroom for slow ATSes.
-export const maxDuration = 60;
+// #425 — the edge function now processes a bounded slice per invocation
+// and self-chains (see supabase/functions/ingest-ats-direct/index.ts), so
+// a single forwarded call can legitimately take close to the edge
+// function's own wall-clock budget. Match the maxDuration used by the
+// other bounded-slice cron route (enrich-jobs) for headroom.
+export const maxDuration = 300;
 
 /**
  * feat/jobs-search-db Task 1 — response shape aligned with the edge
@@ -61,24 +63,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // ── HEARTBEAT (invocation.start) — mirrors the edge-fn pattern for the Vercel-cron path ──
-  const __hbStart = Date.now();
-  const __hbInvocationId = crypto.randomUUID();
-  await logInfrastructureEvent({
-    source: "edge-fn.ingest-ats-direct",       // same source-name-space as the edge fn heartbeat
-    event_type: "invocation.start",
-    severity: "info",
-    payload: {
-      invocation_id: __hbInvocationId,
-      invoked_by: "vercel_cron",                // this path IS the Vercel cron
-      via: "api-route",                          // distinguishes route-fired vs direct edge-fn heartbeats
-      version: null,
-      chain_depth: 0,
-    },
-  });
-
-  try {
-    const __hbResponse: NextResponse = await (async (): Promise<NextResponse> => {
+  // #425 — this route used to ALSO emit its own `invocation.start` /
+  // `invocation.complete` heartbeat under the same `edge-fn.ingest-ats-direct`
+  // source as the edge function itself. Because this route does nothing
+  // but forward one call to the edge function, that produced two
+  // `invocation.start` rows at the identical second on every tick — a
+  // false-positive "duplicate invocation" with no pg_cron job involved.
+  // The edge function is the single source of truth for its own
+  // heartbeat (see supabase/functions/ingest-ats-direct/index.ts); this
+  // route no longer duplicates it, matching every other cron route in
+  // this app (cleanup-dead-jobs, enrich-jobs, validate-job-urls, etc.)
+  // which forward without a route-level heartbeat wrapper.
 
   // ── Layer 2: env vars required to forward to Supabase ───────────────
   const supabaseUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -100,7 +95,7 @@ export async function POST(req: NextRequest) {
         "Content-Type":           "application/json",
         "x-ingest-cron-secret":   ingestSecret,
       },
-      body: JSON.stringify({ dry_run: false, max_per_company: 25 }),
+      body: JSON.stringify({ dry_run: false, max_per_company: 25, chainDepth: 0 }),
     });
 
     const elapsedMs = Date.now() - started;
@@ -139,37 +134,6 @@ export async function POST(req: NextRequest) {
     const msg = e instanceof Error ? e.message : "unknown";
     console.error("[cron/ingest-ats] fetch failed:", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
-  }
-    })();
-    const __hbOutcome: "ok"|"error" = __hbResponse.status >= 200 && __hbResponse.status < 400 ? "ok" : "error";
-    await logInfrastructureEvent({
-      source: "edge-fn.ingest-ats-direct",
-      event_type: "invocation.complete",
-      severity: __hbOutcome === "ok" ? "info" : "error",
-      payload: {
-        invocation_id: __hbInvocationId,
-        outcome: __hbOutcome,
-        duration_ms: Date.now() - __hbStart,
-        error: __hbOutcome === "error" ? `HTTP ${__hbResponse.status}` : null,
-        http_status: __hbResponse.status,
-        via: "api-route",
-      },
-    });
-    return __hbResponse;
-  } catch (__hbE) {
-    await logInfrastructureEvent({
-      source: "edge-fn.ingest-ats-direct",
-      event_type: "invocation.complete",
-      severity: "error",
-      payload: {
-        invocation_id: __hbInvocationId,
-        outcome: "error",
-        duration_ms: Date.now() - __hbStart,
-        error: (__hbE as Error)?.message ?? String(__hbE),
-        via: "api-route",
-      },
-    });
-    throw __hbE;
   }
 }
 

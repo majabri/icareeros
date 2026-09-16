@@ -8,7 +8,7 @@ test.describe("Admin — Users tab", () => {
 
   test("non-admin is redirected away from /admin", async ({ page }) => {
     await page.goto("/auth/login");
-    await page.fill('input[type="email"]', process.env.E2E_TEST_EMAIL!);
+    await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
     await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/(dashboard|auth)/);

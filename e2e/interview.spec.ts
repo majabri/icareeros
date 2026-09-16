@@ -8,7 +8,7 @@ test.describe("Interview Simulator", () => {
   test.beforeEach(async ({ page }) => {
     if (!PROBE) test.skip();
     await page.goto("/auth/login");
-    await page.fill('input[type="email"]', EMAIL);
+    await page.fill('#identifier', EMAIL);
     await page.fill('input[type="password"]', PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL("**/dashboard", { timeout: 15_000 });

@@ -10,7 +10,21 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 was too tight and was silently killing runs: #426's run on the old
+    # 5-project config was cancelled at 45m19s with zero failed jobs, which is
+    # this ceiling, not a test failure. That is the real cause of the "cancelled"
+    # E2E runs going back months — there is no concurrency group in this file.
+    #
+    # The suite is slow for a structural reason: 24 of 33 spec files log in
+    # through the UI as the shared E2E_TEST_EMAIL account, and there is no
+    # globalSetup/storageState to reuse a session, so the login flow is paid
+    # once per file. Fixing that is the real speed-up (see #433) and would let
+    # this come back down. Until then, give the job room to finish rather than
+    # reporting a timeout as though it were a test result.
+    #
+    # workers stays at 1 deliberately: those 24 files share ONE account, so
+    # parallel workers would mutate the same user's data concurrently.
+    timeout-minutes: 75
 
     env:
       # Tests run against the live Vercel deployment — no local server needed
@@ -27,7 +41,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22, not 20: e2e/dashboard.spec.ts and e2e/profile.spec.ts build a
+          # Supabase client in Node, and supabase-js realtime needs a native
+          # WebSocket. On Node 20 every such test died with "Node.js detected
+          # but native WebSocket not found. Suggested solution: Ensure you are
+          # running Node.js 22+". Node 20 is deprecated on Actions runners
+          # anyway — the runner already warns it is forcing Node 24 for the
+          # actions themselves. pr-checks.yml stays on 20 deliberately: it is
+          # green there and this change is scoped to the failure it fixes.
+          node-version: "22"
           # No cache: package-lock.json is not committed (uses npm install --legacy-peer-deps)
 
       - name: Install dependencies
@@ -38,3 +60,31 @@ jobs:
 
       - name: Run E2E tests
         run: npx playwright test --retries=2
+
+      # A failed run used to report only which tests failed, never why: the
+      # assertion detail is interleaved thousands of lines up, and no report was
+      # ever written or uploaded. These two steps close that gap.
+      #
+      # Order matters. Upload runs FIRST because it prints a "Uploaded bytes"
+      # progress line per 8MB chunk — hundreds of lines that would bury the
+      # digest. The digest runs LAST so it is the final thing in the log, which
+      # is the only part reachable by tooling that tails a job log.
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          # playwright-report/ is self-contained: the HTML reporter copies the
+          # screenshots and traces it needs into it. Uploading test-results/
+          # wholesale as well shipped the same attachments a second time and
+          # produced a 2GB artifact. Take the report plus only the JSON the
+          # digest parses.
+          path: |
+            playwright-report/
+            test-results/results.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Failure digest
+        if: failure()
+        run: node scripts/e2e-failure-digest.mjs test-results/results.json
