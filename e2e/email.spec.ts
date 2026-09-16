@@ -32,7 +32,7 @@ test.describe("Email API", () => {
 
     // Sign in first to get a session cookie
     await page.goto(`${BASE_URL}/auth/login`);
-    await page.fill('input[type="email"]', process.env.E2E_TEST_EMAIL!);
+    await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
     await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard/);
@@ -57,7 +57,7 @@ test.describe("Email API", () => {
     test.skip(!HAS_CREDS, "E2E credentials not set");
 
     await page.goto(`${BASE_URL}/auth/login`);
-    await page.fill('input[type="email"]', process.env.E2E_TEST_EMAIL!);
+    await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
     await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard/);

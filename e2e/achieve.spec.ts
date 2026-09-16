@@ -25,7 +25,7 @@ test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   try {
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -65,7 +65,7 @@ test("POST /api/career-os/achieve → 400 when cycle_id is missing", async ({ br
   const page = await browser.newPage();
   try {
     await page.goto(`${BASE_URL}/auth/login`);
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -89,7 +89,7 @@ test("Dashboard shows Achieve stage card", async ({ browser }) => {
   const page = await browser.newPage();
   try {
     await page.goto(`${BASE_URL}/auth/login`);
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });

@@ -29,7 +29,7 @@ const hasRealCreds = !!E2E_EMAIL && !!E2E_PASSWORD;
 /** Sign in via the login form and wait for /dashboard redirect. */
 async function signIn(page: Page): Promise<void> {
   await page.goto("/auth/login");
-  await page.fill("#email", E2E_EMAIL);
+  await page.fill("#identifier", E2E_EMAIL);
   await page.fill("#password", E2E_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/dashboard/, { timeout: 20_000 });

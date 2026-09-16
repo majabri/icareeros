@@ -33,7 +33,7 @@ test.beforeAll(async ({ browser }) => {
   try {
     // Login
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -78,7 +78,7 @@ test.describe("Evaluate stage — /profile", () => {
     }
 
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
@@ -96,7 +96,7 @@ test.describe("Evaluate stage — /profile", () => {
     }
 
     await page.goto("/auth/login");
-    await page.locator("#email").fill(E2E_EMAIL);
+    await page.locator("#identifier").fill(E2E_EMAIL);
     await page.locator("#password").fill(E2E_PASS);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
