@@ -1,6 +1,6 @@
 # ADR-0007: User-defined target scoring
 
-- **Status:** Draft — design approval required
+- **Status:** Accepted — design approved 2026-09-17; implementation phases per §6
 - **Date:** 2026-08-28
 - **Decision owners:** Amir Jabri
 - **Supersedes:** ADR-0006 (ADR-006) Options A and B once this ADR is fully rolled out
@@ -337,26 +337,62 @@ filtered them solely because its global token ban treated `marketing` as bad.
 - **Unknowns:** missing extraction fields do not become accidental hard
   rejections.
 
-## 8. Open design questions for Amir
+## 8. Design questions — resolved
 
-These answers are required before implementation issues can be split:
+Answered by Amir Jabri on 2026-09-17. Implementation issues may now be split
+per §6. Where an answer changes the body of this ADR, the body is the
+authority and the note below records why.
 
-1. **Level taxonomy:** is `IC / M1 / M2 / Director / VP / C-suite` the right
-   taxonomy, or should it be richer or simpler?
-2. **Discipline vocabulary:** what is the approved first-pass list, and who
-   owns additions?
-3. **Industry vocabulary:** should this use SIC/NAICS, a curated product
-   vocabulary, or custom slugs?
-4. **Multi-target scoring:** should best-match-wins remain the rule, or should
-   multiple targets be blended?
-5. **Zero-match edge case:** when a declared target has no matches in the
-   current pool, should the UI say “no matches yet” or fall through to F4?
-6. **Privacy and calibration:** may other users' declared targets be
-   admin-visible in aggregate for calibration, and at what granularity?
-7. **Excluded-pattern semantics:** should a per-target pattern be a hard
-   rejection or a calibrated penalty?
-8. **Unknown extraction:** should missing department/industry signals remain
-   neutral, or should users be able to request stricter completeness?
+1. **Level taxonomy — the two-axis model stands; the question is superseded.**
+   The proposed `IC / M1 / M2 / Director / VP / C-suite` list conflates two
+   dimensions this ADR deliberately separates: `IC` and `M1` are values of
+   `track`, not of `level`. Collapsing them would make "Principal Engineer"
+   and "Engineering Manager" indistinguishable, which is the discrimination
+   §4's track component exists to provide. Keep the 8-value `level` enum and
+   the 4-value `track` enum orthogonal, as specified in §2.
 
-No implementation issue should assume answers to these questions. Once Amir
-answers, update this ADR if necessary and split the phase-specific issues.
+2. **Discipline vocabulary — derived from the corpus, not hand-written.**
+   §4.1 already establishes that hand-curation should *correct* a derived set
+   rather than *be* it; hand-authoring disciplines would recreate the
+   32-family failure one layer down. Seed the first pass from the active
+   corpus ranked by job count, retain `other` as the fallback for unknown
+   values, and assign ownership of additions to the scorer owner.
+
+3. **Industry vocabulary — curated slugs, not SIC/NAICS.**
+   SIC and NAICS classify employers by economic activity; candidates express
+   preference in terms like `fintech` or `healthtech` that cut across those
+   codes. Adopting them would make the field precise and unusable. Use
+   approximately 20–30 curated slugs seeded from corpus employer data.
+
+4. **Multi-target scoring — best-match-wins (`max`) stands.**
+   §4 requires returning the winning target as provenance so the UI can
+   explain a recommendation. Blending removes the single target that
+   explanation names. Revisit only on evidence that users want blended
+   behaviour.
+
+5. **Zero-match — say "no matches yet"; do NOT fall through to F4.**
+   A silent fallback reproduces precisely the failure #424 documented: thin
+   results, no explanation, and a user who concludes the product is weak
+   rather than that their phrasing was unlucky. It would also contradict
+   §4.1's required change 3. State the outcome explicitly and offer
+   alternatives.
+
+6. **Privacy and calibration — aggregate only, with a k-anonymity floor.**
+   Declared targets are never admin-visible per user. Aggregate views expose a
+   target value only where at least 5 users have declared it. This is the
+   conservative default deliberately: it is easy to loosen later and costly to
+   walk back, and this system operates under hiring-related data-protection
+   obligations.
+
+7. **Excluded patterns — calibrated penalty, never hard rejection.**
+   §1 rejects Option A because a global ban would reject a legitimate
+   "CISO for a Marketing SaaS" target. A per-target hard rejection
+   reintroduces the same failure at smaller scale — a user excluding `sales`
+   would lose a Head of Security at a sales-technology company. A penalty
+   preserves recoverability.
+
+8. **Unknown extraction — neutral, as drafted.**
+   Penalising unknowns punishes a job for a thin description, which is an
+   artefact of the source rather than evidence of poor fit, and repeats the
+   reasoning §1 uses to reject the skills floor. Neutral remains the default;
+   user-facing strictness may be added later if requested.
