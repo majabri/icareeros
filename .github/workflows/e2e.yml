@@ -6,6 +6,29 @@ on:
   pull_request:
     branches: [main]
 
+# Serialise every E2E run in the repo, across all branches and PRs.
+#
+# The group key is a CONSTANT on purpose. The usual `${{ github.ref }}` key
+# only stops a branch racing itself, and that is not the hazard here: 24 of
+# the 33 spec files log in as the single shared E2E_TEST_EMAIL account and
+# mutate that one user's rows. Two different PRs running at the same time
+# therefore corrupt each other's fixtures and fail for reasons that have
+# nothing to do with either diff. A constant key is what actually makes the
+# account a serialised resource.
+#
+# cancel-in-progress is false because a half-killed run leaves the shared
+# account in whatever state it had reached, which is worse than waiting.
+#
+# Known tradeoff, worth stating rather than discovering later: GitHub queues
+# at most ONE pending run per group. If three runs are triggered while a
+# fourth is executing, the middle one is superseded and reports as
+# `cancelled`. That is a queue eviction, not a timeout and not a test
+# failure — check whether a newer run for the same ref exists before
+# treating a cancelled E2E run as a signal.
+concurrency:
+  group: e2e-shared-test-account
+  cancel-in-progress: false
+
 jobs:
   e2e:
     name: Playwright E2E
@@ -35,6 +58,14 @@ jobs:
       # Dedicated E2E test user credentials — enables dashboard content tests
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+      # Service role key — used ONLY by e2e/support.spec.ts to delete the
+      # tickets it creates. Without it the suite has no way to clean up after
+      # itself: every run adds two "E2E test:" tickets that are never removed,
+      # and the count has gone 34 -> 43 -> 58 -> 79. Past ~70 rows the list
+      # assertion in that spec matched so many elements it failed on its own
+      # accumulated junk. The spec degrades gracefully when this is unset, so
+      # this line is inert until the repository secret is actually added.
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - uses: actions/checkout@v4
