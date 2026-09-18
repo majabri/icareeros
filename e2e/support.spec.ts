@@ -13,8 +13,49 @@ async function login(page: import("@playwright/test").Page) {
   await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 15_000 });
 }
 
+/**
+ * Delete the tickets this spec creates.
+ *
+ * Every ticket it files has a subject beginning "E2E test:", and nothing else
+ * in the product writes that prefix, so matching on it is both sufficient and
+ * safe. Deleting requires the service role: support_tickets is RLS-scoped to
+ * its owner and the anon key cannot remove rows.
+ *
+ * Silent no-op when SUPABASE_SERVICE_ROLE_KEY is absent — locally, and in CI
+ * until that secret is added. The suite must not start failing because a
+ * cleanup it cannot perform did not happen; the accumulation is a slow leak,
+ * not a correctness problem, and .first() above keeps the assertions honest
+ * either way.
+ */
+async function deleteE2ESupportTickets(): Promise<void> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!serviceKey || !supabaseUrl) return;
+
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await admin
+      .from("support_tickets")
+      .delete()
+      .like("subject", "E2E test:%");
+    if (error) {
+      // Report, never throw: a cleanup failure must not turn a green run red.
+      console.warn(`[support.spec] ticket cleanup failed: ${error.message}`);
+    }
+  } catch (err) {
+    console.warn(`[support.spec] ticket cleanup skipped: ${String(err)}`);
+  }
+}
+
 test.describe("Support Inbox (/support)", () => {
   test.skip(!HAS_CREDS, "E2E_TEST_EMAIL / E2E_TEST_PASSWORD not set");
+
+  // afterAll, not afterEach: the "appears in list" test needs its own ticket
+  // to still exist while it asserts.
+  test.afterAll(deleteE2ESupportTickets);
 
   test("redirects unauthenticated users to /auth/login", async ({ page }) => {
     await page.goto(`${BASE_URL}/support`);
@@ -63,7 +104,15 @@ test.describe("Support Inbox (/support)", () => {
     await page.fill('textarea[id="body"]', "Verifying the new ticket renders in the history list.");
     await page.click('button[type="submit"]');
     await expect(page.locator("text=Ticket submitted")).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("text=E2E test: ticket appears in list")).toBeVisible();
+    // .first() is load-bearing. Every run of this spec leaves its ticket
+    // behind, so this text matches one more element each time; by 2026-09-17
+    // it resolved to 79 and the bare locator failed strict mode — the test was
+    // failing on junk it had created itself, not on a product defect. The
+    // assertion only ever needed "at least one such ticket is rendered".
+    // afterAll below removes the rows so the count stops climbing.
+    await expect(
+      page.locator("text=E2E test: ticket appears in list").first(),
+    ).toBeVisible();
   });
 
   test("GET /api/support returns 401 for unauthenticated request", async ({ request }) => {
