@@ -9,6 +9,15 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "../support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * The subject is the anonymous visitor: /admin must bounce to /auth/login.
+ * With the shared session inherited there would be nothing to redirect.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 test.describe("Admin layout (anonymous)", () => {
   test("hitting /admin redirects to /auth/login", async ({ page }) => {

@@ -18,33 +18,19 @@
  * link `nav a[href="/resumeadvisor"]`; the successor is reached from a link on
  * the dashboard, not from AppNav, so the equivalent check targets that instead
  * of asserting a nav entry that is not meant to exist.
+ *
+ * The per-file login helper is gone as of #433 — globalSetup signs in once for
+ * the whole run and every test here starts with that session.
  */
 
 import { test, expect } from "@playwright/test";
-
-const HAS_CREDS =
-  !!process.env.E2E_TEST_EMAIL && !!process.env.E2E_TEST_PASSWORD;
-
-// ── Auth helper ────────────────────────────────────────────────────────────────
-
-async function loginIfNeeded(page: import("@playwright/test").Page) {
-  await page.goto("/auth/login");
-  await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
-  await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
-  await page.click('button[type="submit"]');
-  // Pattern match, not `${BASE_URL}/dashboard`. On a deployment where
-  // NEXT_PUBLIC_JOBS_URL is unset, middleware.ts sends a job_seeker to
-  // https://jobs.icareeros.com/dashboard after login, so an exact
-  // base-URL match never fires. See the #434 note in the PR — this
-  // tolerates the redirect rather than pretending it is not happening.
-  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
-}
+import { HAS_CREDS } from "./support/auth";
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 test("Job Application Fit is reachable from the dashboard", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
+  await page.goto("/dashboard");
   await expect(
     page.locator('a[href="/evaluate/job-fit"]').first(),
   ).toBeVisible();
@@ -52,7 +38,6 @@ test("Job Application Fit is reachable from the dashboard", async ({ page }) => 
 
 test("Job Application Fit page renders heading", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/evaluate/job-fit");
   // Heading is "🎯 Job Application Fit" — match on the text, not the emoji.
   await expect(
@@ -62,7 +47,6 @@ test("Job Application Fit page renders heading", async ({ page }) => {
 
 test("Job Application Fit shows Step 1 (resume) and Step 2 (job)", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/evaluate/job-fit");
   // The two-step structure survived the consolidation verbatim:
   // "Step 1 — Your Resume" / "Step 2 — The Job".

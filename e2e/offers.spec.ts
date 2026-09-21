@@ -5,27 +5,16 @@
  */
 
 import { test, expect } from "@playwright/test";
-
-const HAS_CREDS =
-  !!process.env.E2E_TEST_EMAIL && !!process.env.E2E_TEST_PASSWORD;
-
-async function loginIfNeeded(page: import("@playwright/test").Page) {
-  await page.goto("/auth/login");
-  await page.fill('#identifier', process.env.E2E_TEST_EMAIL!);
-  await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD!);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 15000 });
-}
+import { HAS_CREDS } from "./support/auth";
 
 test("Offers nav link is visible in AppNav", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
+  await page.goto("/dashboard");
   await expect(page.locator("nav").getByText("Offers")).toBeVisible();
 });
 
 test("Offers page renders heading and Add Offer button", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/offers");
   await expect(page.getByRole("heading", { name: /offer desk/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /add offer/i })).toBeVisible();
@@ -33,7 +22,6 @@ test("Offers page renders heading and Add Offer button", async ({ page }) => {
 
 test("Add Offer button reveals the form", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/offers");
   await page.getByRole("button", { name: /add offer/i }).first().click();
   await expect(page.getByPlaceholder(/e\.g\. google/i)).toBeVisible();
@@ -42,7 +30,6 @@ test("Add Offer button reveals the form", async ({ page }) => {
 
 test("Add Offer form has Company and Role fields", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/offers");
   await page.getByRole("button", { name: /add offer/i }).first().click();
   await expect(page.getByPlaceholder(/e\.g\. google/i)).toBeEnabled();
@@ -51,7 +38,6 @@ test("Add Offer form has Company and Role fields", async ({ page }) => {
 
 test("Cancel button hides the Add Offer form", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/offers");
   await page.getByRole("button", { name: /add offer/i }).first().click();
   await page.getByRole("button", { name: /cancel/i }).click();
@@ -60,7 +46,6 @@ test("Cancel button hides the Add Offer form", async ({ page }) => {
 
 test("Empty state shows call-to-action", async ({ page }) => {
   test.skip(!HAS_CREDS, "E2E credentials not set");
-  await loginIfNeeded(page);
   await page.goto("/offers");
   // Either has offers or shows empty state — both are valid
   const hasOffers = await page.locator(".rounded-xl.border.bg-white").count();

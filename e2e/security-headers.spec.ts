@@ -1,4 +1,15 @@
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * Header and rate-limit smoke tests, plus an explicit "unauthenticated POST
+ * returns 401 not 500". The `request` fixture inherits context storage
+ * state, so the shared session has to be cleared for that last one to mean
+ * anything.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 /**
  * Day 62 — Security headers + rate limit smoke tests

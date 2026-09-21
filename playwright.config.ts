@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { STORAGE_STATE } from "./e2e/support/auth";
 
 /**
  * E2E tests run against the live staging deployment on Vercel.
@@ -15,6 +16,9 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // Signs in once and writes STORAGE_STATE, replacing the per-file UI login
+  // that 24 of 32 spec files each performed. See #433 and e2e/global-setup.ts.
+  globalSetup: "./e2e/global-setup.ts",
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -54,6 +58,17 @@ export default defineConfig({
     // digits, where traces are both affordable and worth reading. See #434.
     trace: process.env.CI ? "off" : "on-first-retry",
     screenshot: "only-on-failure",
+
+    // Every test starts signed in as the shared E2E account. globalSetup
+    // writes this file; when there are no credentials it writes an empty
+    // state, so the path always resolves and credential-gated specs skip
+    // themselves as before.
+    //
+    // Tests whose SUBJECT is being signed out must opt back out with
+    // `test.use({ storageState: LOGGED_OUT })` — that includes the 22 API
+    // tests asserting 401, because the `request` fixture inherits this state
+    // too. e2e/support/auth.ts explains the opt-out in full.
+    storageState: STORAGE_STATE,
   },
 
   // Chromium-engine projects only. The CI workflow installs the chromium

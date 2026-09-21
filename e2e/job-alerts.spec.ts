@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT, anonymousRequest } from "./support/auth";
 
 const BASE_URL     = process.env.PLAYWRIGHT_BASE_URL ?? "https://icareeros.vercel.app";
 const E2E_EMAIL    = process.env.E2E_TEST_EMAIL    ?? "";
@@ -21,16 +22,28 @@ const hasRealCreds = Boolean(E2E_EMAIL && E2E_PASSWORD);
 
 let jobAlertsRouteDeployed = false;
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async () => {
+  // Anonymous on purpose: this probe reads 401 as "deployed". The `request`
+  // fixture carries the shared session now, which would answer 200 and make
+  // the probe conclude the route is missing — skipping the whole file.
+  const anon = await anonymousRequest(BASE_URL);
   try {
-    const res = await request.get(`${BASE_URL}/api/job-alerts`);
+    const res = await anon.get(`${BASE_URL}/api/job-alerts`);
     jobAlertsRouteDeployed = res.status() === 401;
   } catch {
     jobAlertsRouteDeployed = false;
+  } finally {
+    await anon.dispose();
   }
 });
 
 // ── Route tests ───────────────────────────────────────────────────────────────
+//
+// All four assert the UNAUTHENTICATED response, and the `request` fixture
+// inherits the suite session, so they run in a signed-out block.
+
+test.describe("Job alerts API — unauthenticated", () => {
+  test.use({ storageState: LOGGED_OUT });
 
 test("GET /api/job-alerts returns 401 for unauthenticated request", async ({ request }) => {
   if (!jobAlertsRouteDeployed) {
@@ -75,6 +88,8 @@ test("DELETE /api/job-alerts returns 401 for unauthenticated request", async ({ 
   expect(res.status()).toBe(401);
 });
 
+});
+
 // ── UI test: 🔔 Alert button renders on /jobs page ────────────────────────────
 
 test("🔔 Alert button is visible on the jobs page", async ({ page }) => {
@@ -86,13 +101,6 @@ test("🔔 Alert button is visible on the jobs page", async ({ page }) => {
     test.skip(true, "job-alerts route not yet deployed");
     return;
   }
-
-  // Sign in
-  await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('#identifier', E2E_EMAIL);
-  await page.fill('input[type="password"]', E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
   // Navigate to jobs
   await page.goto(`${BASE_URL}/jobs`);
@@ -111,13 +119,6 @@ test("JobAlertModal opens and closes correctly", async ({ page }) => {
     test.skip(true, "job-alerts route not yet deployed");
     return;
   }
-
-  // Sign in
-  await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('#identifier', E2E_EMAIL);
-  await page.fill('input[type="password"]', E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
   await page.goto(`${BASE_URL}/jobs`);
 

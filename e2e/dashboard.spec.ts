@@ -1,4 +1,5 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -25,15 +26,6 @@ const E2E_EMAIL = process.env.E2E_TEST_EMAIL ?? "";
 const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
 
 const hasRealCreds = !!E2E_EMAIL && !!E2E_PASSWORD;
-
-/** Sign in via the login form and wait for /dashboard redirect. */
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/auth/login");
-  await page.fill("#identifier", E2E_EMAIL);
-  await page.fill("#password", E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
-}
 
 /** Return a signed-in Supabase client and the user's ID. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,7 +63,7 @@ test.describe("Career OS Dashboard — empty state", () => {
         .eq("status", "active");
     }
 
-    await signIn(page);
+    await page.goto("/dashboard");
   });
 
   test("dashboard renders after login without redirecting back to login", async ({
@@ -143,7 +135,7 @@ test.describe("Career OS Dashboard — active cycle", () => {
       );
       return;
     }
-    await signIn(page);
+    await page.goto("/dashboard");
   });
 
   test("dashboard shows 6 Career OS stage cards with descriptions", async ({
@@ -197,6 +189,10 @@ test.describe("Career OS Dashboard — active cycle", () => {
 // ─── Navigation tests — run everywhere (no credentials needed) ───────────────
 
 test.describe("Dashboard navigation", () => {
+  // Signed out: both assertions here are about the anonymous visitor, so this
+  // block must not inherit the suite-wide session.
+  test.use({ storageState: LOGGED_OUT });
+
   test("unauthenticated user is redirected to /auth/login from /dashboard", async ({
     page,
   }) => {

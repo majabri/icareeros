@@ -1,4 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433). Every assertion
+ * in this file — the redirect, the login form, the 401 — describes what an
+ * anonymous visitor gets.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 const BASE = process.env.BASE_URL ?? "https://icareeros.vercel.app";
 

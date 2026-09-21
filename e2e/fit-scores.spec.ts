@@ -7,6 +7,17 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * Every assertion here is about the route's UNAUTHENTICATED behaviour (401
+ * when deployed, 404 when not). The `request` fixture inherits context
+ * storage state, so without this the shared session would turn the 401
+ * into a 200.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 const ROUTE = "/api/jobs/fit-scores";
 

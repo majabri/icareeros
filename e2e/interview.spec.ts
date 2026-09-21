@@ -1,21 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { HAS_CREDS as PROBE } from "./support/auth";
 
-const EMAIL = process.env.E2E_TEST_EMAIL ?? "";
-const PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
-const PROBE = EMAIL && PASSWORD;
+// The beforeEach that signed in before every test is gone — globalSetup does
+// it once for the whole run (#433). The one test that depended on the
+// beforeEach leaving the browser on /dashboard now navigates there itself.
 
 test.describe("Interview Simulator", () => {
-  test.beforeEach(async ({ page }) => {
-    if (!PROBE) test.skip();
-    await page.goto("/auth/login");
-    await page.fill('#identifier', EMAIL);
-    await page.fill('input[type="password"]', PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForURL("**/dashboard", { timeout: 15_000 });
-  });
-
   test("nav link navigates to /interview", async ({ page }) => {
     if (!PROBE) test.skip();
+    await page.goto("/dashboard");
     await page.click('a[href="/interview"]');
     await page.waitForURL("**/interview");
     await expect(page).toHaveURL(/\/interview/);
