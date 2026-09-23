@@ -1,4 +1,5 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { LOGGED_OUT, STORAGE_STATE } from "./support/auth";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -27,15 +28,6 @@ const hasRealCreds = !!E2E_EMAIL && !!E2E_PASSWORD;
  */
 let profilePageDeployed = false;
 
-/** Sign in via the login form and wait for /dashboard redirect. */
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/auth/login");
-  await page.fill("#identifier", E2E_EMAIL);
-  await page.fill("#password", E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
-}
-
 /** Return a signed-in Supabase client and the user's ID. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getSupabaseSession(): Promise<{ supabase: any; userId: string } | null> {
@@ -51,6 +43,10 @@ async function getSupabaseSession(): Promise<{ supabase: any; userId: string } |
 // ─── Redirect tests (no credentials needed) ───────────────────────────────────
 
 test.describe("Profile — access control", () => {
+  // Signed out: the subject is what an anonymous visitor gets, so this must
+  // not inherit the suite-wide session.
+  test.use({ storageState: LOGGED_OUT });
+
   test("unauthenticated user is redirected to /auth/login from /profile", async ({
     page,
   }) => {
@@ -66,13 +62,11 @@ test.describe("Profile page — authenticated", () => {
   // The page only exists after PR #14 is merged — tests skip gracefully if not yet live.
   test.beforeAll(async ({ browser }) => {
     if (!hasRealCreds) return;
-    const page = await browser.newPage();
+    // newPage() opens a context with no storage state, so build the context
+    // from the shared session explicitly.
+    const ctx  = await browser.newContext({ storageState: STORAGE_STATE });
+    const page = await ctx.newPage();
     try {
-      await page.goto("/auth/login");
-      await page.fill("#identifier", E2E_EMAIL);
-      await page.fill("#password", E2E_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
       await page.goto("/profile");
       // 404 pages render "404" as large text; real profile page renders form fields
       const has404 = await page.getByText("404").isVisible({ timeout: 4_000 }).catch(() => false);
@@ -80,14 +74,14 @@ test.describe("Profile page — authenticated", () => {
     } catch {
       profilePageDeployed = false;
     } finally {
-      await page.close();
+      await ctx.close();
     }
     if (!profilePageDeployed) {
       console.log("ℹ️  /profile page not yet deployed in staging — content tests skipped");
     }
   });
 
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({}, testInfo) => {
     if (!hasRealCreds) {
       testInfo.skip(
         true,
@@ -111,8 +105,6 @@ test.describe("Profile page — authenticated", () => {
         .delete()
         .eq("user_id", ctx.userId);
     }
-
-    await signIn(page);
   });
 
   test("authenticated user can navigate to /profile", async ({ page }) => {

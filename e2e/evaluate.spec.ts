@@ -11,6 +11,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT, STORAGE_STATE } from "./support/auth";
 
 // ── Env ───────────────────────────────────────────────────────────────────────
 
@@ -29,15 +30,11 @@ test.use({ baseURL: BASE_URL });
 test.beforeAll(async ({ browser }) => {
   if (!hasRealCreds) return;
 
-  const page = await browser.newPage();
+  // newPage() opens a context with no storage state; the probe needs the
+  // shared session, so build the context from it explicitly.
+  const ctx  = await browser.newContext({ storageState: STORAGE_STATE });
+  const page = await ctx.newPage();
   try {
-    // Login
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
     // Probe /profile
     await page.goto("/profile");
     const has404 = await page.getByText("404").isVisible({ timeout: 4_000 }).catch(() => false);
@@ -58,58 +55,21 @@ test.beforeAll(async ({ browser }) => {
     profileDeployed = false;
     apiRouteDeployed = false;
   } finally {
-    await page.close();
+    await ctx.close();
   }
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-test.describe("Evaluate stage — /profile", () => {
+test.describe("Evaluate stage — signed out", () => {
+  // The redirect and the 401 both describe the anonymous visitor. The 401 is
+  // the subtle one: the `request` fixture inherits storage state as well.
+  test.use({ storageState: LOGGED_OUT });
+
   test("unauthenticated user is redirected to /auth/login from /profile", async ({ page }) => {
     // This tests middleware, which is always deployed
     await page.goto("/profile");
     await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
-  });
-
-  test("authenticated user can load /profile page", async ({ page }, testInfo) => {
-    if (!hasRealCreds || !profileDeployed) {
-      testInfo.skip(true, "Profile page not yet deployed — skipping");
-      return;
-    }
-
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    await page.goto("/profile");
-    await expect(page.locator("h1")).toContainText("My Profile", { timeout: 8_000 });
-    await expect(page.locator("text=Evaluate")).toBeVisible();
-    await expect(page.locator("text=Stage 1 of 6")).toBeVisible();
-  });
-
-  test("profile form has all expected fields", async ({ page }, testInfo) => {
-    if (!hasRealCreds || !profileDeployed) {
-      testInfo.skip(true, "Profile page not yet deployed — skipping");
-      return;
-    }
-
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    await page.goto("/profile");
-
-    await expect(page.locator("#full_name")).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator("#current_position")).toBeVisible();
-    await expect(page.locator("#experience_level")).toBeVisible();
-    await expect(page.locator("#skills")).toBeVisible();
-    await expect(page.locator("#target_roles")).toBeVisible();
-    await expect(page.locator("#location")).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
   test("/api/career-os/evaluate returns 401 without auth", async ({ request }, testInfo) => {
@@ -126,5 +86,36 @@ test.describe("Evaluate stage — /profile", () => {
 
     // Without auth cookie, route should return 401
     expect(res.status()).toBe(401);
+  });
+});
+
+test.describe("Evaluate stage — /profile", () => {
+  test("authenticated user can load /profile page", async ({ page }, testInfo) => {
+    if (!hasRealCreds || !profileDeployed) {
+      testInfo.skip(true, "Profile page not yet deployed — skipping");
+      return;
+    }
+
+    await page.goto("/profile");
+    await expect(page.locator("h1")).toContainText("My Profile", { timeout: 8_000 });
+    await expect(page.locator("text=Evaluate")).toBeVisible();
+    await expect(page.locator("text=Stage 1 of 6")).toBeVisible();
+  });
+
+  test("profile form has all expected fields", async ({ page }, testInfo) => {
+    if (!hasRealCreds || !profileDeployed) {
+      testInfo.skip(true, "Profile page not yet deployed — skipping");
+      return;
+    }
+
+    await page.goto("/profile");
+
+    await expect(page.locator("#full_name")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("#current_position")).toBeVisible();
+    await expect(page.locator("#experience_level")).toBeVisible();
+    await expect(page.locator("#skills")).toBeVisible();
+    await expect(page.locator("#target_roles")).toBeVisible();
+    await expect(page.locator("#location")).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 });

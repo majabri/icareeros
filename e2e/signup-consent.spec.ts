@@ -1,4 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * The signup form is by definition a signed-out surface — an authenticated
+ * visitor is redirected away from it, so the shared session would make
+ * every assertion here unreachable.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 

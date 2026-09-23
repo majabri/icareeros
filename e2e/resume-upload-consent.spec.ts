@@ -1,22 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { HAS_CREDS } from "./support/auth";
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
-const E2E_EMAIL    = process.env.E2E_TEST_EMAIL    ?? "";
-const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
-const HAS_CREDS    = Boolean(E2E_EMAIL && E2E_PASSWORD);
 
 // Behind login. Skip when creds aren't configured (matches existing pattern
 // in account.spec.ts) AND when the new modal isn't deployed to BASE_URL yet
 // (so we don't fail on prod-CI before this PR merges).
 let SKIP_REASON: string | null = null;
-
-async function login(page: import("@playwright/test").Page) {
-  await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('#identifier', E2E_EMAIL);
-  await page.fill('input[type="password"]', E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 15_000 });
-}
 
 test.describe("Resume upload consent modal", () => {
   test.skip(!HAS_CREDS, "E2E_TEST_EMAIL / E2E_TEST_PASSWORD not set");
@@ -43,7 +33,6 @@ test.describe("Resume upload consent modal", () => {
   });
 
   test("clicking the dropzone on /mycareer/profile shows the consent modal", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/mycareer/profile`);
     // Find the "Drop resume here or click to browse" dropzone and click it.
     const dropzone = page.getByText(/drop resume here or click to browse/i);
@@ -56,7 +45,6 @@ test.describe("Resume upload consent modal", () => {
   });
 
   test("clicking Cancel dismisses the modal without opening the file picker", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/mycareer/profile`);
     await page.getByText(/drop resume here or click to browse/i).click();
     await expect(page.getByRole("dialog", { name: /before you upload/i })).toBeVisible();
@@ -67,7 +55,6 @@ test.describe("Resume upload consent modal", () => {
   });
 
   test("Accept button has initial focus", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/mycareer/profile`);
     await page.getByText(/drop resume here or click to browse/i).click();
     await expect(page.getByTestId("resume-consent-accept")).toBeFocused();

@@ -1,17 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { HAS_CREDS, LOGGED_OUT } from "./support/auth";
 
-const E2E_EMAIL    = process.env.E2E_TEST_EMAIL    ?? "";
-const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
-const HAS_CREDS    = Boolean(E2E_EMAIL && E2E_PASSWORD);
 const BASE_URL     = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
-
-async function login(page: import("@playwright/test").Page) {
-  await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('#identifier', E2E_EMAIL);
-  await page.fill('input[type="password"]', E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 15_000 });
-}
 
 /**
  * Delete the tickets this spec creates.
@@ -57,13 +47,7 @@ test.describe("Support Inbox (/support)", () => {
   // to still exist while it asserts.
   test.afterAll(deleteE2ESupportTickets);
 
-  test("redirects unauthenticated users to /auth/login", async ({ page }) => {
-    await page.goto(`${BASE_URL}/support`);
-    await expect(page).toHaveURL(/\/auth\/login/);
-  });
-
   test("renders the support page with form and ticket history", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/support`);
     await expect(page.locator("h1")).toContainText("Support");
     await expect(page.locator("h2").first()).toContainText("Submit a ticket");
@@ -71,7 +55,6 @@ test.describe("Support Inbox (/support)", () => {
   });
 
   test("shows validation error when subject is too short", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/support`);
     // HTML5 minlength will prevent submit natively; test that form fields exist
     const subjectInput = page.locator('input[id="subject"]');
@@ -80,7 +63,6 @@ test.describe("Support Inbox (/support)", () => {
   });
 
   test("priority chips are selectable", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/support`);
     const highBtn = page.locator("button", { hasText: "High" });
     await expect(highBtn).toBeVisible();
@@ -89,7 +71,6 @@ test.describe("Support Inbox (/support)", () => {
   });
 
   test("submits a ticket and shows success message", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/support`);
     await page.fill('input[id="subject"]', "E2E test: support ticket");
     await page.fill('textarea[id="body"]', "This is an automated E2E test ticket. Please ignore.");
@@ -98,7 +79,6 @@ test.describe("Support Inbox (/support)", () => {
   });
 
   test("new ticket appears in My tickets list after submit", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/support`);
     await page.fill('input[id="subject"]', "E2E test: ticket appears in list");
     await page.fill('textarea[id="body"]', "Verifying the new ticket renders in the history list.");
@@ -113,6 +93,21 @@ test.describe("Support Inbox (/support)", () => {
     await expect(
       page.locator("text=E2E test: ticket appears in list").first(),
     ).toBeVisible();
+  });
+});
+
+/**
+ * Signed out — both of these assert what an anonymous visitor gets, so they
+ * must not inherit the suite-wide session. The 401 is the subtle one: the
+ * `request` fixture inherits storage state too, so without LOGGED_OUT it
+ * would be authenticated and answer 200.
+ */
+test.describe("Support Inbox — unauthenticated", () => {
+  test.use({ storageState: LOGGED_OUT });
+
+  test("redirects unauthenticated users to /auth/login", async ({ page }) => {
+    await page.goto(`${BASE_URL}/support`);
+    await expect(page).toHaveURL(/\/auth\/login/);
   });
 
   test("GET /api/support returns 401 for unauthenticated request", async ({ request }) => {

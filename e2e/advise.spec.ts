@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
 
 // ── Env ───────────────────────────────────────────────────────────────────────
 
@@ -24,20 +25,13 @@ let dashboardDeployed   = false; // /dashboard shows Career OS stage cards
 
 test.use({ baseURL: BASE_URL });
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ request }) => {
   if (!hasRealCreds) return;
 
-  const page = await browser.newPage();
   try {
     // Login
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
     // Probe the advise API route (unauthenticated → 401 means route exists)
-    const routeRes = await page.request.post("/api/career-os/advise", {
+    const routeRes = await request.post("/api/career-os/advise", {
       data: { cycle_id: "probe" },
       headers: { "Content-Type": "application/json" },
       failOnStatusCode: false,
@@ -47,70 +41,54 @@ test.beforeAll(async ({ browser }) => {
     adviseRouteDeployed = routeRes.status() !== 404;
 
     // Probe dashboard for Advise card
-    const dashRes = await page.request.get("/dashboard", { failOnStatusCode: false });
+    const dashRes = await request.get("/dashboard", { failOnStatusCode: false });
     dashboardDeployed = dashRes.status() < 400;
   } catch {
     adviseRouteDeployed = false;
     dashboardDeployed   = false;
-  } finally {
-    await page.close();
   }
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-test("POST /api/career-os/advise → 401 without authentication", async ({ request }) => {
-  test.skip(!adviseRouteDeployed, "Advise route not yet deployed — skipping until PR is merged");
-  // Fresh unauthenticated request context — no cookies
-  const res = await request.post(`${BASE_URL}/api/career-os/advise`, {
-    data: { cycle_id: "some-cycle-id" },
-    headers: { "Content-Type": "application/json" },
-    failOnStatusCode: false,
-  });
-  expect(res.status()).toBe(401);
-  const body = await res.json();
-  expect(body).toHaveProperty("error");
-});
+/**
+ * Signed out — the `request` fixture inherits the suite-wide session, so a
+ * 401 assertion only means anything with the session cleared.
+ */
+test.describe("advise API — unauthenticated", () => {
+  test.use({ storageState: LOGGED_OUT });
 
-test("POST /api/career-os/advise → 400 when cycle_id is missing", async ({ browser }) => {
-  test.skip(!hasRealCreds || !adviseRouteDeployed, "Advise route not yet deployed");
-
-  const page = await browser.newPage();
-  try {
-    await page.goto(`${BASE_URL}/auth/login`);
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    // Authenticated request without cycle_id
-    const res = await page.request.post("/api/career-os/advise", {
-      data: {},
+  test("POST /api/career-os/advise → 401 without authentication", async ({ request }) => {
+    test.skip(!adviseRouteDeployed, "Advise route not yet deployed — skipping until PR is merged");
+    // Fresh unauthenticated request context — no cookies
+    const res = await request.post(`${BASE_URL}/api/career-os/advise`, {
+      data: { cycle_id: "some-cycle-id" },
       headers: { "Content-Type": "application/json" },
       failOnStatusCode: false,
     });
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(401);
     const body = await res.json();
-    expect(body.error).toMatch(/cycle_id/i);
-  } finally {
-    await page.close();
-  }
+    expect(body).toHaveProperty("error");
+  });
 });
 
-test("Dashboard shows Advise stage card", async ({ browser }) => {
+test("POST /api/career-os/advise → 400 when cycle_id is missing", async ({ request }) => {
+  test.skip(!hasRealCreds || !adviseRouteDeployed, "Advise route not yet deployed");
+
+  // Authenticated request without cycle_id
+  const res = await request.post("/api/career-os/advise", {
+    data: {},
+    headers: { "Content-Type": "application/json" },
+    failOnStatusCode: false,
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toMatch(/cycle_id/i);
+});
+
+test("Dashboard shows Advise stage card", async ({ page }) => {
   test.skip(!hasRealCreds || !dashboardDeployed, "Dashboard not yet deployed");
 
-  const page = await browser.newPage();
-  try {
-    await page.goto(`${BASE_URL}/auth/login`);
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    await page.goto("/dashboard");
-    await expect(page.getByText("Advise")).toBeVisible({ timeout: 10_000 });
-  } finally {
-    await page.close();
-  }
+  await page.goto("/dashboard");
+  await expect(page.getByText("Advise")).toBeVisible({ timeout: 10_000 });
 });

@@ -1,9 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { HAS_CREDS } from "./support/auth";
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
-const E2E_EMAIL    = process.env.E2E_TEST_EMAIL    ?? "";
-const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "";
-const HAS_CREDS    = Boolean(E2E_EMAIL && E2E_PASSWORD);
 
 let SKIP_REASON: string | null = null;
 
@@ -20,14 +18,6 @@ test.beforeAll(async ({ request }) => {
   }
 });
 
-async function login(page: import("@playwright/test").Page) {
-  await page.goto(`${BASE_URL}/auth/login`);
-  await page.fill('#identifier', E2E_EMAIL);
-  await page.fill('input[type="password"]', E2E_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 15_000 });
-}
-
 test.describe("Founding offer checkout", () => {
   test.skip(!HAS_CREDS, "E2E_TEST_EMAIL / E2E_TEST_PASSWORD not set");
 
@@ -36,7 +26,6 @@ test.describe("Founding offer checkout", () => {
   });
 
   test("renders headline + price + consent + payment button", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/founding`);
     await expect(page.getByRole("heading", { name: /founding lifetime access/i, level: 1 })).toBeVisible();
     await expect(page.getByText(/\$89\.00/)).toBeVisible();
@@ -45,7 +34,6 @@ test.describe("Founding offer checkout", () => {
   });
 
   test("payment button is disabled until non-refundable checkbox is checked", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/founding`);
     const button = page.getByTestId("founding-purchase-button");
     await expect(button).toBeDisabled();
@@ -58,7 +46,6 @@ test.describe("Founding offer checkout", () => {
   });
 
   test("non-refundable checkbox is required and aria-required=true", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/founding`);
     const cb = page.getByTestId("founding-nonrefundable-consent");
     await expect(cb).toHaveAttribute("aria-required", "true");
@@ -66,7 +53,6 @@ test.describe("Founding offer checkout", () => {
   });
 
   test("Founding Member Terms link points to /legal/terms#founding-offer in new tab", async ({ page }) => {
-    await login(page);
     await page.goto(`${BASE_URL}/founding`);
     const link = page.getByRole("link", { name: /founding member terms/i }).first();
     await expect(link).toHaveAttribute("href", "/legal/terms#founding-offer");

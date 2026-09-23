@@ -1,4 +1,15 @@
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * This whole file is about the signed-OUT experience: the middleware
+ * redirects for an anonymous visitor, and the login/signup forms as they
+ * render before anyone has authenticated. It must not inherit the shared
+ * session that playwright.config.ts now applies by default.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 /**
  * Auth flow E2E tests.

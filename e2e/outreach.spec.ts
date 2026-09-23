@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT, STORAGE_STATE, anonymousRequest } from "./support/auth";
 
 // ── Env ───────────────────────────────────────────────────────────────────────
 
@@ -35,10 +36,16 @@ let hasOutreachButtons = false;
 
 test.use({ baseURL: BASE_URL });
 
-test.beforeAll(async ({ browser, request: unauthRequest }) => {
+test.beforeAll(async ({ browser, request }) => {
   // ── Probe 1: outreach route — unauthenticated ────────────────────────────
+  //
+  // Anonymous on purpose: this probe reads 401 as "route exists, wants auth"
+  // and 404 as "not deployed". The `request` fixture carries the shared
+  // session now, so an authenticated probe would answer 200 and the file
+  // would skip itself silently.
+  const anon = await anonymousRequest(BASE_URL);
   try {
-    const routeRes = await unauthRequest.post(`${BASE_URL}/api/outreach`, {
+    const routeRes = await anon.post(`${BASE_URL}/api/outreach`, {
       data: {},
       headers: { "Content-Type": "application/json" },
       failOnStatusCode: false,
@@ -46,20 +53,20 @@ test.beforeAll(async ({ browser, request: unauthRequest }) => {
     outreachRouteDeployed = routeRes.status() === 401;
   } catch {
     outreachRouteDeployed = false;
+  } finally {
+    await anon.dispose();
   }
 
   if (!hasRealCreds) return;
 
   // ── Probes 2 & 3: jobs page + Outreach button presence ───────────────────
-  const page = await browser.newPage();
+  //
+  // These need the signed-in session. newContext() without storageState would
+  // open an anonymous browser, so pass it explicitly.
+  const ctx  = await browser.newContext({ storageState: STORAGE_STATE });
+  const page = await ctx.newPage();
   try {
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    const jobsRes = await page.request.get("/opportunities", { failOnStatusCode: false });
+    const jobsRes = await request.get("/opportunities", { failOnStatusCode: false });
     jobsPageDeployed = jobsRes.status() < 400;
 
     if (jobsPageDeployed && outreachRouteDeployed) {
@@ -78,11 +85,14 @@ test.beforeAll(async ({ browser, request: unauthRequest }) => {
     jobsPageDeployed   = false;
     hasOutreachButtons = false;
   } finally {
-    await page.close();
+    await ctx.close();
   }
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+test.describe("Outreach API — unauthenticated", () => {
+  test.use({ storageState: LOGGED_OUT });
 
 test("POST /api/outreach → 401 without authentication", async ({ request }) => {
   test.skip(!outreachRouteDeployed, "Outreach route not yet deployed — skipping until PR is merged");
@@ -95,51 +105,31 @@ test("POST /api/outreach → 401 without authentication", async ({ request }) =>
   expect(res.status()).toBe(401);
 });
 
-test("POST /api/outreach → 400 when opportunity_id is missing", async ({ browser }) => {
+});
+
+test("POST /api/outreach → 400 when opportunity_id is missing", async ({ request }) => {
   test.skip(!outreachRouteDeployed, "Outreach route not yet deployed — skipping until PR is merged");
   test.skip(!hasRealCreds, "No E2E credentials — skipping authenticated test");
 
-  const page = await browser.newPage();
-  try {
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-
-    const res = await page.request.post("/api/outreach", {
-      data: {},
-      headers: { "Content-Type": "application/json" },
-      failOnStatusCode: false,
-    });
-    expect(res.status()).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/opportunity_id/i);
-  } finally {
-    await page.close();
-  }
+  const res = await request.post("/api/outreach", {
+    data: {},
+    headers: { "Content-Type": "application/json" },
+    failOnStatusCode: false,
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toMatch(/opportunity_id/i);
 });
 
-test("/jobs page shows Outreach button on opportunity cards", async ({ browser }) => {
+test("/jobs page shows Outreach button on opportunity cards", async ({ page }) => {
   test.skip(!outreachRouteDeployed, "Outreach route not yet deployed — skipping until PR is merged");
   test.skip(!jobsPageDeployed,      "/jobs page not yet deployed — skipping until PR is merged");
   test.skip(!hasRealCreds,          "No E2E credentials — skipping authenticated test");
   test.skip(!hasOutreachButtons,    "No Outreach buttons visible on /jobs — DB may be empty or code not yet deployed");
 
-  const page = await browser.newPage();
-  try {
-    await page.goto("/auth/login");
-    await page.locator("#identifier").fill(E2E_EMAIL);
-    await page.locator("#password").fill(E2E_PASS);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
+  await page.goto("/opportunities");
+  await page.waitForSelector('button:has-text("Outreach")', { timeout: 15_000 });
 
-    await page.goto("/opportunities");
-    await page.waitForSelector('button:has-text("Outreach")', { timeout: 15_000 });
-
-    const outreachBtn = page.locator('button:has-text("Outreach")').first();
-    await expect(outreachBtn).toBeVisible();
-  } finally {
-    await page.close();
-  }
+  const outreachBtn = page.locator('button:has-text("Outreach")').first();
+  await expect(outreachBtn).toBeVisible();
 });

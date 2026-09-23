@@ -1,4 +1,15 @@
 import { test, expect } from "@playwright/test";
+import { LOGGED_OUT } from "./support/auth";
+
+/**
+ * Runs signed OUT, overriding the suite-wide session (#433).
+ *
+ * The consent banner's behaviour depends on a first-visit browser with no
+ * stored state. Inheriting the shared session would also carry over
+ * whatever consent that session had already recorded, so these tests need
+ * a genuinely empty context.
+ */
+test.use({ storageState: LOGGED_OUT });
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
