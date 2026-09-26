@@ -34,7 +34,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { invocationStart, invocationComplete, inferInvoker } from "../_shared/heartbeat.ts";
 
-const BATCH_SIZE = 20;                // Greenhouse/Lever/Ashby fetch batch
+const BATCH_SIZE = 5;                 // Greenhouse/Lever/Ashby parallel companies per batch (#453: was 20 — stacked 8s statement timeouts)
+const UPSERT_CHUNK_ROWS = 100;        // #453 — rows per ats_jobs_upsert_batch RPC call; keeps each statement well under the PostgREST 8s statement_timeout
 const FETCH_TIMEOUT_MS = 10_000;
 const WD_PAGE_DELAY_MS = 100;         // Bug 3 — was 200
 const WD_TENANT_BATCH  = 4;           // Bug 3 — parallel tenants per batch
@@ -51,9 +52,19 @@ const SR_MAX_PAGES = 30;
 // if a full cycle (5 sources) can't complete in 60 chained invocations
 // something is fundamentally wrong (e.g. every request timing out), and
 // we let the cursor go stale + reset rather than chain forever.
-const INGEST_BUDGET_MS = 100_000;
+const INGEST_BUDGET_MS = 90_000;  // #453: was 100_000
+// #453 — the deadline is only observed BETWEEN batches, so a batch that starts
+// at deadline-1ms still runs to completion. With BATCH_SIZE companies in
+// flight, each up to FETCH_TIMEOUT_MS + several upsert chunks, a batch can
+// take ~30s. No batch may START inside that margin, which keeps the worst
+// case (90s - 30s + 30s) at 90s — 60s clear of the 150s wall clock that was
+// killing link 0 (#443).
+const BATCH_MARGIN_MS  = 30_000;
 const MAX_CHAIN_DEPTH  = 60;
 const CURSOR_STALE_MS  = 10 * 60 * 1000; // 10 min — presumed-dead chain, safe to restart
+const SWEEP_BATCH      = 2000;           // #453 — rows per ats_jobs_sweep_stale call (well under 8s)
+const SWEEP_MAX_PASSES = 5;              // #453 — at most 10k deactivations per completed cycle
+const SWEEP_MARGIN_MS  = 20_000;         // #453 — never start a sweep pass inside the last 20s
 
 // ── Company lists — synced to companyList.ts (dead slugs pruned) ────────
 
@@ -144,6 +155,41 @@ async function fetchJsonWithLogging<T>(url: string, source: string, slug: string
   }
 }
 
+/**
+ * #453 — batch-level budget check. True when there is no longer room to
+ * START another batch of BATCH_SIZE companies before `deadline`.
+ */
+function outOfBudget(deadline: number): boolean {
+  return Date.now() + BATCH_MARGIN_MS >= deadline;
+}
+
+/**
+ * #453 — write rows through `ats_jobs_upsert_batch` in chunks of
+ * UPSERT_CHUNK_ROWS. The RPC does INSERT … ON CONFLICT DO UPDATE only where
+ * the row actually changed and a narrow `last_seen_at` bump otherwise, so an
+ * unchanged catalog no longer rewrites every row + 13 indexes each cycle.
+ * Chunking is what keeps each statement under the 8s PostgREST timeout that
+ * silently froze the large employers from 2026-09-16.
+ *
+ * Extra keys on a row (last_seen_at, is_active) are ignored by the RPC;
+ * the row literals below are left exactly as they were so the payload-shape
+ * contract tests keep meaning what they meant.
+ *
+ * Returns rows written (inserted + updated + touched). Throws on the first
+ * failed chunk with the chunk index in the message.
+ */
+async function upsertRows(supabase: any, rows: unknown[], tag: string): Promise<number> {
+  let written = 0;
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK_ROWS) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK_ROWS);
+    const { data, error } = await supabase.rpc("ats_jobs_upsert_batch", { p_rows: chunk });
+    if (error) throw new Error(`${tag}:chunk${i / UPSERT_CHUNK_ROWS}:${error.message}`);
+    const r = Array.isArray(data) ? data[0] : data;
+    written += (r?.inserted ?? 0) + (r?.updated ?? 0) + (r?.touched ?? 0);
+  }
+  return written;
+}
+
 // #425 — chunked-source contract. Every per-source ingest function now
 // takes a startIndex (resume point) + deadline (Date.now() ms) and
 // returns nextIndex/done so the caller can persist a cursor and self-chain
@@ -160,7 +206,7 @@ async function ingestGreenhouse(supabase: any, startIndex: number, deadline: num
   const errors: string[] = [];
   let i = startIndex;
   for (; i < GREENHOUSE.length; i += BATCH_SIZE) {
-    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    if (outOfBudget(deadline)) return { upserted, errors, nextIndex: i, done: false };
     const batch = GREENHOUSE.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -182,8 +228,7 @@ async function ingestGreenhouse(supabase: any, startIndex: number, deadline: num
         is_active: true,
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) throw new Error(`gh:${slug}:${error.message}`);
+      await upsertRows(supabase, rows, `gh:${slug}`);
       return rows.length;
     }));
     for (const r of results) {
@@ -204,7 +249,7 @@ async function ingestLever(supabase: any, startIndex: number, deadline: number):
   const errors: string[] = [];
   let i = startIndex;
   for (; i < LEVER.length; i += BATCH_SIZE) {
-    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    if (outOfBudget(deadline)) return { upserted, errors, nextIndex: i, done: false };
     const batch = LEVER.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const postings = (await fetchJsonWithLogging<any[]>(
@@ -227,8 +272,7 @@ async function ingestLever(supabase: any, startIndex: number, deadline: number):
         enrichment_status: "pending",
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) throw new Error(`lever:${slug}:${error.message}`);
+      await upsertRows(supabase, rows, `lever:${slug}`);
       return rows.length;
     }));
     for (const r of results) {
@@ -249,7 +293,7 @@ async function ingestAshby(supabase: any, startIndex: number, deadline: number):
   const errors: string[] = [];
   let i = startIndex;
   for (; i < ASHBY.length; i += BATCH_SIZE) {
-    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    if (outOfBudget(deadline)) return { upserted, errors, nextIndex: i, done: false };
     const batch = ASHBY.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map(async (slug) => {
       const data = await fetchJsonWithLogging<{ jobs?: any[] }>(
@@ -273,8 +317,7 @@ async function ingestAshby(supabase: any, startIndex: number, deadline: number):
         enrichment_status: "pending",
       }));
       if (rows.length === 0) return 0;
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) throw new Error(`ashby:${slug}:${error.message}`);
+      await upsertRows(supabase, rows, `ashby:${slug}`);
       return rows.length;
     }));
     for (const r of results) {
@@ -327,8 +370,8 @@ async function ingestSingleWorkdayTenant(t: { tenant: string; shard: string; sit
       };
     }).filter((r: any) => r !== null);
     if (rows.length > 0) {
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) { errors.push(`workday:${t.tenant}:${error.message}`.slice(0, 200)); break; }
+      try { await upsertRows(supabase, rows, `workday:${t.tenant}`); }
+      catch (e) { errors.push(String((e as Error).message).slice(0, 200)); break; }
       upserted += rows.length;
     }
     if (postings.length < WD_PAGE_SIZE) break;
@@ -349,7 +392,7 @@ async function ingestWorkday(supabase: any, startIndex: number, deadline: number
   const errors: string[] = [];
   let i = startIndex;
   for (; i < WORKDAY.length; i += WD_TENANT_BATCH) {
-    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    if (outOfBudget(deadline)) return { upserted, errors, nextIndex: i, done: false };
     const batch = WORKDAY.slice(i, i + WD_TENANT_BATCH);
     const results = await Promise.allSettled(batch.map(t => ingestSingleWorkdayTenant(t, supabase, errors, deadline)));
     for (const r of results) {
@@ -406,8 +449,8 @@ async function ingestSmartRecruitersSlug(slug: string, supabase: any, errors: st
         };
       }).filter((r: any) => r !== null);
     if (rows.length > 0) {
-      const { error } = await supabase.from("ats_jobs").upsert(rows, { onConflict: "source,apply_url" });
-      if (error) { errors.push(`smartrecruiters:${slug}:${error.message}`.slice(0, 200)); break; }
+      try { await upsertRows(supabase, rows, `smartrecruiters:${slug}`); }
+      catch (e) { errors.push(String((e as Error).message).slice(0, 200)); break; }
       upserted += rows.length;
     }
     if (postings.length < SR_PAGE_SIZE) break;
@@ -422,7 +465,7 @@ async function ingestSmartRecruiters(supabase: any, startIndex: number, deadline
   const errors: string[] = [];
   let i = startIndex;
   for (; i < SMARTRECRUITERS.length; i++) {
-    if (Date.now() >= deadline) return { upserted, errors, nextIndex: i, done: false };
+    if (outOfBudget(deadline)) return { upserted, errors, nextIndex: i, done: false };
     const slug = SMARTRECRUITERS[i];
     upserted += await ingestSmartRecruitersSlug(slug, supabase, errors, deadline);
   }
@@ -560,16 +603,24 @@ serve(async (req) => {
       // truncated/still-chaining pass would falsely deactivate jobs from
       // sources this cycle hasn't reached yet — see issue #425's
       // "do NOT mass-deactivate" warning.
+      // #453 — the sweep used to be ONE unbounded UPDATE over every stale
+      // row through PostgREST, which timed out at 8s on every cycle, swallowed
+      // the error, and reported `deactivated: 0` because `.select(…, {count,
+      // head})` after `.update()` has no effect in postgrest-js. It now runs
+      // through ats_jobs_sweep_stale(): bounded (SWEEP_BATCH rows per call),
+      // board-aware (only boards crawled inside the window are swept, so a
+      // board WE failed to refresh is never mass-deactivated), and it returns
+      // the real count. Loops while there is budget and rows keep coming.
       try {
-        const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabase
-          .from("ats_jobs")
-          .update({ is_active: false })
-          .lt("last_seen_at", cutoff)
-          .eq("is_active", true)
-          .select("id", { count: "exact", head: true });
-        deactivated = count ?? 0;
-      } catch (_e) { /* best-effort */ }
+        for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
+          if (Date.now() + SWEEP_MARGIN_MS >= deadline) break;
+          const { data, error } = await supabase.rpc("ats_jobs_sweep_stale", { p_cutoff_hours: 48, p_limit: SWEEP_BATCH });
+          if (error) { console.error("[ingest-ats-direct] sweep failed:", error.message); break; }
+          const n = typeof data === "number" ? data : Number(data ?? 0);
+          deactivated += n;
+          if (n < SWEEP_BATCH) break;
+        }
+      } catch (e) { console.error("[ingest-ats-direct] sweep threw:", (e as Error).message); }
 
       // fix/jobs-enrichment-throughput Fix 2 — kick a priority-lane enrich
       // pass targeting exec / director / VP / security titles so the newly
