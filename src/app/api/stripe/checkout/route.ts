@@ -22,9 +22,20 @@ import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
-import { getStripe, isFoundingPriceId, resolvePriceId } from "@/lib/stripe";
-import { RECURRING_ADDONS } from "@/services/billing/types";
-import type { SubscriptionPlan, BillingCycle, AddonKey } from "@/services/billing/types";
+import { getStripe, isFoundingPriceId, resolvePriceId, allConfiguredPriceIds } from "@/lib/stripe";
+import type { SubscriptionPlan, BillingCycle } from "@/services/billing/types";
+
+/**
+ * #446 — the three non-founding one-time/recurring addons (sprint,
+ * interview_pack, negotiation_pack) are sellable through this route but
+ * nothing in the codebase grants anything for them, and the webhook has no
+ * way to record "this customer also bought an addon" without clobbering
+ * their plan (see #446's write-up). Restricting checkout to founding_lifetime
+ * only means the smallest safe change: no one can be charged for
+ * something the product doesn't yet deliver. Re-add the others to this
+ * union once #446's schema work (a real entitlements table) ships.
+ */
+type SellableAddon = "founding_lifetime";
 
 async function makeSupabaseServer() {
   const cookieStore = await cookies();
@@ -49,15 +60,18 @@ async function makeSupabaseServer() {
  * server-side STRIPE_PRICE_* ones — easy to forget when wiring Vercel.
  *
  * The route now accepts EITHER shape:
- *   • Legacy: `{ priceId, mode, successUrl, cancelUrl }` (still works for any
- *     server-side caller that already has a priceId in hand).
+ *   • Legacy: `{ priceId, mode, successUrl, cancelUrl }` — priceId must be one
+ *     of this server's own configured prices (#452); still works for any
+ *     server-side caller that already has a priceId in hand.
  *   • Plan:   `{ plan: "starter" | "standard" | "pro", cycle: "monthly" | "annual",
  *               successUrl, cancelUrl }` — server resolves to the matching
  *     STRIPE_PRICE_<TIER>_<CYCLE> env var. mode is always 'subscription'.
- *   • Addon:  `{ addon: "sprint" | "interview_pack" | "negotiation_pack" |
- *                       "founding_lifetime",
- *               successUrl, cancelUrl }` — server resolves to STRIPE_PRICE_<NAME>
- *     and infers mode (subscription for RECURRING_ADDONS, payment otherwise).
+ *   • Addon:  `{ addon: "founding_lifetime", successUrl, cancelUrl }` — server
+ *     resolves to STRIPE_PRICE_FOUNDING, mode is always 'payment'. #446 —
+ *     sprint / interview_pack / negotiation_pack are intentionally NOT
+ *     accepted here: nothing grants their benefit and the webhook has no
+ *     schema to record their purchase without clobbering the customer's
+ *     plan. Re-enable once that entitlements work ships.
  */
 interface Body {
   priceId:     string;
@@ -74,7 +88,7 @@ interface PlanBody {
 }
 
 interface AddonBody {
-  addon:       AddonKey;
+  addon:       SellableAddon;
   successUrl:  string;
   cancelUrl:   string;
 }
@@ -84,9 +98,14 @@ function hasUrlsRaw(o: Record<string, unknown>): boolean {
          typeof o.cancelUrl  === "string" && o.cancelUrl.length  > 0;
 }
 
+/**
+ * #452 — the legacy shape lets any server-side caller hand in an arbitrary
+ * priceId; restrict it to a price this app is actually configured to sell.
+ */
 function isPriceIdBody(b: Record<string, unknown>): b is Body & Record<string, unknown> {
   return typeof b.priceId === "string" && b.priceId.length > 0 &&
          (b.mode === "subscription" || b.mode === "payment") &&
+         allConfiguredPriceIds().has(b.priceId) &&
          hasUrlsRaw(b);
 }
 
@@ -98,10 +117,8 @@ function isPlanBody(b: Record<string, unknown>): b is PlanBody & Record<string, 
 }
 
 function isAddonBody(b: Record<string, unknown>): b is AddonBody & Record<string, unknown> {
-  if (typeof b.addon !== "string") return false;
-  const ok = b.addon === "sprint" || b.addon === "interview_pack" ||
-             b.addon === "negotiation_pack" || b.addon === "founding_lifetime";
-  return ok && hasUrlsRaw(b);
+  // #446 — only founding_lifetime is sellable; see the SellableAddon note above.
+  return b.addon === "founding_lifetime" && hasUrlsRaw(b);
 }
 
 /**
@@ -135,9 +152,9 @@ function resolveCheckoutInputs(
   if (isAddonBody(b)) {
     const priceId = resolvePriceId({ addon: b.addon });
     if (!priceId) return { error: "price_not_configured", status: 422 };
-    const mode: "subscription" | "payment" =
-      RECURRING_ADDONS.has(b.addon) ? "subscription" : "payment";
-    return { priceId, mode, successUrl: b.successUrl, cancelUrl: b.cancelUrl };
+    // #446 — founding_lifetime is the only sellable addon and it is always
+    // a one-time payment; RECURRING_ADDONS no longer applies here.
+    return { priceId, mode: "payment", successUrl: b.successUrl, cancelUrl: b.cancelUrl };
   }
 
   return { error: "invalid_body", status: 400 };

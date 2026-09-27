@@ -101,3 +101,31 @@ export function isFoundingPriceId(priceId: string): boolean {
   const founding = process.env.STRIPE_PRICE_FOUNDING;
   return Boolean(founding && founding === priceId);
 }
+
+/**
+ * #452 — every price id this server is actually configured to sell, for
+ * validating the legacy `{ priceId, mode }` checkout body. Without this,
+ * that body shape accepts ANY string as a Stripe price id and creates a
+ * checkout session for it — not exploitable for a discount (Stripe charges
+ * whatever the price object says), but it lets a caller check out against a
+ * price this app never intended to sell (a draft/test price in the same
+ * Stripe account, for example) with no server-side record of what it was
+ * for. Only the six plan tiers + the four addon keys are ever legitimate.
+ */
+export function allConfiguredPriceIds(): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const plans: Array<Exclude<SubscriptionPlan, "free">> = ["starter", "standard", "pro"];
+  const cycles: BillingCycle[] = ["monthly", "annual"];
+  for (const plan of plans) {
+    for (const cycle of cycles) {
+      const id = resolvePriceId({ plan, cycle });
+      if (id) ids.add(id);
+    }
+  }
+  const addons: AddonKey[] = ["sprint", "interview_pack", "negotiation_pack", "founding_lifetime"];
+  for (const addon of addons) {
+    const id = resolvePriceId({ addon });
+    if (id) ids.add(id);
+  }
+  return ids;
+}

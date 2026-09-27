@@ -81,10 +81,19 @@ describe("checkPlanLimit", () => {
     expect(json.currentPlan).toBe("free");
   });
 
-  it("treats past_due subscription as free — blocks aiCoach", async () => {
+  // #451 — past_due is Stripe's own retry grace window, not an immediate
+  // lockout. Only a terminal status (canceled/unpaid) drops the user to free.
+  it("treats past_due subscription as still active — allows aiCoach (grace period, #451)", async () => {
     const sb = makeSupabaseMock(true, { plan: "starter", status: "past_due" });
+    expect(await checkPlanLimit(sb, USER_ID, "aiCoach")).toBeNull();
+  });
+
+  it("treats unpaid subscription as free — blocks aiCoach", async () => {
+    const sb = makeSupabaseMock(true, { plan: "starter", status: "unpaid" });
     const res = await checkPlanLimit(sb, USER_ID, "aiCoach");
     expect(res).not.toBeNull();
+    const json = await res!.json();
+    expect(json.currentPlan).toBe("free");
   });
 
   it("fails open (null) on DB error", async () => {
