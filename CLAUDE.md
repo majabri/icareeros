@@ -143,13 +143,14 @@ NEXT_PUBLIC_MONETIZATION_ENABLED    # currently `false` — flip to `true` to ac
 ### Env vars — pending (set before billing/observability launch)
 
 ```
-# Stripe — 17 vars total; full list in the Drive workspace CLAUDE.md
+# Stripe — 13 vars total; full list in the Drive workspace CLAUDE.md
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 STRIPE_PRICE_{STARTER,STANDARD,PRO}_{MONTHLY,ANNUAL}        # 6 server-side
-STRIPE_PRICE_{SPRINT,INTERVIEW_WEEK,NEGOTIATION_PACK,FOUNDING_LIFETIME}  # 4 server-side
-NEXT_PUBLIC_STRIPE_PRICE_*          # NEXT_PUBLIC_-prefixed copies for the client checkout
+STRIPE_PRICE_{SPRINT,INTERVIEW_PACK,NEGOTIATION_PACK,FOUNDING}  # 4 server-side (ten price vars total, not eleven)
+# Price resolution is server-side only (resolvePriceId() in src/lib/stripe.ts) —
+# no NEXT_PUBLIC_STRIPE_PRICE_* copies are read or required by the client.
 
 # Email + observability
 SUPABASE_SERVICE_ROLE_KEY           # required by /api/stripe/webhook + /api/jobs/{agent,search}
