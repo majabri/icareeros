@@ -85,6 +85,8 @@ function makeChain(table: string) {
     delete: vi.fn(() => ({
       eq: vi.fn((col: string, val: unknown) => {
         deletes.push({ table, whereCol: col, whereVal: val });
+        const armed = deleteErrorQueue[table]?.shift();
+        if (armed) return Promise.resolve({ data: null, error: armed });
         return Promise.resolve({ data: null, error: null });
       }),
     })),
@@ -92,6 +94,7 @@ function makeChain(table: string) {
 }
 
 const insertErrorQueue: Record<string, Array<unknown>> = {};
+const deleteErrorQueue: Record<string, Array<unknown>> = {};
 const mockFrom = vi.fn((table: string) => makeChain(table));
 const mockRpc = vi.fn((fn: string, args: Row) => {
   rpcCalls.push({ fn, args });
@@ -106,6 +109,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   Object.keys(maybeSingleQueue).forEach(k => delete maybeSingleQueue[k]);
   Object.keys(insertErrorQueue).forEach(k => delete insertErrorQueue[k]);
+  Object.keys(deleteErrorQueue).forEach(k => delete deleteErrorQueue[k]);
   inserts.length = 0;
   upserts.length = 0;
   updates.length = 0;
@@ -178,7 +182,7 @@ describe("POST /api/stripe/webhook", () => {
     expect(upserts).toHaveLength(0);
   });
 
-  it("un-claims the event from stripe_webhook_events when the handler throws, so Stripe's retry isn't skipped as a duplicate", async () => {
+  it("un-claims the event and returns 500 when the handler throws, so Stripe actually redelivers it", async () => {
     mockConstructEvent.mockReturnValue({
       id: "evt_fail",
       type: "checkout.session.completed",
@@ -187,11 +191,24 @@ describe("POST /api/stripe/webhook", () => {
     mockRetrieveSub.mockRejectedValue(new Error("stripe api down"));
     const { POST } = await load();
     const res = await POST(makeReq("payload", "sig"));
-    // Still 200 to Stripe — swallowing the error is intentional, but the
-    // claim must be undone so a genuine retry can complete the event.
-    expect(res.status).toBe(200);
+    // 500, not 200 — Stripe only redelivers on a non-2xx response. A 200
+    // here would mean the un-claim below is never actually exercised.
+    expect(res.status).toBe(500);
     expect(inserts.some(i => i.table === "stripe_webhook_events" && i.payload.event_id === "evt_fail")).toBe(true);
     expect(deletes).toContainEqual({ table: "stripe_webhook_events", whereCol: "event_id", whereVal: "evt_fail" });
+  });
+
+  it("returns 200 (not 500) when the handler throws AND the un-claim delete itself fails — nothing to gain from a retry Stripe would just skip", async () => {
+    mockConstructEvent.mockReturnValue({
+      id: "evt_fail_2",
+      type: "checkout.session.completed",
+      data: { object: { id: "cs_1", client_reference_id: "u1", customer: "cus_1", mode: "subscription", subscription: "sub_1" } },
+    });
+    mockRetrieveSub.mockRejectedValue(new Error("stripe api down"));
+    deleteErrorQueue["stripe_webhook_events"] = [{ message: "db unreachable" }];
+    const { POST } = await load();
+    const res = await POST(makeReq("payload", "sig"));
+    expect(res.status).toBe(200);
   });
 
   // ── checkout.session.completed ──────────────────────────────────────

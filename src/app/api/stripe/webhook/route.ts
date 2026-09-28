@@ -8,9 +8,12 @@
  * Reads the raw bytes via req.text() (NOT req.json()) — signature verification
  * needs the original payload.
  *
- * Always returns 200 once the signature is valid, even if downstream side
- * effects fail, so Stripe doesn't retry-storm us. Failures are logged to
- * console.error and surfaced via Sentry on the host side.
+ * Returns 200 once the signature is valid and the handler succeeds (or the
+ * event was already processed — see #447 idempotency below). A handler
+ * failure returns 500 instead, so Stripe redelivers the event; that retry
+ * is safe because the event is un-claimed from stripe_webhook_events first
+ * (see the POST catch block). Failures are logged to console.error and
+ * surfaced via Sentry on the host side.
  *
  * Handles:
  *   checkout.session.completed       — upsert user_subscriptions; decrement
@@ -460,26 +463,34 @@ export async function POST(req: Request) {
         break;
     }
   } catch (err) {
-    // Always 200 to Stripe once signature is valid — but the event was
-    // claimed in stripe_webhook_events *before* the handler ran (so two
-    // concurrent deliveries of the same event can't both process it). A
-    // handler failure here means the event is only half-applied, so undo
-    // the claim: without this, Stripe's retry of this exact event.id would
-    // hit claimEventOnce's duplicate check and be skipped forever, silently
-    // dropping a real event. Best-effort — if the delete itself fails, log
-    // it; the event stays claimed and needs a manual replay.
+    // The event was claimed in stripe_webhook_events *before* the handler
+    // ran (so two concurrent deliveries of the same event can't both
+    // process it — the unique constraint on event_id makes that race-safe).
+    // A handler failure here means the event is only half-applied, so undo
+    // the claim and tell Stripe to retry: Stripe only re-delivers on a
+    // non-2xx response, so returning 200 here (as we do for every other
+    // path) would mean the un-claim is never actually exercised — the
+    // event just silently never gets a second attempt. Returning 500
+    // instead makes Stripe redeliver, and the released claim lets that
+    // retry run as first-time processing.
     console.error("[stripe.webhook] handler error — un-claiming event for retry", err);
     const { error: unclaimError } = await sb
       .from("stripe_webhook_events")
       .delete()
       .eq("event_id", event.id);
     if (unclaimError) {
+      // Couldn't release the claim — a retry would just hit the duplicate
+      // check and be skipped, so there's nothing to gain from a 500 here.
+      // This is the one path where the event is genuinely stuck and needs
+      // a manual replay; log loudly.
       console.error(
         `[stripe.webhook] failed to un-claim ${event.id} after handler error — ` +
         `Stripe retries of this event will now be silently skipped as duplicates:`,
         unclaimError.message,
       );
+      return NextResponse.json({ received: true }, { status: 200 });
     }
+    return NextResponse.json({ error: "handler_error" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true }, { status: 200 });
