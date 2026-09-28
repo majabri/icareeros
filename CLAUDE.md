@@ -182,7 +182,7 @@ Events:
 ### Open launch blockers (full list in the Drive workspace CLAUDE.md)
 
 P0 (manual, blocks production):
-- Set the 17 Stripe env vars above + register webhook
+- Set the 13 Stripe env vars above + register webhook
 - Add `SUPABASE_SERVICE_ROLE_KEY` (required by Stripe webhook + /jobs upsert pipeline)
 - Add SMTP, Sentry, Langfuse env vars
 - Counsel review of `/legal/{privacy,terms,ai-disclosure}` content (currently DRAFT)
