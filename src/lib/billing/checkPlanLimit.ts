@@ -66,8 +66,16 @@ export async function checkPlanLimit(
         ? (rawPlan as SubscriptionPlan)
         : "free";
 
-    // Canceled or past_due subscriptions fall back to free limits
-    const activeStatuses = ["active", "trialing"];
+    // #451 — past_due is a grace signal, not an immediate lockout. Stripe
+    // retries a failed renewal on its own Smart Retries schedule (roughly
+    // three weeks) and fires invoice.payment_failed on each attempt; this
+    // app's webhook sets status='past_due' on the FIRST failure. Locking out
+    // immediately meant every renewal hiccup — a temporarily declined card,
+    // not a genuine non-payment — cut the user off from every AI feature on
+    // day 0 of that retry window, while the client kept showing them as
+    // fully paid (see #451). Only Stripe's terminal states — canceled,
+    // unpaid — actually mean the customer stopped paying.
+    const activeStatuses = ["active", "trialing", "past_due"];
     const effectivePlan: SubscriptionPlan =
       sub?.status && activeStatuses.includes(sub.status) ? plan : "free";
 
