@@ -460,8 +460,26 @@ export async function POST(req: Request) {
         break;
     }
   } catch (err) {
-    // Always 200 to Stripe once signature is valid; log for ops.
-    console.error("[stripe.webhook] handler error", err);
+    // Always 200 to Stripe once signature is valid — but the event was
+    // claimed in stripe_webhook_events *before* the handler ran (so two
+    // concurrent deliveries of the same event can't both process it). A
+    // handler failure here means the event is only half-applied, so undo
+    // the claim: without this, Stripe's retry of this exact event.id would
+    // hit claimEventOnce's duplicate check and be skipped forever, silently
+    // dropping a real event. Best-effort — if the delete itself fails, log
+    // it; the event stays claimed and needs a manual replay.
+    console.error("[stripe.webhook] handler error — un-claiming event for retry", err);
+    const { error: unclaimError } = await sb
+      .from("stripe_webhook_events")
+      .delete()
+      .eq("event_id", event.id);
+    if (unclaimError) {
+      console.error(
+        `[stripe.webhook] failed to un-claim ${event.id} after handler error — ` +
+        `Stripe retries of this event will now be silently skipped as duplicates:`,
+        unclaimError.message,
+      );
+    }
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

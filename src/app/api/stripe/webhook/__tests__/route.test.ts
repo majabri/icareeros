@@ -47,6 +47,7 @@ function pushMaybeSingle(table: string, result: { data: Row | null; error?: unkn
 const inserts: Array<{ table: string; payload: Row }> = [];
 const upserts: Array<{ table: string; payload: Row }> = [];
 const updates: Array<{ table: string; payload: Row; whereCol: string; whereVal: unknown }> = [];
+const deletes: Array<{ table: string; whereCol: string; whereVal: unknown }> = [];
 const rpcCalls: Array<{ fn: string; args: Row }> = [];
 let rpcResult: { data: unknown; error: unknown } = { data: null, error: null };
 
@@ -79,6 +80,14 @@ function makeChain(table: string) {
         return Promise.resolve({ data: null, error: null });
       }),
     })),
+    // delete().eq(col, val) — used to un-claim stripe_webhook_events on a
+    // handler error so Stripe's retry isn't skipped as a duplicate.
+    delete: vi.fn(() => ({
+      eq: vi.fn((col: string, val: unknown) => {
+        deletes.push({ table, whereCol: col, whereVal: val });
+        return Promise.resolve({ data: null, error: null });
+      }),
+    })),
   };
 }
 
@@ -100,6 +109,7 @@ beforeEach(() => {
   inserts.length = 0;
   upserts.length = 0;
   updates.length = 0;
+  deletes.length = 0;
   rpcCalls.length = 0;
   rpcResult = { data: null, error: null };
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
@@ -166,6 +176,22 @@ describe("POST /api/stripe/webhook", () => {
     expect(body.duplicate).toBe(true);
     expect(mockRetrieveSub).not.toHaveBeenCalled();
     expect(upserts).toHaveLength(0);
+  });
+
+  it("un-claims the event from stripe_webhook_events when the handler throws, so Stripe's retry isn't skipped as a duplicate", async () => {
+    mockConstructEvent.mockReturnValue({
+      id: "evt_fail",
+      type: "checkout.session.completed",
+      data: { object: { id: "cs_1", client_reference_id: "u1", customer: "cus_1", mode: "subscription", subscription: "sub_1" } },
+    });
+    mockRetrieveSub.mockRejectedValue(new Error("stripe api down"));
+    const { POST } = await load();
+    const res = await POST(makeReq("payload", "sig"));
+    // Still 200 to Stripe — swallowing the error is intentional, but the
+    // claim must be undone so a genuine retry can complete the event.
+    expect(res.status).toBe(200);
+    expect(inserts.some(i => i.table === "stripe_webhook_events" && i.payload.event_id === "evt_fail")).toBe(true);
+    expect(deletes).toContainEqual({ table: "stripe_webhook_events", whereCol: "event_id", whereVal: "evt_fail" });
   });
 
   // ── checkout.session.completed ──────────────────────────────────────
