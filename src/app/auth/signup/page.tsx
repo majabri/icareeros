@@ -18,6 +18,7 @@ export default async function SignupPage({
 }) {
   const sp = await searchParams;
   const initialRole = parseRoleParam(sp.role);
+  const initialInviteCode = typeof sp.invite === "string" ? sp.invite : undefined;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent px-4">
@@ -29,7 +30,7 @@ export default async function SignupPage({
           </p>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <AuthForm mode="signup" initialRole={initialRole} />
+          <AuthForm mode="signup" initialRole={initialRole} initialInviteCode={initialInviteCode} />
         </div>
         <p className="mt-6 text-center text-xs text-gray-400">
           By creating an account you agree to our{" "}

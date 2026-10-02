@@ -19,6 +19,12 @@ interface AuthFormProps {
    * `?role=job_seeker`. Either value pre-selects that card on mount.
    */
   initialRole?: UserRole;
+  /**
+   * Invite-only enrollment (2026-10-01) — prefills the invite code field
+   * from `?invite=` on /auth/signup, so a shared invite link needs no
+   * manual copy/paste. See enforce_invite_only_signup() trigger.
+   */
+  initialInviteCode?: string;
 }
 
 // Username aliases → real Supabase email
@@ -32,9 +38,10 @@ const INITIAL_CONSENT: ConsentState = {
   marketingEmail: false,
 };
 
-export function AuthForm({ mode, initialRole }: AuthFormProps) {
+export function AuthForm({ mode, initialRole, initialInviteCode }: AuthFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
+  const [inviteCode, setInviteCode] = useState(initialInviteCode ?? "");
   const [consentState, setConsentState] = useState<ConsentState>(INITIAL_CONSENT);
   const [allRequiredConsent, setAllRequiredConsent] = useState(false);
   const [loading, setLoading]       = useState(false);
@@ -98,6 +105,31 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
       if (mode === "signup") {
         const email = identifier.trim();
         const role: UserRole = selectedRole ?? "job_seeker";
+        const trimmedInvite = inviteCode.trim().toUpperCase();
+
+        // Invite-only enrollment (2026-10-01) — validate the code up front
+        // so a bad/used/expired code surfaces a clear message instead of
+        // GoTrue's opaque "Database error saving new user" (which is what
+        // signUp() below would otherwise return, since the real gate is
+        // the enforce_invite_only_signup() BEFORE INSERT trigger on
+        // auth.users). This RPC is a read-only UX check; it doesn't claim
+        // the code — the trigger does that atomically at insert time.
+        const { data: inviteCheck, error: inviteCheckError } = await supabase.rpc(
+          "validate_invite_code",
+          { p_code: trimmedInvite },
+        );
+        if (inviteCheckError) throw inviteCheckError;
+        if (!(inviteCheck as { valid?: boolean } | null)?.valid) {
+          const reason = (inviteCheck as { reason?: string } | null)?.reason;
+          setError(
+            reason === "already_used"
+              ? "That invite code has already been used. Ask for a new one."
+              : reason === "expired"
+              ? "That invite code has expired. Ask for a new one."
+              : "That invite code isn't valid. iCareerOS is invite-only right now — ask an existing member for a code.",
+          );
+          return;
+        }
 
         // Phase 3 (2026-05-17) — pass the chosen role in signUp
         // options.data so the public.handle_new_user_role() trigger
@@ -120,11 +152,23 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
           email,
           password,
           options: {
-            data: { role },
+            data: { role, invite_code: trimmedInvite },
             emailRedirectTo: `${rootUrl}/auth/confirm`,
           },
         });
-        if (error) throw error;
+        if (error) {
+          // The trigger's RAISE EXCEPTION messages don't survive GoTrue's
+          // generic "Database error saving new user" wrapping — the
+          // validate_invite_code() check above handles the common cases
+          // up front, so this is the race-condition fallback (code claimed
+          // by someone else between the check and this insert).
+          if (/database error|unexpected_failure/i.test(error.message)) {
+            throw new Error(
+              "Something went wrong creating your account — your invite code may have just been used by someone else. Please try again with a new code.",
+            );
+          }
+          throw error;
+        }
 
         // Record the 3 consent rows via a server action. It uses the
         // SUPABASE_SERVICE_ROLE_KEY internally to bypass RLS, so it
@@ -241,7 +285,8 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
     loading
     || !!success
     || (mode === "signup" && !allRequiredConsent)
-    || (mode === "signup" && !selectedRole);
+    || (mode === "signup" && !selectedRole)
+    || (mode === "signup" && !inviteCode.trim());
 
   // ── Role-selector cards (signup only) ─────────────────────────────────────
   const roleSelector = mode === "signup" ? (
@@ -301,7 +346,14 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {roleSelector}
-      {showCredentialBlock && <SocialLogins mode={mode} />}
+      {showCredentialBlock && mode === "login" && <SocialLogins mode={mode} />}
+      {showCredentialBlock && mode === "signup" && (
+        <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+          iCareerOS is invite-only right now, so social sign-up is temporarily
+          off — create your account with an email, password and invite code
+          below.
+        </p>
+      )}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -334,6 +386,25 @@ export function AuthForm({ mode, initialRole }: AuthFormProps) {
       )}
 
       {showCredentialBlock && <>
+      {mode === "signup" && (
+        <div>
+          <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700">
+            Invite code
+          </label>
+          <input
+            id="inviteCode"
+            type="text"
+            autoCapitalize="characters"
+            required
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm
+                       uppercase tracking-wide text-gray-900 placeholder-gray-400 shadow-sm
+                       focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            placeholder="Ask an existing member for a code"
+          />
+        </div>
+      )}
       <div>
         <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
           {mode === "login" ? "Email" : "Email address"}
