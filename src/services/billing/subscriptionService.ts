@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase";
 import type {
   UserSubscription,
   SubscriptionPlan,
+  SubscriptionStatus,
   BillingCycle,
   AddonKey,
   FeatureKey,
@@ -138,25 +139,44 @@ export async function cancelSubscription(): Promise<boolean> {
   return false;
 }
 
+// #451/#450 — statuses the client treats as "still has their plan's access".
+// Mirrors checkPlanLimit's activeStatuses on the server: past_due is a grace
+// signal (Stripe's own retry schedule), not a downgrade, so the UI must not
+// show a paid user as Free the moment one renewal attempt fails while the
+// server is still granting them access. Only canceled/unpaid/paused mean the
+// subscription has actually ended.
+const CLIENT_ACTIVE_STATUSES: ReadonlySet<SubscriptionStatus> = new Set(["active", "trialing", "past_due"]);
+
+function isEffectivelyPaid(sub: UserSubscription | null): boolean {
+  if (!sub || sub.plan === "free") return false;
+  return CLIENT_ACTIVE_STATUSES.has(sub.status);
+}
+
 /**
  * Returns whether the current user can access a gated feature. Computed
  * client-side from PLAN_LIMITS; the route handlers do their own server-side
- * enforcement via checkPlanLimit.
+ * enforcement via checkPlanLimit. This is advisory only (a 402 from the
+ * server is still possible) — see #450 for the fuller gap between what
+ * PLAN_LIMITS declares and what routes actually enforce.
  */
 export async function canAccessFeature(_featureKey: FeatureKey): Promise<boolean> {
   if (!isMonetizationEnabled()) return true;
   const sub = await getSubscription();
-  return sub?.plan != null && sub.plan !== "free";
+  return isEffectivelyPaid(sub);
 }
 
 export async function getCurrentPlan(): Promise<SubscriptionPlan> {
   const sub = await getSubscription();
+  // #451 — a canceled/unpaid row's `plan` column can still say "starter" or
+  // "pro" between the terminal Stripe event landing and this read; treat it
+  // as free for display once status says the subscription has ended.
+  if (sub && !CLIENT_ACTIVE_STATUSES.has(sub.status)) return "free";
   return sub?.plan ?? "free";
 }
 
 export async function isOnPaidPlan(): Promise<boolean> {
-  const plan = await getCurrentPlan();
-  return plan !== "free";
+  const sub = await getSubscription();
+  return isEffectivelyPaid(sub);
 }
 
 /**

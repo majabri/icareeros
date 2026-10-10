@@ -66,6 +66,10 @@ vi.mock("@/lib/stripe", () => ({
     if (opts.addon === "sprint")            return "price_sprint";
     return null;
   }),
+  // #452 — the legacy priceId body is validated against this set.
+  allConfiguredPriceIds: vi.fn(() => new Set([
+    "price_starter_m", "price_starter_a", "price_standard_m", "price_pro_m", "price_founding",
+  ])),
 }));
 
 beforeEach(() => {
@@ -205,20 +209,31 @@ describe("POST /api/stripe/checkout", () => {
     }));
   });
 
-  it("resolves addon=sprint body → payment mode + price_sprint", async () => {
+  // #446 — sprint / interview_pack / negotiation_pack are no longer sellable:
+  // nothing grants their benefit and the webhook has no schema to record an
+  // addon purchase without clobbering the customer's plan. Only
+  // founding_lifetime remains in isAddonBody.
+  it("400 invalid_body for a retired addon key (sprint) — #446", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
-    pushFrom("user_subscriptions", { data: { stripe_customer_id: "cus_x" }, error: null });
-    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_sp" });
     const { POST } = await load();
     const res = await POST(makeReq({
       addon: "sprint",
       successUrl: "https://x/s", cancelUrl: "https://x/c",
     }));
-    expect(res.status).toBe(200);
-    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_body");
+  });
+
+  it("400 invalid_body for a legacy priceId not in this server's configured set — #452", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    const { POST } = await load();
+    const res = await POST(makeReq({
+      priceId: "price_totally_unknown",
       mode: "payment",
-      line_items: [{ price: "price_sprint", quantity: 1 }],
+      successUrl: "https://x/s", cancelUrl: "https://x/c",
     }));
+    expect(res.status).toBe(400);
   });
 
   it("422 price_not_configured when plan/cycle has no matching env var", async () => {
