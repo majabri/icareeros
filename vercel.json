@@ -13,22 +13,6 @@
   },
   "crons": [
     {
-      "path": "/api/cron/job-alerts",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-insights",
-      "schedule": "0 8 * * 0"
-    },
-    {
-      "path": "/api/cron/re-engagement",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/cron/prefetch-jobs",
-      "schedule": "0 */6 * * *"
-    },
-    {
       "path": "/api/cron/health-check",
       "schedule": "*/15 * * * *"
     },
@@ -37,44 +21,12 @@
       "schedule": "0 6 * * *"
     },
     {
-      "path": "/api/cron/ingest-ats",
-      "schedule": "0 */4 * * *"
-    },
-    {
       "path": "/api/cron/check-bugs-inbox",
       "schedule": "0,30 * * * *"
     },
     {
-      "path": "/api/cron/discover-rss",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron/discover-perplexity",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/enrich-salaries",
-      "schedule": "0 3 * * *"
-    },
-    {
       "path": "/api/cron/smtp-health-check",
       "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/curate-user-recommendations",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/enrich-jobs",
-      "schedule": "30 */4 * * *"
-    },
-    {
-      "path": "/api/cron/validate-job-urls",
-      "schedule": "15 3 * * *"
-    },
-    {
-      "path": "/api/cron/cleanup-dead-jobs",
-      "schedule": "0 5 * * *"
     }
   ]
 }
