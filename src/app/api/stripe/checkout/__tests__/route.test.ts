@@ -293,6 +293,7 @@ describe("POST /api/stripe/checkout", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
     pushFrom("user_subscriptions", { data: null, error: null });
     mockCreateCustomer.mockResolvedValue({ id: "cus_new" });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_457" });
     const { POST } = await load();
     const res = await POST(makeReq(validBody));
 
@@ -309,6 +310,7 @@ describe("POST /api/stripe/checkout", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
     pushFrom("user_subscriptions", { data: null, error: null });
     mockCreateCustomer.mockResolvedValue({ id: "cus_new" });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_457b" });
     adminUpsertError = { code: "42501", message: "new row violates row-level security policy" };
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
