@@ -40,7 +40,8 @@ const mockFrom = vi.fn((table: string) => makeChain(table));
 // #457 — the route persists stripe_customer_id with a service-role client,
 // because user_subscriptions has no user-write RLS policy. Mocked separately
 // from the ssr client so tests can assert WHICH client did the write.
-const adminUpsert = vi.fn(() => Promise.resolve({ data: null, error: adminUpsertError }));
+const adminUpsert = vi.fn((_row: Record<string, unknown>, _opts?: Record<string, unknown>) =>
+  Promise.resolve({ data: null, error: adminUpsertError }));
 let adminUpsertError: { code?: string; message: string } | null = null;
 const mockAdminFrom = vi.fn(() => ({ upsert: adminUpsert }));
 vi.mock("@supabase/supabase-js", () => ({
