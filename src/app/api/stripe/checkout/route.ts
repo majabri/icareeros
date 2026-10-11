@@ -20,6 +20,7 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { withCrossSubdomainCookie } from "@/lib/supabase-cookie-options";
 import { cookies } from "next/headers";
 import { getStripe, isFoundingPriceId, resolvePriceId, allConfiguredPriceIds } from "@/lib/stripe";
@@ -160,6 +161,25 @@ function resolveCheckoutInputs(
   return { error: "invalid_body", status: 400 };
 }
 
+/**
+ * #457 — service-role client for server-side bookkeeping writes.
+ *
+ * `user_subscriptions` has no INSERT/UPDATE policy for the owning user: RLS
+ * grants SELECT on your own row, and everything else is service_role only.
+ * Persisting the Stripe customer id with the user-scoped client therefore
+ * failed silently -- Postgres logged
+ *   new row violates row-level security policy for table "user_subscriptions"
+ * while the route discarded the result and carried on. Observed in production
+ * during the first live payment on 2026-10-10.
+ */
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+}
+
 export async function POST(req: Request) {
   let raw: unknown;
   try { raw = await req.json(); }
@@ -205,17 +225,34 @@ export async function POST(req: Request) {
       metadata: { user_id: user.id },
     });
     customerId = customer.id;
-    // Upsert the subscription row so we have somewhere to store the customer id.
-    await supabase.from("user_subscriptions").upsert(
-      {
-        user_id: user.id,
-        plan: existing?.plan ?? "free",
-        status: existing?.status ?? "active",
-        stripe_customer_id: customerId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+    // Upsert the subscription row so we have somewhere to store the customer
+    // id. Must use the service-role client: RLS has no user-write policy on
+    // user_subscriptions (see adminClient above). Check the result -- the
+    // previous unchecked call swallowed the RLS rejection.
+    const { error: persistErr } = await adminClient()
+      .from("user_subscriptions")
+      .upsert(
+        {
+          user_id: user.id,
+          plan: existing?.plan ?? "free",
+          status: existing?.status ?? "active",
+          stripe_customer_id: customerId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    if (persistErr) {
+      // Not fatal: the webhook resolves the user from the Stripe customer's
+      // metadata.user_id fallback (#448) and writes the id itself. But it must
+      // be visible, because until that event lands /api/stripe/portal has no
+      // customer id and returns 404 no_customer.
+      console.error("[stripe.checkout] failed to persist stripe_customer_id", {
+        userId: user.id,
+        customerId,
+        code: persistErr.code,
+        message: persistErr.message,
+      });
+    }
   }
 
   try {

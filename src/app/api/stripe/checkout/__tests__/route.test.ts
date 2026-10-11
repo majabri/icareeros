@@ -37,6 +37,17 @@ function makeChain(table: string) {
 }
 const mockFrom = vi.fn((table: string) => makeChain(table));
 
+// #457 — the route persists stripe_customer_id with a service-role client,
+// because user_subscriptions has no user-write RLS policy. Mocked separately
+// from the ssr client so tests can assert WHICH client did the write.
+const adminUpsert = vi.fn((_row: Record<string, unknown>, _opts?: Record<string, unknown>) =>
+  Promise.resolve({ data: null, error: adminUpsertError }));
+let adminUpsertError: { code?: string; message: string } | null = null;
+const mockAdminFrom = vi.fn(() => ({ upsert: adminUpsert }));
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn(() => ({ from: mockAdminFrom })),
+}));
+
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
@@ -75,6 +86,9 @@ vi.mock("@/lib/stripe", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   Object.keys(fromQueue).forEach(k => delete fromQueue[k]);
+  adminUpsertError = null;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
 });
 
 async function load() {
@@ -266,5 +280,49 @@ describe("POST /api/stripe/checkout", () => {
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toBe("stripe_error");
+  });
+
+  // ── #457 regression ────────────────────────────────────────────────────
+  // The route used to persist stripe_customer_id with the USER-scoped client
+  // and discard the result. user_subscriptions has no user-write RLS policy,
+  // so the write was always rejected -- silently. Production logged
+  // "new row violates row-level security policy" during the first live
+  // payment while checkout returned 200 as if nothing was wrong.
+
+  it("#457 persists stripe_customer_id via the service-role client, not the user client", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    pushFrom("user_subscriptions", { data: null, error: null });
+    mockCreateCustomer.mockResolvedValue({ id: "cus_new" });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_457" });
+    const { POST } = await load();
+    const res = await POST(makeReq(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockAdminFrom).toHaveBeenCalledWith("user_subscriptions");
+    expect(adminUpsert).toHaveBeenCalledTimes(1);
+    expect(adminUpsert.mock.calls[0][0]).toMatchObject({
+      user_id: "u1",
+      stripe_customer_id: "cus_new",
+    });
+  });
+
+  it("#457 logs, rather than swallowing, a failed customer-id persist", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "u@x" } } });
+    pushFrom("user_subscriptions", { data: null, error: null });
+    mockCreateCustomer.mockResolvedValue({ id: "cus_new" });
+    mockCreateCheckout.mockResolvedValue({ url: "https://stripe.test/c_457b" });
+    adminUpsertError = { code: "42501", message: "new row violates row-level security policy" };
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { POST } = await load();
+    const res = await POST(makeReq(validBody));
+
+    // Non-fatal: the webhook recovers the id via metadata.user_id (#448).
+    expect(res.status).toBe(200);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[stripe.checkout] failed to persist stripe_customer_id",
+      expect.objectContaining({ userId: "u1", customerId: "cus_new", code: "42501" }),
+    );
+    errSpy.mockRestore();
   });
 });
